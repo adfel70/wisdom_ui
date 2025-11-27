@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, TextField, Button, InputAdornment, Select, MenuItem, IconButton, Tooltip } from '@mui/material';
-import { Search as SearchIcon, FilterList, ArrowForward, Undo } from '@mui/icons-material';
+import { Search as SearchIcon, FilterList, ArrowForward, Undo, AutoAwesome } from '@mui/icons-material';
 import { TRANSFORMATIONS, applyTransformation } from '../utils/transformUtils';
 
 /**
@@ -104,20 +104,35 @@ const SearchBar = ({
                   onChange={handleTransformChange}
                   displayEmpty
                   size="small"
+                  renderValue={() => (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <AutoAwesome sx={{ fontSize: '1rem' }} />
+                      <span>Transform</span>
+                    </Box>
+                  )}
                   sx={{
-                    minWidth: 140,
+                    minWidth: 'fit-content',
+                    borderRadius: '12px',
                     '& .MuiOutlinedInput-notchedOutline': {
-                      border: 'none',
+                      borderColor: 'divider',
                     },
                     '& .MuiSelect-select': {
                       py: 0.75,
+                      px: 1.5,
                       fontSize: '0.875rem',
-                      color: 'text.secondary',
+                      color: 'text.primary',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
                     },
                     '&:hover': {
-                      '& .MuiSelect-select': {
-                        color: 'primary.main',
+                      backgroundColor: 'action.hover',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
                       },
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'primary.main',
                     },
                   }}
                 >
