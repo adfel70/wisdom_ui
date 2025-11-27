@@ -1,10 +1,11 @@
-import React from 'react';
-import { Box, TextField, Button, InputAdornment } from '@mui/material';
-import { Search as SearchIcon, FilterList, ArrowForward } from '@mui/icons-material';
+import React, { useState } from 'react';
+import { Box, TextField, Button, InputAdornment, Select, MenuItem, IconButton, Tooltip } from '@mui/material';
+import { Search as SearchIcon, FilterList, ArrowForward, Undo, AutoAwesome } from '@mui/icons-material';
+import { TRANSFORMATIONS, applyTransformation } from '../utils/transformUtils';
 
 /**
  * SearchBar Component
- * Reusable search input with filter button
+ * Reusable search input with filter button and text transformation
  */
 const SearchBar = ({
   value,
@@ -14,9 +15,38 @@ const SearchBar = ({
   variant = 'home', // 'home' or 'compact'
   placeholder = 'Search by Value (e.g., Name, ID, Location)...'
 }) => {
+  const [originalText, setOriginalText] = useState('');
+  const [hasTransformed, setHasTransformed] = useState(false);
+  const [transformValue, setTransformValue] = useState('');
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (onSubmit) onSubmit(value);
+  };
+
+  const handleTransformChange = (e) => {
+    const transformId = e.target.value;
+
+    // Reset dropdown to empty after selection
+    setTransformValue('');
+
+    if (!transformId) return;
+
+    // Store original text before first transformation
+    if (!hasTransformed) {
+      setOriginalText(value);
+      setHasTransformed(true);
+    }
+
+    // Apply transformation to current text (chainable)
+    const transformed = applyTransformation(value, transformId);
+    onChange(transformed);
+  };
+
+  const handleRevert = () => {
+    onChange(originalText);
+    setOriginalText('');
+    setHasTransformed(false);
   };
 
   const isHome = variant === 'home';
@@ -47,6 +77,75 @@ const SearchBar = ({
                   transition: 'color 0.2s',
                 }}
               />
+            </InputAdornment>
+          ),
+          endAdornment: (
+            <InputAdornment position="end">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                {hasTransformed && (
+                  <Tooltip title="Revert to original">
+                    <IconButton
+                      onClick={handleRevert}
+                      size="small"
+                      sx={{
+                        color: 'primary.main',
+                        '&:hover': {
+                          backgroundColor: 'primary.light',
+                          color: 'primary.dark',
+                        },
+                      }}
+                    >
+                      <Undo fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <Select
+                  value={transformValue}
+                  onChange={handleTransformChange}
+                  displayEmpty
+                  size="small"
+                  renderValue={() => (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <AutoAwesome sx={{ fontSize: '1rem' }} />
+                      <span>Transform</span>
+                    </Box>
+                  )}
+                  sx={{
+                    minWidth: 'fit-content',
+                    borderRadius: '12px',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'divider',
+                    },
+                    '& .MuiSelect-select': {
+                      py: 0.75,
+                      px: 1.5,
+                      fontSize: '0.875rem',
+                      color: 'text.primary',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                    },
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'primary.main',
+                    },
+                  }}
+                >
+                  <MenuItem value="" disabled>
+                    Transform...
+                  </MenuItem>
+                  {TRANSFORMATIONS.map((transform) => (
+                    <MenuItem key={transform.id} value={transform.id}>
+                      {transform.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
             </InputAdornment>
           ),
           sx: {
