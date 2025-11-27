@@ -9,18 +9,12 @@ import generatedData from '../data/generatedData.json' with { type: 'json' };
 let metadataCache = null;
 let recordsCache = null;
 
-// Database organization (10 databases with 10 tables each)
+// Database organization (matching the UI tabs)
 const DATABASE_CONFIG = {
-  db1: { name: 'Sales & Transactions', tableKeys: [] },
-  db2: { name: 'HR & Personnel', tableKeys: [] },
-  db3: { name: 'Marketing Analytics', tableKeys: [] },
-  db4: { name: 'Operations & Logistics', tableKeys: [] },
-  db5: { name: 'Financial Records', tableKeys: [] },
-  db6: { name: 'Customer Data', tableKeys: [] },
-  db7: { name: 'Product Catalog', tableKeys: [] },
-  db8: { name: 'Compliance & Legal', tableKeys: [] },
-  db9: { name: 'IT & Infrastructure', tableKeys: [] },
-  db10: { name: 'Analytics & Reporting', tableKeys: [] },
+  db1: { name: 'Sales Database', description: 'Contains sales transactions, inventory, and customer data', tableKeys: [] },
+  db2: { name: 'HR & Personnel', description: 'Human resources and employee management data', tableKeys: [] },
+  db3: { name: 'Marketing Analytics', description: 'Marketing campaigns, leads, and analytics data', tableKeys: [] },
+  db4: { name: 'Legacy Archives', description: 'Historical data and archived records', tableKeys: [] },
 };
 
 /**
@@ -102,7 +96,7 @@ function queryDatabase(dbKey, query = '') {
 
 /**
  * Database query functions (simulating different backend types)
- * Each function represents a different database/collection that can be queried
+ * Each function represents a different database tab in the UI
  */
 
 export function db1(query) {
@@ -119,30 +113,6 @@ export function db3(query) {
 
 export function db4(query) {
   return queryDatabase('db4', query);
-}
-
-export function db5(query) {
-  return queryDatabase('db5', query);
-}
-
-export function db6(query) {
-  return queryDatabase('db6', query);
-}
-
-export function db7(query) {
-  return queryDatabase('db7', query);
-}
-
-export function db8(query) {
-  return queryDatabase('db8', query);
-}
-
-export function db9(query) {
-  return queryDatabase('db9', query);
-}
-
-export function db10(query) {
-  return queryDatabase('db10', query);
 }
 
 /**

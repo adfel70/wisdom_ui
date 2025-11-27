@@ -5,7 +5,7 @@
 
 import {
   get_tables_metadata,
-  db1, db2,
+  db1, db2, db3, db4,
   getDatabaseConfig,
   getTableRecords,
   getDataStats

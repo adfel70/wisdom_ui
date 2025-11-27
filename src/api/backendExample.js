@@ -5,7 +5,7 @@
 
 import {
   get_tables_metadata,
-  db1, db2, db3, db4, db5, db6, db7, db8, db9, db10,
+  db1, db2, db3, db4,
   getDatabaseConfig,
   getTableRecords,
   getDataStats
@@ -105,7 +105,7 @@ export function exampleGetStats() {
 export function exampleMultiDatabaseSearch(query) {
   console.log(`\n=== Multi-Database Search: "${query}" ===`);
 
-  const databases = [db1, db2, db3, db4, db5, db6, db7, db8, db9, db10];
+  const databases = [db1, db2, db3, db4];
   const results = databases.map((dbFunc, idx) => {
     const records = dbFunc(query);
     return {

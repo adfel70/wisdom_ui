@@ -20,7 +20,7 @@ import {
   getAvailableYears,
   getAvailableCategories,
   getAvailableCountries,
-} from '../data/mockDatabase';
+} from '../data/mockDatabaseNew';
 
 /**
  * FilterModal Component

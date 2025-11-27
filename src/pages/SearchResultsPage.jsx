@@ -15,7 +15,7 @@ import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { MOCK_DATABASES } from '../data/mockDatabase';
+import { MOCK_DATABASES } from '../data/mockDatabaseNew';
 import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
