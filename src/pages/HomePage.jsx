@@ -68,18 +68,6 @@ const HomePage = () => {
     setFilters(clearedFilters);
   };
 
-  const handleClearAllFilters = () => {
-    setFilters({
-      tableName: '',
-      year: 'all',
-      category: 'all',
-      country: 'all',
-      minDate: '',
-      maxDate: '',
-      selectedTables: [],
-    });
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -230,13 +218,6 @@ const HomePage = () => {
                       color="secondary"
                     />
                   )}
-                  <Button
-                    size="small"
-                    onClick={handleClearAllFilters}
-                    sx={{ ml: 1, textTransform: 'none' }}
-                  >
-                    Clear All
-                  </Button>
                 </Box>
               )}
             </Paper>

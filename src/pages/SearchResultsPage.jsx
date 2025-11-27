@@ -13,7 +13,7 @@ import {
   Alert,
   Button,
 } from '@mui/material';
-import { Home as HomeIcon, FilterList, Clear } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -138,23 +138,6 @@ const SearchResultsPage = () => {
       (filters.selectedTables && filters.selectedTables.length > 0)
     );
   }, [filters]);
-
-  const handleClearFilters = () => {
-    const clearedFilters = {
-      year: 'all',
-      category: 'all',
-      country: 'all',
-      tableName: '',
-      minDate: '',
-      maxDate: '',
-      selectedTables: [],
-    };
-    setFilters(clearedFilters);
-
-    // Update URL with cleared filters
-    const params = new URLSearchParams({ q: inputValue });
-    navigate(`/search?${params.toString()}`, { replace: true });
-  };
 
   const handleBackToHome = () => {
     navigate('/');
@@ -339,19 +322,9 @@ const SearchResultsPage = () => {
           >
             {/* Active Filters Alert */}
             {hasActiveFilters && (
-              <Alert 
-                severity="info" 
+              <Alert
+                severity="info"
                 sx={{ mb: 3 }}
-                action={
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={handleClearFilters}
-                    startIcon={<Clear />}
-                  >
-                    Clear All
-                  </Button>
-                }
               >
                 <Box>
                   <Typography variant="body2" fontWeight={600} gutterBottom>
