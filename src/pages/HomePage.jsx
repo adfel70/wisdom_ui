@@ -40,6 +40,11 @@ const HomePage = () => {
 
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
+    // If tables are selected, you could navigate to a results page or handle them here
+    if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
+      console.log('Selected tables:', newFilters.selectedTables);
+      // You can add navigation or other logic here if needed
+    }
   };
 
   return (
@@ -131,7 +136,7 @@ const HomePage = () => {
               />
 
               {/* Active Filters Display */}
-              {Object.values(filters).some(v => v && v !== 'all') && (
+              {(Object.values(filters).some(v => v && v !== 'all') || (filters.selectedTables && filters.selectedTables.length > 0)) && (
                 <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                     Active filters:
@@ -154,6 +159,21 @@ const HomePage = () => {
                   {filters.tableName && (
                     <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
                       Table: {filters.tableName}
+                    </Typography>
+                  )}
+                  {filters.minDate && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
+                      From: {filters.minDate}
+                    </Typography>
+                  )}
+                  {filters.maxDate && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
+                      To: {filters.maxDate}
+                    </Typography>
+                  )}
+                  {filters.selectedTables && filters.selectedTables.length > 0 && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'secondary.main', color: 'white', borderRadius: 1 }}>
+                      {filters.selectedTables.length} table{filters.selectedTables.length > 1 ? 's' : ''} selected
                     </Typography>
                   )}
                 </Box>
@@ -206,12 +226,12 @@ const HomePage = () => {
               ))}
             </Box>
 
-            {/* Table View Navigation Button */}
+            {/* Browse Tables Button */}
             <Box sx={{ mt: 4, textAlign: 'center' }}>
               <Button
-                variant="contained"
+                variant="outlined"
                 size="large"
-                onClick={() => navigate('/tables')}
+                onClick={() => setIsFilterOpen(true)}
                 sx={{
                   px: 4,
                   py: 1.5,
@@ -219,18 +239,18 @@ const HomePage = () => {
                   textTransform: 'none',
                   fontSize: '1rem',
                   fontWeight: 600,
-                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                  borderWidth: 2,
                   '&:hover': {
-                    boxShadow: '0 6px 16px rgba(37, 99, 235, 0.4)',
+                    borderWidth: 2,
                     transform: 'translateY(-2px)',
                   },
                   transition: 'all 0.3s ease',
                 }}
               >
-                View All Tables
+                Browse & Filter Tables
               </Button>
               <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                Browse all tables with date range filters
+                View all tables with advanced filters and selection
               </Typography>
             </Box>
           </motion.div>

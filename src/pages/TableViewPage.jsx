@@ -15,10 +15,13 @@ import {
   Stack,
   Chip,
   Button,
-  IconButton
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ClearIcon from '@mui/icons-material/Clear';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { MOCK_DATABASES } from '../data/mockDatabase';
 
 /**
@@ -76,6 +79,14 @@ const TableViewPage = () => {
     });
   };
 
+  // Clear all filters
+  const handleClearFilters = () => {
+    setMinDate('');
+    setMaxDate('');
+  };
+
+  const hasActiveFilters = minDate || maxDate;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -109,10 +120,25 @@ const TableViewPage = () => {
         </Box>
 
         {/* Date Range Filters */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Filter by Indexing Date
-          </Typography>
+        <Paper sx={{ p: 3, mb: 3, boxShadow: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CalendarTodayIcon color="primary" />
+              <Typography variant="h6">
+                Filter by Indexing Date
+              </Typography>
+            </Box>
+            {hasActiveFilters && (
+              <Button
+                startIcon={<ClearIcon />}
+                onClick={handleClearFilters}
+                size="small"
+                color="secondary"
+              >
+                Clear Filters
+              </Button>
+            )}
+          </Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="Min Date"
@@ -135,13 +161,23 @@ const TableViewPage = () => {
               fullWidth
             />
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            Showing {filteredTables.length} of {allTables.length} tables
-          </Typography>
+          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Showing <strong>{filteredTables.length}</strong> of <strong>{allTables.length}</strong> tables
+            </Typography>
+            {hasActiveFilters && (
+              <Chip
+                label="Filters Active"
+                color="primary"
+                size="small"
+                variant="outlined"
+              />
+            )}
+          </Box>
         </Paper>
 
         {/* Tables View */}
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
           <Table sx={{ minWidth: 650 }} aria-label="tables overview">
             <TableHead>
               <TableRow sx={{ bgcolor: 'primary.main' }}>
@@ -157,10 +193,29 @@ const TableViewPage = () => {
             <TableBody>
               {filteredTables.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No tables found matching the selected date range
-                    </Typography>
+                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <CalendarTodayIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                      <Typography variant="h6" color="text.secondary">
+                        No tables found
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {hasActiveFilters 
+                          ? 'Try adjusting your date range filters'
+                          : 'No tables available in the database'
+                        }
+                      </Typography>
+                      {hasActiveFilters && (
+                        <Button
+                          variant="outlined"
+                          onClick={handleClearFilters}
+                          startIcon={<ClearIcon />}
+                          sx={{ mt: 1 }}
+                        >
+                          Clear Filters
+                        </Button>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -177,8 +232,16 @@ const TableViewPage = () => {
                         {table.name}
                       </Typography>
                     </TableCell>
-                    <TableCell>{table.year}</TableCell>
-                    <TableCell>{table.country}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {table.year}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {table.country}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
                         {table.categories.map((category, idx) => (
@@ -192,14 +255,18 @@ const TableViewPage = () => {
                         ))}
                       </Stack>
                     </TableCell>
-                    <TableCell>{formatDate(table.indexingDate)}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatDate(table.indexingDate)}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
                         {table.databaseName}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" fontWeight={500}>
+                      <Typography variant="body2" fontWeight={500} color="primary">
                         {table.count.toLocaleString()}
                       </Typography>
                     </TableCell>
