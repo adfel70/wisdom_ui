@@ -107,70 +107,80 @@ const SearchResultsPage = () => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: 6 }}>
-        {/* Header */}
-        <Paper
-          elevation={1}
-          sx={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 0,
-          }}
-        >
-          <Container maxWidth="xl">
-            <Box sx={{ py: 2 }}>
-              {/* Top Bar */}
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
+    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: 6 }}>
+      {/* Header */}
+      <Paper
+        elevation={1}
+        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: 0,
+        }}
+      >
+        <Container maxWidth="xl">
+          <Box sx={{ py: 2 }}>
+            {/* Top Bar */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <IconButton
+                  onClick={handleBackToHome}
+                  sx={{
+                    color: 'text.secondary',
+                    '&:hover': {
+                      color: 'primary.main',
+                      backgroundColor: 'primary.light',
+                    },
+                  }}
+                >
+                  <HomeIcon />
+                </IconButton>
+
+                <Divider orientation="vertical" flexItem />
+
+                <Typography variant="h6" fontWeight={600} color="text.primary">
+                  Wisdom UI
+                </Typography>
+
+                <Box sx={{ flex: 1 }} />
+
+                <Typography variant="body2" color="text.secondary">
+                  Search Results
+                </Typography>
+              </Box>
+            </motion.div>
+
+            {/* Search Bar */}
+            <motion.div
+              layout
+              layoutId="search-container"
+              transition={{
+                layout: { duration: 0.6, ease: [0.4, 0, 0.2, 1] }
+              }}
+            >
+              <Paper
+                elevation={3}
+                sx={{
+                  backgroundColor: 'background.paper',
+                  borderRadius: 2,
+                  p: 3,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <IconButton
-                    onClick={handleBackToHome}
-                    sx={{
-                      color: 'text.secondary',
-                      '&:hover': {
-                        color: 'primary.main',
-                        backgroundColor: 'primary.light',
-                      },
-                    }}
-                  >
-                    <HomeIcon />
-                  </IconButton>
-
-                  <Divider orientation="vertical" flexItem />
-
-                  <Typography variant="h6" fontWeight={600} color="text.primary">
-                    Wisdom UI
-                  </Typography>
-
-                  <Box sx={{ flex: 1 }} />
-
-                  <Typography variant="body2" color="text.secondary">
-                    Search Results
-                  </Typography>
-                </Box>
-              </motion.div>
-
-              {/* Search Bar */}
-              <motion.div layoutId="search-bar">
                 <SearchBar
                   value={searchQuery}
                   onChange={setSearchQuery}
                   onFilterClick={() => setIsFilterOpen(true)}
                   variant="compact"
                 />
-              </motion.div>
+              </Paper>
+            </motion.div>
 
             {/* Database Tabs */}
             <DatabaseTabs
@@ -185,43 +195,48 @@ const SearchResultsPage = () => {
 
       {/* Results Content */}
       <Container maxWidth="xl" sx={{ mt: 4 }}>
-        {/* Results Summary */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
-            {currentDatabase?.name}
-          </Typography>
-          {currentDatabase?.description && (
-            <Typography variant="body2" color="text.secondary">
-              {currentDatabase.description}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          {/* Results Summary */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" fontWeight={600} gutterBottom>
+              {currentDatabase?.name}
             </Typography>
-          )}
-          {currentTables.length > 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''}
-              {searchQuery && ` matching "${searchQuery}"`}
-            </Typography>
-          )}
-        </Box>
+            {currentDatabase?.description && (
+              <Typography variant="body2" color="text.secondary">
+                {currentDatabase.description}
+              </Typography>
+            )}
+            {currentTables.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''}
+                {searchQuery && ` matching "${searchQuery}"`}
+              </Typography>
+            )}
+          </Box>
 
-        {/* Table Cards or Empty State */}
-        {currentTables.length === 0 ? (
-          <EmptyState type={getEmptyStateType()} />
-        ) : (
-          currentTables.map((table) => (
-            <TableCard key={table.id} table={table} query={searchQuery} />
-          ))
-        )}
+          {/* Table Cards or Empty State */}
+          {currentTables.length === 0 ? (
+            <EmptyState type={getEmptyStateType()} />
+          ) : (
+            currentTables.map((table) => (
+              <TableCard key={table.id} table={table} query={searchQuery} />
+            ))
+          )}
+        </motion.div>
       </Container>
 
-        {/* Filter Modal */}
-        <FilterModal
-          open={isFilterOpen}
-          onClose={() => setIsFilterOpen(false)}
-          onApply={handleApplyFilters}
-          initialFilters={filters}
-        />
-      </Box>
-    </motion.div>
+      {/* Filter Modal */}
+      <FilterModal
+        open={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+      />
+    </Box>
   );
 };
 
