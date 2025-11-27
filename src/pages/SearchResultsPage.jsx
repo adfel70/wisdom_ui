@@ -7,6 +7,7 @@ import {
   Typography,
   IconButton,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import { Home as HomeIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -15,12 +16,15 @@ import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { MOCK_DATABASES } from '../data/mockDatabaseNew';
+import { getMockDatabase, getDatabaseMetadata } from '../data/mockDatabaseNew';
 import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
  * Displays search results with database tabs and filtered tables
+ *
+ * IMPORTANT: This component loads data on-demand (async).
+ * Only the active database is loaded, not all databases at once.
  */
 const SearchResultsPage = () => {
   const navigate = useNavigate();
@@ -31,6 +35,11 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [currentDatabaseData, setCurrentDatabaseData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Get database metadata (lightweight, no records)
+  const databaseMetadata = getDatabaseMetadata();
 
   // Initialize from URL params
   useEffect(() => {
@@ -50,25 +59,41 @@ const SearchResultsPage = () => {
     });
   }, [searchParams]);
 
-  // Get filtered tables for current database
-  const filteredDatabases = useMemo(() => {
-    return MOCK_DATABASES.map(db => ({
-      ...db,
-      tables: applySearchAndFilters(db.tables, searchQuery, filters),
-    }));
-  }, [searchQuery, filters]);
+  // Load data for active database
+  useEffect(() => {
+    let isCancelled = false;
 
-  const currentDatabase = filteredDatabases.find(db => db.id === activeDatabase);
-  const currentTables = currentDatabase?.tables || [];
+    const loadDatabase = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getMockDatabase(activeDatabase);
+        if (!isCancelled) {
+          setCurrentDatabaseData(data);
+        }
+      } catch (error) {
+        console.error('Failed to load database:', error);
+        if (!isCancelled) {
+          setCurrentDatabaseData(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-  // Calculate table counts for each database
-  const tableCounts = useMemo(() => {
-    const counts = {};
-    filteredDatabases.forEach(db => {
-      counts[db.id] = db.tables.length;
-    });
-    return counts;
-  }, [filteredDatabases]);
+    loadDatabase();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeDatabase]);
+
+  // Apply filters to current database
+  const currentTables = useMemo(() => {
+    if (!currentDatabaseData) return [];
+    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters);
+  }, [currentDatabaseData, searchQuery, filters]);
 
   const handleBackToHome = () => {
     navigate('/');
@@ -120,7 +145,7 @@ const SearchResultsPage = () => {
     const hasFilters = Object.values(filters).some(v => v && v !== 'all');
     const hasSearch = searchQuery.trim() !== '';
 
-    if (currentDatabase?.tables.length === 0 && !hasFilters && !hasSearch) {
+    if (currentDatabaseData?.tables.length === 0 && !hasFilters && !hasSearch) {
       return 'empty-database';
     }
     if (hasFilters && currentTables.length === 0) {
@@ -214,10 +239,10 @@ const SearchResultsPage = () => {
 
             {/* Database Tabs */}
             <DatabaseTabs
-              databases={filteredDatabases}
+              databases={databaseMetadata}
               activeDatabase={activeDatabase}
               onChange={setActiveDatabase}
-              tableCounts={tableCounts}
+              tableCounts={{ [activeDatabase]: currentTables.length }}
             />
           </Box>
         </Container>
@@ -233,14 +258,14 @@ const SearchResultsPage = () => {
             {/* Results Summary */}
             <Box sx={{ mb: 3 }}>
               <Typography variant="h5" fontWeight={600} gutterBottom>
-                {currentDatabase?.name}
+                {currentDatabaseData?.name || 'Loading...'}
               </Typography>
-              {currentDatabase?.description && (
+              {currentDatabaseData?.description && (
                 <Typography variant="body2" color="text.secondary">
-                  {currentDatabase.description}
+                  {currentDatabaseData.description}
                 </Typography>
               )}
-              {currentTables.length > 0 && (
+              {!isLoading && currentTables.length > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''}
                   {searchQuery && ` matching "${searchQuery}"`}
@@ -248,13 +273,22 @@ const SearchResultsPage = () => {
               )}
             </Box>
 
-            {/* Table Cards or Empty State */}
-            {currentTables.length === 0 ? (
-              <EmptyState type={getEmptyStateType()} />
+            {/* Loading State */}
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
             ) : (
-              currentTables.map((table) => (
-                <TableCard key={table.id} table={table} query={searchQuery} />
-              ))
+              <>
+                {/* Table Cards or Empty State */}
+                {currentTables.length === 0 ? (
+                  <EmptyState type={getEmptyStateType()} />
+                ) : (
+                  currentTables.map((table) => (
+                    <TableCard key={table.id} table={table} query={searchQuery} />
+                  ))
+                )}
+              </>
             )}
           </motion.div>
         </Container>
