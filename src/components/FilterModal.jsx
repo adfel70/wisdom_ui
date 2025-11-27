@@ -64,9 +64,9 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
     return tables;
   }, []);
 
-  // Filter tables based on current filters
+  // Filter tables based on current filters and sort selected to top
   const filteredTables = useMemo(() => {
-    return allTables.filter(table => {
+    const filtered = allTables.filter(table => {
       // Filter by table name
       if (filters.tableName && !table.name.toLowerCase().includes(filters.tableName.toLowerCase())) {
         return false;
@@ -104,7 +104,17 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
 
       return true;
     });
-  }, [allTables, filters]);
+
+    // Sort: selected tables first, then unselected
+    return filtered.sort((a, b) => {
+      const aSelected = selectedTables.includes(a.id);
+      const bSelected = selectedTables.includes(b.id);
+      
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return 0;
+    });
+  }, [allTables, filters, selectedTables]);
 
   useEffect(() => {
     if (open) {
@@ -117,7 +127,8 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
         maxDate: '',
         ...initialFilters,
       });
-      setSelectedTables([]);
+      // Preserve selected tables from initialFilters
+      setSelectedTables(initialFilters.selectedTables || []);
     }
   }, [open, initialFilters]);
 
@@ -338,14 +349,22 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
         {/* Tables Selection Section */}
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              Tables ({filteredTables.length} {filteredTables.length === 1 ? 'table' : 'tables'})
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Tables
+              </Typography>
+              <Chip
+                label={`${filteredTables.length} available`}
+                size="small"
+                variant="outlined"
+              />
+            </Box>
             {selectedTables.length > 0 && (
               <Chip
                 label={`${selectedTables.length} selected`}
                 color="primary"
                 size="small"
+                sx={{ fontWeight: 600 }}
               />
             )}
           </Box>
@@ -379,37 +398,45 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTables.map((table) => (
-                    <TableRow
-                      key={table.id}
-                      hover
-                      onClick={() => handleSelectTable(table.id)}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedTables.includes(table.id)}
-                          onChange={() => handleSelectTable(table.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {table.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {table.databaseName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {table.year}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {table.country}
-                        </Typography>
-                      </TableCell>
+                  filteredTables.map((table) => {
+                    const isSelected = selectedTables.includes(table.id);
+                    return (
+                      <TableRow
+                        key={table.id}
+                        hover
+                        onClick={() => handleSelectTable(table.id)}
+                        sx={{ 
+                          cursor: 'pointer',
+                          bgcolor: isSelected ? 'action.selected' : 'inherit',
+                          '&:hover': {
+                            bgcolor: isSelected ? 'action.selected' : 'action.hover',
+                          }
+                        }}
+                      >
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={isSelected}
+                            onChange={() => handleSelectTable(table.id)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
+                            {table.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {table.databaseName}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
+                            {table.year}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
+                            {table.country}
+                          </Typography>
+                        </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
                           {table.categories.slice(0, 2).map((category, idx) => (
@@ -431,18 +458,19 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                           )}
                         </Stack>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatDate(table.indexingDate)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2" fontWeight={500}>
-                          {table.count.toLocaleString()}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {formatDate(table.indexingDate)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
+                            {table.count.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

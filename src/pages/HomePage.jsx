@@ -237,27 +237,6 @@ const HomePage = () => {
 
             {/* Browse Tables Button */}
             <Box sx={{ mt: 4, textAlign: 'center' }}>
-              <Button
-                variant="outlined"
-                size="large"
-                onClick={() => setIsFilterOpen(true)}
-                sx={{
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  borderWidth: 2,
-                  '&:hover': {
-                    borderWidth: 2,
-                    transform: 'translateY(-2px)',
-                  },
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                Browse & Filter Tables
-              </Button>
               <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
                 View all tables with advanced filters and selection
               </Typography>

@@ -7,15 +7,19 @@ import {
   Typography,
   IconButton,
   Divider,
+  Chip,
+  Stack,
+  Alert,
+  Button,
 } from '@mui/material';
-import { Home as HomeIcon } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Clear } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { MOCK_DATABASES } from '../data/mockDatabase';
+import { MOCK_DATABASES } from '../data/mockDatabaseNew';
 import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
@@ -67,6 +71,41 @@ const SearchResultsPage = () => {
 
   const currentDatabase = filteredDatabases.find(db => db.id === activeDatabase);
   const currentTables = currentDatabase?.tables || [];
+
+  // Calculate total tables with results across all databases
+  const totalTablesWithResults = useMemo(() => {
+    return filteredDatabases.reduce((count, db) => count + db.tables.length, 0);
+  }, [filteredDatabases]);
+
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return (
+      (filters.year && filters.year !== 'all') ||
+      (filters.category && filters.category !== 'all') ||
+      (filters.country && filters.country !== 'all') ||
+      filters.tableName ||
+      filters.minDate ||
+      filters.maxDate ||
+      (filters.selectedTables && filters.selectedTables.length > 0)
+    );
+  }, [filters]);
+
+  const handleClearFilters = () => {
+    const clearedFilters = {
+      year: 'all',
+      category: 'all',
+      country: 'all',
+      tableName: '',
+      minDate: '',
+      maxDate: '',
+      selectedTables: [],
+    };
+    setFilters(clearedFilters);
+    
+    // Update URL with cleared filters
+    const params = new URLSearchParams({ q: inputValue });
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
 
   // Calculate table counts for each database
   const tableCounts = useMemo(() => {
@@ -258,11 +297,97 @@ const SearchResultsPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
+            {/* Active Filters Alert */}
+            {hasActiveFilters && (
+              <Alert 
+                severity="info" 
+                sx={{ mb: 3 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={handleClearFilters}
+                    startIcon={<Clear />}
+                  >
+                    Clear All
+                  </Button>
+                }
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Filters Active
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                    {filters.year && filters.year !== 'all' && (
+                      <Chip
+                        label={`Year: ${filters.year}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, year: 'all' })}
+                      />
+                    )}
+                    {filters.category && filters.category !== 'all' && (
+                      <Chip
+                        label={`Category: ${filters.category}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, category: 'all' })}
+                      />
+                    )}
+                    {filters.country && filters.country !== 'all' && (
+                      <Chip
+                        label={`Country: ${filters.country}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, country: 'all' })}
+                      />
+                    )}
+                    {filters.tableName && (
+                      <Chip
+                        label={`Table: ${filters.tableName}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, tableName: '' })}
+                      />
+                    )}
+                    {filters.minDate && (
+                      <Chip
+                        label={`From: ${filters.minDate}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, minDate: '' })}
+                      />
+                    )}
+                    {filters.maxDate && (
+                      <Chip
+                        label={`To: ${filters.maxDate}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, maxDate: '' })}
+                      />
+                    )}
+                    {filters.selectedTables && filters.selectedTables.length > 0 && (
+                      <Chip
+                        label={`${filters.selectedTables.length} table${filters.selectedTables.length !== 1 ? 's' : ''} selected`}
+                        size="small"
+                        color="primary"
+                        onDelete={() => handleApplyFilters({ ...filters, selectedTables: [] })}
+                      />
+                    )}
+                  </Stack>
+                </Box>
+              </Alert>
+            )}
+
             {/* Results Summary */}
             <Box sx={{ mb: 3 }}>
-              <Typography variant="h5" fontWeight={600} gutterBottom>
-                {currentDatabase?.name}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="h5" fontWeight={600}>
+                  {currentDatabase?.name}
+                </Typography>
+                {searchQuery && totalTablesWithResults > 0 && (
+                  <Chip
+                    icon={<FilterList />}
+                    label={`Results in ${totalTablesWithResults} table${totalTablesWithResults !== 1 ? 's' : ''} across all databases`}
+                    variant="outlined"
+                    color="primary"
+                  />
+                )}
+              </Box>
               {currentDatabase?.description && (
                 <Typography variant="body2" color="text.secondary">
                   {currentDatabase.description}
@@ -270,11 +395,8 @@ const SearchResultsPage = () => {
               )}
               {currentTables.length > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''}
+                  Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''} in this database
                   {searchQuery && ` matching "${searchQuery}"`}
-                  {filters.selectedTables && filters.selectedTables.length > 0 && (
-                    <> (from {filters.selectedTables.length} selected table{filters.selectedTables.length !== 1 ? 's' : ''})</>
-                  )}
                 </Typography>
               )}
             </Box>

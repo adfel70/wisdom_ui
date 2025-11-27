@@ -22,7 +22,7 @@ import { motion } from 'framer-motion';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ClearIcon from '@mui/icons-material/Clear';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import { MOCK_DATABASES } from '../data/mockDatabase';
+import { MOCK_DATABASES } from '../data/mockDatabaseNew';
 
 /**
  * TableViewPage Component
