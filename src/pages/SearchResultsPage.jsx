@@ -41,6 +41,22 @@ const SearchResultsPage = () => {
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
 
+  // Calculate table counts - show metadata count for inactive databases, filtered count for active
+  const tableCounts = useMemo(() => {
+    const counts = {};
+    databaseMetadata.forEach(db => {
+      if (db.id === activeDatabase && currentDatabaseData) {
+        // For active database, show filtered count
+        counts[db.id] = currentTables.length;
+      } else {
+        // For inactive databases, we can't show filtered count without loading them
+        // Show undefined so the tab doesn't display a count
+        counts[db.id] = undefined;
+      }
+    });
+    return counts;
+  }, [databaseMetadata, activeDatabase, currentDatabaseData, currentTables]);
+
   // Initialize from URL params
   useEffect(() => {
     const query = searchParams.get('q') || '';
@@ -242,7 +258,7 @@ const SearchResultsPage = () => {
               databases={databaseMetadata}
               activeDatabase={activeDatabase}
               onChange={setActiveDatabase}
-              tableCounts={{ [activeDatabase]: currentTables.length }}
+              tableCounts={tableCounts}
             />
           </Box>
         </Container>

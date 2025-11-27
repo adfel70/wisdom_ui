@@ -32,7 +32,7 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} })
         }}
       >
         {databases.map((database) => {
-          const tableCount = tableCounts[database.id] || database.tables.length;
+          const tableCount = tableCounts[database.id] !== undefined ? tableCounts[database.id] : (database.tables?.length);
 
           return (
             <Tab
@@ -42,7 +42,7 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} })
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DatabaseIcon sx={{ fontSize: 18 }} />
                   <span>{database.name}</span>
-                  {tableCount > 0 && (
+                  {tableCount !== undefined && tableCount > 0 && (
                     <Badge
                       badgeContent={tableCount}
                       color="primary"
