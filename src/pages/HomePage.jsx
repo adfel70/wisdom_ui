@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper } from '@mui/material';
+import { Box, Container, Typography, Paper, Button } from '@mui/material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -34,12 +34,26 @@ const HomePage = () => {
     if (filters.tableName) {
       params.append('tableName', filters.tableName);
     }
+    if (filters.minDate) {
+      params.append('minDate', filters.minDate);
+    }
+    if (filters.maxDate) {
+      params.append('maxDate', filters.maxDate);
+    }
+    if (filters.selectedTables && filters.selectedTables.length > 0) {
+      params.append('selectedTables', filters.selectedTables.join(','));
+    }
 
     navigate(`/search?${params.toString()}`);
   };
 
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
+    // If tables are selected, you could navigate to a results page or handle them here
+    if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
+      console.log('Selected tables:', newFilters.selectedTables);
+      // You can add navigation or other logic here if needed
+    }
   };
 
   return (
@@ -131,7 +145,7 @@ const HomePage = () => {
               />
 
               {/* Active Filters Display */}
-              {Object.values(filters).some(v => v && v !== 'all') && (
+              {(Object.values(filters).some(v => v && v !== 'all') || (filters.selectedTables && filters.selectedTables.length > 0)) && (
                 <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                     Active filters:
@@ -154,6 +168,21 @@ const HomePage = () => {
                   {filters.tableName && (
                     <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
                       Table: {filters.tableName}
+                    </Typography>
+                  )}
+                  {filters.minDate && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
+                      From: {filters.minDate}
+                    </Typography>
+                  )}
+                  {filters.maxDate && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
+                      To: {filters.maxDate}
+                    </Typography>
+                  )}
+                  {filters.selectedTables && filters.selectedTables.length > 0 && (
+                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'secondary.main', color: 'white', borderRadius: 1 }}>
+                      {filters.selectedTables.length} table{filters.selectedTables.length > 1 ? 's' : ''} selected
                     </Typography>
                   )}
                 </Box>
@@ -204,6 +233,13 @@ const HomePage = () => {
                   </Typography>
                 </Paper>
               ))}
+            </Box>
+
+            {/* Browse Tables Button */}
+            <Box sx={{ mt: 4, textAlign: 'center' }}>
+              <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                View all tables with advanced filters and selection
+              </Typography>
             </Box>
           </motion.div>
         </Container>
