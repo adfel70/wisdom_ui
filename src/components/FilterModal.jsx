@@ -32,7 +32,7 @@ import {
   getAvailableCategories,
   getAvailableCountries,
   MOCK_DATABASES,
-} from '../data/mockDatabase';
+} from '../data/mockDatabaseNew';
 
 /**
  * FilterModal Component
