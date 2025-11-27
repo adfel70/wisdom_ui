@@ -34,6 +34,15 @@ const HomePage = () => {
     if (filters.tableName) {
       params.append('tableName', filters.tableName);
     }
+    if (filters.minDate) {
+      params.append('minDate', filters.minDate);
+    }
+    if (filters.maxDate) {
+      params.append('maxDate', filters.maxDate);
+    }
+    if (filters.selectedTables && filters.selectedTables.length > 0) {
+      params.append('selectedTables', filters.selectedTables.join(','));
+    }
 
     navigate(`/search?${params.toString()}`);
   };
