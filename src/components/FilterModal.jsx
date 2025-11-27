@@ -31,7 +31,7 @@ import {
   getAvailableYears,
   getAvailableCategories,
   getAvailableCountries,
-  MOCK_DATABASES,
+  getMockDatabases,
 } from '../data/mockDatabaseNew';
 
 /**
@@ -49,11 +49,21 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
     ...initialFilters,
   });
   const [selectedTables, setSelectedTables] = useState([]);
+  const [allDatabases, setAllDatabases] = useState([]);
+
+  // Load all databases when modal opens
+  useEffect(() => {
+    if (open) {
+      getMockDatabases().then(databases => {
+        setAllDatabases(databases);
+      });
+    }
+  }, [open]);
 
   // Flatten all tables from all databases
   const allTables = useMemo(() => {
     const tables = [];
-    MOCK_DATABASES.forEach(db => {
+    allDatabases.forEach(db => {
       db.tables.forEach(table => {
         tables.push({
           ...table,
@@ -62,7 +72,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
       });
     });
     return tables;
-  }, []);
+  }, [allDatabases]);
 
   // Filter tables based on current filters and sort selected to top
   const filteredTables = useMemo(() => {

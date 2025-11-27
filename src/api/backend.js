@@ -1,49 +1,42 @@
 /**
  * Backend API Module
  * Simulates backend database queries for different database types (Elastic, Mongo, etc.)
+ *
+ * IMPORTANT: This mock simulates a real backend that queries data on-demand.
+ * - Metadata is loaded upfront (small, ~80KB)
+ * - Records are fetched dynamically per database query (no caching)
+ * - This matches the real backend architecture (Elastic DB)
  */
 
-import generatedData from '../data/generatedData.json' with { type: 'json' };
+import metadataFile from '../data/metadata.json' with { type: 'json' };
 
-// Cache for metadata (loaded once on app start)
-let metadataCache = null;
-let recordsCache = null;
-
-// Database organization (matching the UI tabs)
-const DATABASE_CONFIG = {
-  db1: { name: 'Sales Database', description: 'Contains sales transactions, inventory, and customer data', tableKeys: [] },
-  db2: { name: 'HR & Personnel', description: 'Human resources and employee management data', tableKeys: [] },
-  db3: { name: 'Marketing Analytics', description: 'Marketing campaigns, leads, and analytics data', tableKeys: [] },
-  db4: { name: 'Legacy Archives', description: 'Historical data and archived records', tableKeys: [] },
-};
-
-/**
- * Initialize database configuration by distributing tables across databases
- */
-function initializeDatabaseConfig() {
-  const tableKeys = Object.keys(metadataCache);
-  const dbKeys = Object.keys(DATABASE_CONFIG);
-  const tablesPerDb = Math.ceil(tableKeys.length / dbKeys.length);
-
-  tableKeys.forEach((tableKey, idx) => {
-    const dbIdx = Math.floor(idx / tablesPerDb);
-    const dbKey = dbKeys[Math.min(dbIdx, dbKeys.length - 1)];
-    DATABASE_CONFIG[dbKey].tableKeys.push(tableKey);
-  });
-}
+// Metadata loaded once on app start (small file, OK to keep in memory)
+const METADATA = metadataFile.metadata;
+const DATABASE_CONFIG = metadataFile.databaseConfig;
+const DATABASE_ASSIGNMENTS = metadataFile.databaseAssignments;
 
 /**
  * Get all table metadata
- * Simulates loading metadata from backend on app start
+ * Returns metadata for all tables (loaded upfront)
  * @returns {Object} Map of tableKey to metadata
  */
 export function get_tables_metadata() {
-  if (!metadataCache) {
-    metadataCache = generatedData.metadata;
-    recordsCache = generatedData.records;
-    initializeDatabaseConfig();
+  return METADATA;
+}
+
+/**
+ * Fetch records for a specific database
+ * Simulates an API call to the backend (Elastic, etc.)
+ * @param {string} dbKey - Database key (e.g., 'db1')
+ * @returns {Promise<Array>} List of records for this database
+ */
+async function fetchDatabaseRecords(dbKey) {
+  const response = await fetch(`/src/data/records/${dbKey}.json`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch records for ${dbKey}`);
   }
-  return metadataCache;
+  const data = await response.json();
+  return data.records;
 }
 
 /**
@@ -70,25 +63,19 @@ function searchRecords(records, query) {
 
 /**
  * Query records for a specific database
+ * Fetches records on-demand (no caching, like real Elastic backend)
  * @param {string} dbKey - Database key (e.g., 'db1')
  * @param {string} query - Search query string
- * @returns {Array} List of matching records with tableKey field
+ * @returns {Promise<Array>} List of matching records with tableKey field
  */
-function queryDatabase(dbKey, query = '') {
-  // Ensure metadata is loaded
-  if (!metadataCache) {
-    get_tables_metadata();
-  }
-
+async function queryDatabase(dbKey, query = '') {
   const config = DATABASE_CONFIG[dbKey];
   if (!config) {
     throw new Error(`Database ${dbKey} not found`);
   }
 
-  // Get all records for tables in this database
-  const dbRecords = recordsCache.filter(record =>
-    config.tableKeys.includes(record.tableKey)
-  );
+  // Fetch records from file (simulates backend API call)
+  const dbRecords = await fetchDatabaseRecords(dbKey);
 
   // Apply search filter
   return searchRecords(dbRecords, query);
@@ -97,21 +84,22 @@ function queryDatabase(dbKey, query = '') {
 /**
  * Database query functions (simulating different backend types)
  * Each function represents a different database tab in the UI
+ * All functions are async and fetch data on-demand
  */
 
-export function db1(query) {
+export async function db1(query) {
   return queryDatabase('db1', query);
 }
 
-export function db2(query) {
+export async function db2(query) {
   return queryDatabase('db2', query);
 }
 
-export function db3(query) {
+export async function db3(query) {
   return queryDatabase('db3', query);
 }
 
-export function db4(query) {
+export async function db4(query) {
   return queryDatabase('db4', query);
 }
 
@@ -120,22 +108,39 @@ export function db4(query) {
  * @returns {Object} Database configuration with table assignments
  */
 export function getDatabaseConfig() {
-  if (!metadataCache) {
-    get_tables_metadata();
-  }
-  return DATABASE_CONFIG;
+  return {
+    db1: { ...DATABASE_CONFIG.db1, tableKeys: DATABASE_ASSIGNMENTS.db1 },
+    db2: { ...DATABASE_CONFIG.db2, tableKeys: DATABASE_ASSIGNMENTS.db2 },
+    db3: { ...DATABASE_CONFIG.db3, tableKeys: DATABASE_ASSIGNMENTS.db3 },
+    db4: { ...DATABASE_CONFIG.db4, tableKeys: DATABASE_ASSIGNMENTS.db4 },
+  };
 }
 
 /**
  * Get all records for a specific table
+ * Fetches from the appropriate database file
  * @param {string} tableKey - Table key (e.g., 't1')
- * @returns {Array} All records for the table
+ * @returns {Promise<Array>} All records for the table
  */
-export function getTableRecords(tableKey) {
-  if (!recordsCache) {
-    get_tables_metadata();
+export async function getTableRecords(tableKey) {
+  // Find which database contains this table
+  let dbKey = null;
+  for (const [key, tableKeys] of Object.entries(DATABASE_ASSIGNMENTS)) {
+    if (tableKeys.includes(tableKey)) {
+      dbKey = key;
+      break;
+    }
   }
-  return recordsCache.filter(record => record.tableKey === tableKey);
+
+  if (!dbKey) {
+    throw new Error(`Table ${tableKey} not found in any database`);
+  }
+
+  // Fetch all records from the database
+  const dbRecords = await fetchDatabaseRecords(dbKey);
+
+  // Filter for this specific table
+  return dbRecords.filter(record => record.tableKey === tableKey);
 }
 
 /**
@@ -143,16 +148,13 @@ export function getTableRecords(tableKey) {
  * @returns {Object} Data statistics
  */
 export function getDataStats() {
-  if (!metadataCache) {
-    get_tables_metadata();
-  }
   return {
-    totalTables: Object.keys(metadataCache).length,
-    totalRecords: recordsCache.length,
+    totalTables: Object.keys(METADATA).length,
+    totalRecords: Object.values(METADATA).reduce((sum, table) => sum + table.recordCount, 0),
     databases: Object.keys(DATABASE_CONFIG).map(dbKey => ({
       key: dbKey,
       name: DATABASE_CONFIG[dbKey].name,
-      tableCount: DATABASE_CONFIG[dbKey].tableKeys.length
+      tableCount: DATABASE_ASSIGNMENTS[dbKey].length
     }))
   };
 }

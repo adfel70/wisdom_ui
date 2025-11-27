@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,13 +16,14 @@ import {
   Chip,
   Button,
   IconButton,
-  Tooltip
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ClearIcon from '@mui/icons-material/Clear';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import { MOCK_DATABASES } from '../data/mockDatabaseNew';
+import { getMockDatabases } from '../data/mockDatabaseNew';
 
 /**
  * TableViewPage Component
@@ -32,11 +33,21 @@ const TableViewPage = () => {
   const navigate = useNavigate();
   const [minDate, setMinDate] = useState('');
   const [maxDate, setMaxDate] = useState('');
+  const [allDatabases, setAllDatabases] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load all databases on mount
+  useEffect(() => {
+    getMockDatabases().then(databases => {
+      setAllDatabases(databases);
+      setIsLoading(false);
+    });
+  }, []);
 
   // Flatten all tables from all databases
   const allTables = useMemo(() => {
     const tables = [];
-    MOCK_DATABASES.forEach(db => {
+    allDatabases.forEach(db => {
       db.tables.forEach(table => {
         tables.push({
           ...table,
@@ -45,7 +56,7 @@ const TableViewPage = () => {
       });
     });
     return tables;
-  }, []);
+  }, [allDatabases]);
 
   // Filter tables by date range
   const filteredTables = useMemo(() => {
@@ -191,7 +202,13 @@ const TableViewPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredTables.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : filteredTables.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

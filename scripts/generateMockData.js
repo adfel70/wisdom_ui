@@ -154,6 +154,34 @@ function generateRecords(metadata) {
   return records;
 }
 
+// Database configuration
+const DATABASE_CONFIG = {
+  db1: { name: 'Sales Database', description: 'Contains sales transactions, inventory, and customer data' },
+  db2: { name: 'HR & Personnel', description: 'Human resources and employee management data' },
+  db3: { name: 'Marketing Analytics', description: 'Marketing campaigns, leads, and analytics data' },
+  db4: { name: 'Legacy Archives', description: 'Historical data and archived records' },
+};
+
+// Distribute tables across databases
+function assignTablesToDatabases(numTables) {
+  const dbKeys = Object.keys(DATABASE_CONFIG);
+  const tablesPerDb = Math.ceil(numTables / dbKeys.length);
+  const assignments = {};
+
+  dbKeys.forEach(dbKey => {
+    assignments[dbKey] = [];
+  });
+
+  for (let i = 0; i < numTables; i++) {
+    const tableKey = `t${i + 1}`;
+    const dbIdx = Math.floor(i / tablesPerDb);
+    const dbKey = dbKeys[Math.min(dbIdx, dbKeys.length - 1)];
+    assignments[dbKey].push(tableKey);
+  }
+
+  return assignments;
+}
+
 // Main generation function
 function generateMockData() {
   console.log('Generating mock data...');
@@ -174,9 +202,22 @@ function generateMockData() {
     metadata[key] = rest;
   });
 
-  const output = {
+  // Assign tables to databases
+  const dbAssignments = assignTablesToDatabases(NUM_TABLES);
+
+  // Create output directory structure
+  const dataDir = path.join(__dirname, '..', 'src', 'data');
+  const recordsDir = path.join(dataDir, 'records');
+
+  if (!fs.existsSync(recordsDir)) {
+    fs.mkdirSync(recordsDir, { recursive: true });
+  }
+
+  // Write metadata file
+  const metadataOutput = {
     metadata,
-    records,
+    databaseConfig: DATABASE_CONFIG,
+    databaseAssignments: dbAssignments,
     generatedAt: new Date().toISOString(),
     stats: {
       totalTables: NUM_TABLES,
@@ -185,13 +226,32 @@ function generateMockData() {
     }
   };
 
-  // Write to file
-  const outputPath = path.join(__dirname, '..', 'src', 'data', 'generatedData.json');
-  fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
+  const metadataPath = path.join(dataDir, 'metadata.json');
+  fs.writeFileSync(metadataPath, JSON.stringify(metadataOutput, null, 2));
+  console.log(`✓ Saved metadata to ${metadataPath}`);
+  console.log(`✓ Metadata size: ${(fs.statSync(metadataPath).size / 1024).toFixed(2)} KB`);
 
-  console.log(`✓ Generated ${records.length} records across ${NUM_TABLES} tables`);
-  console.log(`✓ Saved to ${outputPath}`);
-  console.log(`✓ File size: ${(fs.statSync(outputPath).size / 1024 / 1024).toFixed(2)} MB`);
+  // Write records files per database
+  Object.keys(DATABASE_CONFIG).forEach(dbKey => {
+    const tableKeys = dbAssignments[dbKey];
+    const dbRecords = records.filter(record => tableKeys.includes(record.tableKey));
+
+    const recordsOutput = {
+      databaseKey: dbKey,
+      records: dbRecords,
+      stats: {
+        tableCount: tableKeys.length,
+        recordCount: dbRecords.length
+      }
+    };
+
+    const dbPath = path.join(recordsDir, `${dbKey}.json`);
+    fs.writeFileSync(dbPath, JSON.stringify(recordsOutput, null, 2));
+    console.log(`✓ Saved ${dbKey} records to ${dbPath} (${dbRecords.length} records, ${(fs.statSync(dbPath).size / 1024).toFixed(2)} KB)`);
+  });
+
+  console.log(`\n✓ Generated ${records.length} records across ${NUM_TABLES} tables`);
+  console.log(`✓ Split into ${Object.keys(DATABASE_CONFIG).length} database files`);
 }
 
 // Run generator

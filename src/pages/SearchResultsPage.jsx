@@ -7,6 +7,7 @@ import {
   Typography,
   IconButton,
   Divider,
+  CircularProgress,
   Chip,
   Stack,
   Alert,
@@ -19,12 +20,15 @@ import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { MOCK_DATABASES } from '../data/mockDatabaseNew';
+import { getMockDatabases, getDatabaseMetadata } from '../data/mockDatabaseNew';
 import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
  * Displays search results with database tabs and filtered tables
+ *
+ * IMPORTANT: Loads all databases upfront for fast tab switching.
+ * Files are still separated for organization and backend architecture matching.
  */
 const SearchResultsPage = () => {
   const navigate = useNavigate();
@@ -35,6 +39,11 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [allDatabases, setAllDatabases] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Get database metadata (lightweight, no records)
+  const databaseMetadata = getDatabaseMetadata();
 
   // Initialize from URL params
   useEffect(() => {
@@ -61,21 +70,61 @@ const SearchResultsPage = () => {
     });
   }, [searchParams]);
 
-  // Get filtered tables for current database
-  const filteredDatabases = useMemo(() => {
-    return MOCK_DATABASES.map(db => ({
-      ...db,
-      tables: applySearchAndFilters(db.tables, searchQuery, filters),
-    }));
-  }, [searchQuery, filters]);
+  // Load ALL databases on mount (fetch all at once)
+  useEffect(() => {
+    let isCancelled = false;
 
-  const currentDatabase = filteredDatabases.find(db => db.id === activeDatabase);
-  const currentTables = currentDatabase?.tables || [];
+    const loadAllDatabases = async () => {
+      setIsLoading(true);
+      try {
+        const databases = await getMockDatabases();
+        if (!isCancelled) {
+          setAllDatabases(databases);
+        }
+      } catch (error) {
+        console.error('Failed to load databases:', error);
+        if (!isCancelled) {
+          setAllDatabases([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadAllDatabases();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []); // Only run once on mount
+
+  // Get current database data (no fetching, just filtering from loaded data)
+  const currentDatabaseData = useMemo(() => {
+    return allDatabases.find(db => db.id === activeDatabase);
+  }, [allDatabases, activeDatabase]);
+
+  // Apply filters to current database
+  const currentTables = useMemo(() => {
+    if (!currentDatabaseData) return [];
+    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters);
+  }, [currentDatabaseData, searchQuery, filters]);
+
+  // Calculate table counts for all databases
+  const tableCounts = useMemo(() => {
+    const counts = {};
+    allDatabases.forEach(db => {
+      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters);
+      counts[db.id] = filteredTables.length;
+    });
+    return counts;
+  }, [allDatabases, searchQuery, filters]);
 
   // Calculate total tables with results across all databases
   const totalTablesWithResults = useMemo(() => {
-    return filteredDatabases.reduce((count, db) => count + db.tables.length, 0);
-  }, [filteredDatabases]);
+    return Object.values(tableCounts).reduce((sum, count) => sum + count, 0);
+  }, [tableCounts]);
 
   // Check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -101,20 +150,11 @@ const SearchResultsPage = () => {
       selectedTables: [],
     };
     setFilters(clearedFilters);
-    
+
     // Update URL with cleared filters
     const params = new URLSearchParams({ q: inputValue });
     navigate(`/search?${params.toString()}`, { replace: true });
   };
-
-  // Calculate table counts for each database
-  const tableCounts = useMemo(() => {
-    const counts = {};
-    filteredDatabases.forEach(db => {
-      counts[db.id] = db.tables.length;
-    });
-    return counts;
-  }, [filteredDatabases]);
 
   const handleBackToHome = () => {
     navigate('/');
@@ -187,7 +227,7 @@ const SearchResultsPage = () => {
     });
     const hasSearch = searchQuery.trim() !== '';
 
-    if (currentDatabase?.tables.length === 0 && !hasFilters && !hasSearch) {
+    if (currentDatabaseData?.tables.length === 0 && !hasFilters && !hasSearch) {
       return 'empty-database';
     }
     if (hasFilters && currentTables.length === 0) {
@@ -281,7 +321,7 @@ const SearchResultsPage = () => {
 
             {/* Database Tabs */}
             <DatabaseTabs
-              databases={filteredDatabases}
+              databases={databaseMetadata}
               activeDatabase={activeDatabase}
               onChange={setActiveDatabase}
               tableCounts={tableCounts}
@@ -377,7 +417,7 @@ const SearchResultsPage = () => {
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="h5" fontWeight={600}>
-                  {currentDatabase?.name}
+                  {currentDatabaseData?.name || 'Loading...'}
                 </Typography>
                 {searchQuery && totalTablesWithResults > 0 && (
                   <Chip
@@ -388,12 +428,12 @@ const SearchResultsPage = () => {
                   />
                 )}
               </Box>
-              {currentDatabase?.description && (
+              {currentDatabaseData?.description && (
                 <Typography variant="body2" color="text.secondary">
-                  {currentDatabase.description}
+                  {currentDatabaseData.description}
                 </Typography>
               )}
-              {currentTables.length > 0 && (
+              {!isLoading && currentTables.length > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''} in this database
                   {searchQuery && ` matching "${searchQuery}"`}
@@ -401,13 +441,22 @@ const SearchResultsPage = () => {
               )}
             </Box>
 
-            {/* Table Cards or Empty State */}
-            {currentTables.length === 0 ? (
-              <EmptyState type={getEmptyStateType()} />
+            {/* Loading State */}
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
             ) : (
-              currentTables.map((table) => (
-                <TableCard key={table.id} table={table} query={searchQuery} />
-              ))
+              <>
+                {/* Table Cards or Empty State */}
+                {currentTables.length === 0 ? (
+                  <EmptyState type={getEmptyStateType()} />
+                ) : (
+                  currentTables.map((table) => (
+                    <TableCard key={table.id} table={table} query={searchQuery} />
+                  ))
+                )}
+              </>
             )}
           </motion.div>
         </Container>
