@@ -8,8 +8,12 @@ import {
   IconButton,
   Divider,
   CircularProgress,
+  Chip,
+  Stack,
+  Alert,
+  Button,
 } from '@mui/material';
-import { Home as HomeIcon } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Clear } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -48,6 +52,10 @@ const SearchResultsPage = () => {
     const category = searchParams.get('category') || 'all';
     const country = searchParams.get('country') || 'all';
     const tableName = searchParams.get('tableName') || '';
+    const minDate = searchParams.get('minDate') || '';
+    const maxDate = searchParams.get('maxDate') || '';
+    const selectedTablesParam = searchParams.get('selectedTables') || '';
+    const selectedTables = selectedTablesParam ? selectedTablesParam.split(',') : [];
 
     setSearchQuery(query);
     setInputValue(query);
@@ -56,6 +64,9 @@ const SearchResultsPage = () => {
       category: category !== 'all' ? category : 'all',
       country: country !== 'all' ? country : 'all',
       tableName: tableName || '',
+      minDate: minDate || '',
+      maxDate: maxDate || '',
+      selectedTables: selectedTables,
     });
   }, [searchParams]);
 
@@ -110,6 +121,41 @@ const SearchResultsPage = () => {
     return counts;
   }, [allDatabases, searchQuery, filters]);
 
+  // Calculate total tables with results across all databases
+  const totalTablesWithResults = useMemo(() => {
+    return Object.values(tableCounts).reduce((sum, count) => sum + count, 0);
+  }, [tableCounts]);
+
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return (
+      (filters.year && filters.year !== 'all') ||
+      (filters.category && filters.category !== 'all') ||
+      (filters.country && filters.country !== 'all') ||
+      filters.tableName ||
+      filters.minDate ||
+      filters.maxDate ||
+      (filters.selectedTables && filters.selectedTables.length > 0)
+    );
+  }, [filters]);
+
+  const handleClearFilters = () => {
+    const clearedFilters = {
+      year: 'all',
+      category: 'all',
+      country: 'all',
+      tableName: '',
+      minDate: '',
+      maxDate: '',
+      selectedTables: [],
+    };
+    setFilters(clearedFilters);
+
+    // Update URL with cleared filters
+    const params = new URLSearchParams({ q: inputValue });
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
   const handleBackToHome = () => {
     navigate('/');
   };
@@ -130,6 +176,15 @@ const SearchResultsPage = () => {
     }
     if (filters.tableName) {
       params.append('tableName', filters.tableName);
+    }
+    if (filters.minDate) {
+      params.append('minDate', filters.minDate);
+    }
+    if (filters.maxDate) {
+      params.append('maxDate', filters.maxDate);
+    }
+    if (filters.selectedTables && filters.selectedTables.length > 0) {
+      params.append('selectedTables', filters.selectedTables.join(','));
     }
 
     navigate(`/search?${params.toString()}`, { replace: true });
@@ -152,12 +207,24 @@ const SearchResultsPage = () => {
     if (newFilters.tableName) {
       params.append('tableName', newFilters.tableName);
     }
+    if (newFilters.minDate) {
+      params.append('minDate', newFilters.minDate);
+    }
+    if (newFilters.maxDate) {
+      params.append('maxDate', newFilters.maxDate);
+    }
+    if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
+      params.append('selectedTables', newFilters.selectedTables.join(','));
+    }
     navigate(`/search?${params.toString()}`, { replace: true });
   };
 
   // Determine empty state type
   const getEmptyStateType = () => {
-    const hasFilters = Object.values(filters).some(v => v && v !== 'all');
+    const hasFilters = Object.values(filters).some(v => {
+      if (Array.isArray(v)) return v.length > 0;
+      return v && v !== 'all';
+    });
     const hasSearch = searchQuery.trim() !== '';
 
     if (currentDatabaseData?.tables.length === 0 && !hasFilters && !hasSearch) {
@@ -270,11 +337,97 @@ const SearchResultsPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
+            {/* Active Filters Alert */}
+            {hasActiveFilters && (
+              <Alert 
+                severity="info" 
+                sx={{ mb: 3 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={handleClearFilters}
+                    startIcon={<Clear />}
+                  >
+                    Clear All
+                  </Button>
+                }
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Filters Active
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                    {filters.year && filters.year !== 'all' && (
+                      <Chip
+                        label={`Year: ${filters.year}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, year: 'all' })}
+                      />
+                    )}
+                    {filters.category && filters.category !== 'all' && (
+                      <Chip
+                        label={`Category: ${filters.category}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, category: 'all' })}
+                      />
+                    )}
+                    {filters.country && filters.country !== 'all' && (
+                      <Chip
+                        label={`Country: ${filters.country}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, country: 'all' })}
+                      />
+                    )}
+                    {filters.tableName && (
+                      <Chip
+                        label={`Table: ${filters.tableName}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, tableName: '' })}
+                      />
+                    )}
+                    {filters.minDate && (
+                      <Chip
+                        label={`From: ${filters.minDate}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, minDate: '' })}
+                      />
+                    )}
+                    {filters.maxDate && (
+                      <Chip
+                        label={`To: ${filters.maxDate}`}
+                        size="small"
+                        onDelete={() => handleApplyFilters({ ...filters, maxDate: '' })}
+                      />
+                    )}
+                    {filters.selectedTables && filters.selectedTables.length > 0 && (
+                      <Chip
+                        label={`${filters.selectedTables.length} table${filters.selectedTables.length !== 1 ? 's' : ''} selected`}
+                        size="small"
+                        color="primary"
+                        onDelete={() => handleApplyFilters({ ...filters, selectedTables: [] })}
+                      />
+                    )}
+                  </Stack>
+                </Box>
+              </Alert>
+            )}
+
             {/* Results Summary */}
             <Box sx={{ mb: 3 }}>
-              <Typography variant="h5" fontWeight={600} gutterBottom>
-                {currentDatabaseData?.name || 'Loading...'}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="h5" fontWeight={600}>
+                  {currentDatabaseData?.name || 'Loading...'}
+                </Typography>
+                {searchQuery && totalTablesWithResults > 0 && (
+                  <Chip
+                    icon={<FilterList />}
+                    label={`Results in ${totalTablesWithResults} table${totalTablesWithResults !== 1 ? 's' : ''} across all databases`}
+                    variant="outlined"
+                    color="primary"
+                  />
+                )}
+              </Box>
               {currentDatabaseData?.description && (
                 <Typography variant="body2" color="text.secondary">
                   {currentDatabaseData.description}
@@ -282,7 +435,7 @@ const SearchResultsPage = () => {
               )}
               {!isLoading && currentTables.length > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''}
+                  Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''} in this database
                   {searchQuery && ` matching "${searchQuery}"`}
                 </Typography>
               )}

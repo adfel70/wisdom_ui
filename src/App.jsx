@@ -5,6 +5,7 @@ import { AnimatePresence } from 'framer-motion';
 import { theme } from './theme/theme';
 import HomePage from './pages/HomePage';
 import SearchResultsPage from './pages/SearchResultsPage';
+import TableViewPage from './pages/TableViewPage';
 
 /**
  * AnimatedRoutes Component
@@ -18,6 +19,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchResultsPage />} />
+        <Route path="/tables" element={<TableViewPage />} />
       </Routes>
     </AnimatePresence>
   );

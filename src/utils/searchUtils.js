@@ -37,9 +37,14 @@ export const searchTables = (tables, query) => {
  * @returns {Array} Filtered tables
  */
 export const filterTables = (tables, filters) => {
-  const { tableName, year, category, country } = filters;
+  const { tableName, year, category, country, selectedTables, minDate, maxDate } = filters;
 
   return tables.filter(table => {
+    // Filter by selected tables (if any are selected)
+    if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
+      return false;
+    }
+
     // Filter by table name
     if (tableName && !table.name.toLowerCase().includes(tableName.toLowerCase())) {
       return false;
@@ -58,6 +63,21 @@ export const filterTables = (tables, filters) => {
     // Filter by country
     if (country && country !== 'all' && table.country !== country) {
       return false;
+    }
+
+    // Filter by date range
+    if (table.indexingDate) {
+      const tableDate = new Date(table.indexingDate);
+      
+      if (minDate) {
+        const min = new Date(minDate);
+        if (tableDate < min) return false;
+      }
+
+      if (maxDate) {
+        const max = new Date(maxDate);
+        if (tableDate > max) return false;
+      }
     }
 
     return true;
