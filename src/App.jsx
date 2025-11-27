@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
-import { AnimatePresence, LayoutGroup } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { theme } from './theme/theme';
 import HomePage from './pages/HomePage';
 import SearchResultsPage from './pages/SearchResultsPage';
@@ -14,14 +14,12 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <LayoutGroup>
-      <AnimatePresence mode="popLayout" initial={false}>
-        <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-        </Routes>
-      </AnimatePresence>
-    </LayoutGroup>
+    <AnimatePresence mode="wait" initial={false}>
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
+      </Routes>
+    </AnimatePresence>
   );
 }
 
