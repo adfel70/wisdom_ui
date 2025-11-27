@@ -16,6 +16,7 @@ export const MOCK_DATABASES = [
         country: 'USA',
         categories: ['Finance', 'Retail'],
         count: 1240,
+        indexingDate: '2024-09-30',
         columns: ['TransID', 'Client', 'Amount', 'Date', 'Region'],
         data: [
           { TransID: 'TX-9901', Client: 'Apex Corp', Amount: '$14,200', Date: '2024-09-01', Region: 'North-East' },
@@ -35,6 +36,7 @@ export const MOCK_DATABASES = [
         country: 'USA',
         categories: ['Logistics'],
         count: 85,
+        indexingDate: '2024-10-15',
         columns: ['SKU', 'ProductName', 'StockLevel', 'Warehouse', 'Supplier'],
         data: [
           { SKU: 'WID-A1', ProductName: 'Super Widget', StockLevel: '4,000', Warehouse: 'NY-01', Supplier: 'Global Mfg' },
@@ -52,6 +54,7 @@ export const MOCK_DATABASES = [
         country: 'USA',
         categories: ['Sales', 'CRM'],
         count: 456,
+        indexingDate: '2024-11-01',
         columns: ['AccountID', 'CompanyName', 'Industry', 'Status', 'AccountManager'],
         data: [
           { AccountID: 'ACC-1001', CompanyName: 'Apex Corp', Industry: 'Technology', Status: 'Active', AccountManager: 'Sarah Johnson' },
@@ -75,6 +78,7 @@ export const MOCK_DATABASES = [
         country: 'Global',
         categories: ['HR', 'Sensitive'],
         count: 4500,
+        indexingDate: '2024-08-20',
         columns: ['EmpID', 'FullName', 'Title', 'Department', 'Email'],
         data: [
           { EmpID: 'E8821', FullName: 'Sarah Connor', Title: 'Security Lead', Department: 'Operations', Email: 's.connor@company.com' },
@@ -92,6 +96,7 @@ export const MOCK_DATABASES = [
         country: 'USA',
         categories: ['Finance', 'HR'],
         count: 25,
+        indexingDate: '2024-07-10',
         columns: ['DeptID', 'DepartmentName', 'Budget', 'Spent', 'Remaining'],
         data: [
           { DeptID: 'D-001', DepartmentName: 'Engineering', Budget: '$2,500,000', Spent: '$1,800,000', Remaining: '$700,000' },
@@ -108,6 +113,7 @@ export const MOCK_DATABASES = [
         country: 'Global',
         categories: ['HR', 'Development'],
         count: 78,
+        indexingDate: '2024-06-15',
         columns: ['ProgramID', 'ProgramName', 'Duration', 'Participants', 'Status'],
         data: [
           { ProgramID: 'TRN-501', ProgramName: 'Leadership Development', Duration: '6 weeks', Participants: '45', Status: 'Active' },
@@ -130,6 +136,7 @@ export const MOCK_DATABASES = [
         country: 'Global',
         categories: ['Marketing', 'Analytics'],
         count: 156,
+        indexingDate: '2024-10-20',
         columns: ['CampaignID', 'CampaignName', 'Channel', 'Impressions', 'Conversions'],
         data: [
           { CampaignID: 'CMP-2401', CampaignName: 'Summer Sale 2024', Channel: 'Email', Impressions: '450,000', Conversions: '12,500' },
@@ -146,6 +153,7 @@ export const MOCK_DATABASES = [
         country: 'USA',
         categories: ['Marketing', 'Sales'],
         count: 2340,
+        indexingDate: '2024-11-15',
         columns: ['LeadID', 'CompanyName', 'Source', 'Score', 'Status'],
         data: [
           { LeadID: 'LD-8801', CompanyName: 'TechStart Inc', Source: 'Webinar', Score: '85', Status: 'Qualified' },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper } from '@mui/material';
+import { Box, Container, Typography, Paper, Button } from '@mui/material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -204,6 +204,34 @@ const HomePage = () => {
                   </Typography>
                 </Paper>
               ))}
+            </Box>
+
+            {/* Table View Navigation Button */}
+            <Box sx={{ mt: 4, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => navigate('/tables')}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                  '&:hover': {
+                    boxShadow: '0 6px 16px rgba(37, 99, 235, 0.4)',
+                    transform: 'translateY(-2px)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                View All Tables
+              </Button>
+              <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                Browse all tables with date range filters
+              </Typography>
             </Box>
           </motion.div>
         </Container>
