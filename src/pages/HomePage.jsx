@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper, Button } from '@mui/material';
+import { Box, Container, Typography, Paper, Button, Chip } from '@mui/material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -54,6 +54,18 @@ const HomePage = () => {
       console.log('Selected tables:', newFilters.selectedTables);
       // You can add navigation or other logic here if needed
     }
+  };
+
+  const handleClearFilter = (filterKey) => {
+    const clearedFilters = { ...filters };
+    if (filterKey === 'selectedTables') {
+      clearedFilters.selectedTables = [];
+    } else if (filterKey === 'year' || filterKey === 'category' || filterKey === 'country') {
+      clearedFilters[filterKey] = 'all';
+    } else {
+      clearedFilters[filterKey] = '';
+    }
+    setFilters(clearedFilters);
   };
 
   return (
@@ -146,44 +158,65 @@ const HomePage = () => {
 
               {/* Active Filters Display */}
               {(Object.values(filters).some(v => v && v !== 'all') || (filters.selectedTables && filters.selectedTables.length > 0)) && (
-                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                   <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                     Active filters:
                   </Typography>
                   {filters.year && filters.year !== 'all' && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      Year: {filters.year}
-                    </Typography>
+                    <Chip
+                      label={`Year: ${filters.year}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('year')}
+                      color="primary"
+                    />
                   )}
                   {filters.category && filters.category !== 'all' && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      Category: {filters.category}
-                    </Typography>
+                    <Chip
+                      label={`Category: ${filters.category}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('category')}
+                      color="primary"
+                    />
                   )}
                   {filters.country && filters.country !== 'all' && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      Region: {filters.country}
-                    </Typography>
+                    <Chip
+                      label={`Region: ${filters.country}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('country')}
+                      color="primary"
+                    />
                   )}
                   {filters.tableName && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      Table: {filters.tableName}
-                    </Typography>
+                    <Chip
+                      label={`Table: ${filters.tableName}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('tableName')}
+                      color="primary"
+                    />
                   )}
                   {filters.minDate && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      From: {filters.minDate}
-                    </Typography>
+                    <Chip
+                      label={`From: ${filters.minDate}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('minDate')}
+                      color="primary"
+                    />
                   )}
                   {filters.maxDate && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'primary.light', color: 'white', borderRadius: 1 }}>
-                      To: {filters.maxDate}
-                    </Typography>
+                    <Chip
+                      label={`To: ${filters.maxDate}`}
+                      size="small"
+                      onDelete={() => handleClearFilter('maxDate')}
+                      color="primary"
+                    />
                   )}
                   {filters.selectedTables && filters.selectedTables.length > 0 && (
-                    <Typography variant="caption" sx={{ px: 1, py: 0.5, backgroundColor: 'secondary.main', color: 'white', borderRadius: 1 }}>
-                      {filters.selectedTables.length} table{filters.selectedTables.length > 1 ? 's' : ''} selected
-                    </Typography>
+                    <Chip
+                      label={`${filters.selectedTables.length} table${filters.selectedTables.length > 1 ? 's' : ''} selected`}
+                      size="small"
+                      onDelete={() => handleClearFilter('selectedTables')}
+                      color="secondary"
+                    />
                   )}
                 </Box>
               )}

@@ -74,9 +74,9 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
     return tables;
   }, [allDatabases]);
 
-  // Filter tables based on current filters and sort selected to top
+  // Filter tables based on current filters
   const filteredTables = useMemo(() => {
-    const filtered = allTables.filter(table => {
+    return allTables.filter(table => {
       // Filter by table name
       if (filters.tableName && !table.name.toLowerCase().includes(filters.tableName.toLowerCase())) {
         return false;
@@ -100,7 +100,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
       // Filter by date range
       if (table.indexingDate) {
         const tableDate = new Date(table.indexingDate);
-        
+
         if (filters.minDate) {
           const min = new Date(filters.minDate);
           if (tableDate < min) return false;
@@ -114,17 +114,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
 
       return true;
     });
-
-    // Sort: selected tables first, then unselected
-    return filtered.sort((a, b) => {
-      const aSelected = selectedTables.includes(a.id);
-      const bSelected = selectedTables.includes(b.id);
-      
-      if (aSelected && !bSelected) return -1;
-      if (!aSelected && bSelected) return 1;
-      return 0;
-    });
-  }, [allTables, filters, selectedTables]);
+  }, [allTables, filters]);
 
   useEffect(() => {
     if (open) {
@@ -415,7 +405,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                         key={table.id}
                         hover
                         onClick={() => handleSelectTable(table.id)}
-                        sx={{ 
+                        sx={{
                           cursor: 'pointer',
                           bgcolor: isSelected ? 'action.selected' : 'inherit',
                           '&:hover': {
@@ -423,7 +413,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                           }
                         }}
                       >
-                        <TableCell padding="checkbox">
+                        <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={isSelected}
                             onChange={() => handleSelectTable(table.id)}
