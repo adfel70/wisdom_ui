@@ -27,6 +27,7 @@ const SearchResultsPage = () => {
   const [searchParams] = useSearchParams();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
@@ -40,6 +41,7 @@ const SearchResultsPage = () => {
     const tableName = searchParams.get('tableName') || '';
 
     setSearchQuery(query);
+    setInputValue(query);
     setFilters({
       year: year !== 'all' ? year : 'all',
       category: category !== 'all' ? category : 'all',
@@ -72,11 +74,32 @@ const SearchResultsPage = () => {
     navigate('/');
   };
 
+  const handleSearch = () => {
+    // Update search query and URL params
+    const params = new URLSearchParams({ q: inputValue });
+
+    // Add current filters to URL
+    if (filters.year && filters.year !== 'all') {
+      params.append('year', filters.year);
+    }
+    if (filters.category && filters.category !== 'all') {
+      params.append('category', filters.category);
+    }
+    if (filters.country && filters.country !== 'all') {
+      params.append('country', filters.country);
+    }
+    if (filters.tableName) {
+      params.append('tableName', filters.tableName);
+    }
+
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
 
-    // Update URL with new filters
-    const params = new URLSearchParams({ q: searchQuery });
+    // Update URL with new filters (use inputValue to preserve current input)
+    const params = new URLSearchParams({ q: inputValue });
     if (newFilters.year && newFilters.year !== 'all') {
       params.append('year', newFilters.year);
     }
@@ -180,8 +203,9 @@ const SearchResultsPage = () => {
                   }}
                 >
                   <SearchBar
-                    value={searchQuery}
-                    onChange={setSearchQuery}
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSubmit={handleSearch}
                     onFilterClick={() => setIsFilterOpen(true)}
                     variant="compact"
                   />

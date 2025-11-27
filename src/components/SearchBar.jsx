@@ -87,21 +87,19 @@ const SearchBar = ({
           Filter Tables
         </Button>
 
-        {isHome && (
-          <Button
-            type="submit"
-            variant="contained"
-            endIcon={<ArrowForward />}
-            sx={{
-              py: 2,
-              px: 4,
-              fontSize: '1rem',
-              fontWeight: 600,
-            }}
-          >
-            Search
-          </Button>
-        )}
+        <Button
+          type="submit"
+          variant="contained"
+          endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
+          sx={{
+            py: isHome ? 2 : 1.25,
+            px: isHome ? 4 : 3,
+            fontSize: isHome ? '1rem' : '0.875rem',
+            fontWeight: 600,
+          }}
+        >
+          Search
+        </Button>
       </Box>
     </Box>
   );

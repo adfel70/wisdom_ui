@@ -161,15 +161,18 @@ function generateMockData() {
   console.log(`Records per table: ${RECORDS_PER_TABLE}`);
   console.log(`Total records: ${NUM_TABLES * RECORDS_PER_TABLE}`);
 
-  const metadata = generateMetadata();
-
-  // Clean up internal generators before saving
-  Object.keys(metadata).forEach(key => {
-    delete metadata[key]._generators;
-  });
+  // Generate metadata once with generators
+  const metadataWithGenerators = generateMetadata();
 
   console.log('Generating records...');
-  const records = generateRecords(generateMetadata()); // regenerate with generators
+  const records = generateRecords(metadataWithGenerators);
+
+  // Clean up internal generators for final output
+  const metadata = {};
+  Object.keys(metadataWithGenerators).forEach(key => {
+    const { _generators, ...rest } = metadataWithGenerators[key];
+    metadata[key] = rest;
+  });
 
   const output = {
     metadata,
