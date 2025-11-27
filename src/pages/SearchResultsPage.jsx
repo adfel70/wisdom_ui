@@ -16,15 +16,15 @@ import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { getMockDatabase, getDatabaseMetadata } from '../data/mockDatabaseNew';
+import { getMockDatabases, getDatabaseMetadata } from '../data/mockDatabaseNew';
 import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
  * Displays search results with database tabs and filtered tables
  *
- * IMPORTANT: This component loads data on-demand (async).
- * Only the active database is loaded, not all databases at once.
+ * IMPORTANT: Loads all databases upfront for fast tab switching.
+ * Files are still separated for organization and backend architecture matching.
  */
 const SearchResultsPage = () => {
   const navigate = useNavigate();
@@ -35,8 +35,8 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
-  const [currentDatabaseData, setCurrentDatabaseData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [allDatabases, setAllDatabases] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
@@ -59,21 +59,21 @@ const SearchResultsPage = () => {
     });
   }, [searchParams]);
 
-  // Load data for active database
+  // Load ALL databases on mount (fetch all at once)
   useEffect(() => {
     let isCancelled = false;
 
-    const loadDatabase = async () => {
+    const loadAllDatabases = async () => {
       setIsLoading(true);
       try {
-        const data = await getMockDatabase(activeDatabase);
+        const databases = await getMockDatabases();
         if (!isCancelled) {
-          setCurrentDatabaseData(data);
+          setAllDatabases(databases);
         }
       } catch (error) {
-        console.error('Failed to load database:', error);
+        console.error('Failed to load databases:', error);
         if (!isCancelled) {
-          setCurrentDatabaseData(null);
+          setAllDatabases([]);
         }
       } finally {
         if (!isCancelled) {
@@ -82,12 +82,17 @@ const SearchResultsPage = () => {
       }
     };
 
-    loadDatabase();
+    loadAllDatabases();
 
     return () => {
       isCancelled = true;
     };
-  }, [activeDatabase]);
+  }, []); // Only run once on mount
+
+  // Get current database data (no fetching, just filtering from loaded data)
+  const currentDatabaseData = useMemo(() => {
+    return allDatabases.find(db => db.id === activeDatabase);
+  }, [allDatabases, activeDatabase]);
 
   // Apply filters to current database
   const currentTables = useMemo(() => {
@@ -95,21 +100,15 @@ const SearchResultsPage = () => {
     return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters);
   }, [currentDatabaseData, searchQuery, filters]);
 
-  // Calculate table counts - show filtered count for active database only
+  // Calculate table counts for all databases
   const tableCounts = useMemo(() => {
     const counts = {};
-    databaseMetadata.forEach(db => {
-      if (db.id === activeDatabase && currentDatabaseData) {
-        // For active database, show filtered count
-        counts[db.id] = currentTables.length;
-      } else {
-        // For inactive databases, we can't show filtered count without loading them
-        // Show undefined so the tab doesn't display a count
-        counts[db.id] = undefined;
-      }
+    allDatabases.forEach(db => {
+      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters);
+      counts[db.id] = filteredTables.length;
     });
     return counts;
-  }, [databaseMetadata, activeDatabase, currentDatabaseData, currentTables]);
+  }, [allDatabases, searchQuery, filters]);
 
   const handleBackToHome = () => {
     navigate('/');
