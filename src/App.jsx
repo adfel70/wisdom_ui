@@ -1,9 +1,27 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
+import { AnimatePresence } from 'framer-motion';
 import { theme } from './theme/theme';
 import HomePage from './pages/HomePage';
 import SearchResultsPage from './pages/SearchResultsPage';
+
+/**
+ * AnimatedRoutes Component
+ * Wrapper for routes to enable page transitions
+ */
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
+      </Routes>
+    </AnimatePresence>
+  );
+}
 
 /**
  * Main App Component
@@ -14,10 +32,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-        </Routes>
+        <AnimatedRoutes />
       </Router>
     </ThemeProvider>
   );

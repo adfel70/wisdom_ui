@@ -9,6 +9,7 @@ import {
   Divider,
 } from '@mui/material';
 import { Home as HomeIcon } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
@@ -106,56 +107,70 @@ const SearchResultsPage = () => {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: 6 }}>
-      {/* Header */}
-      <Paper
-        elevation={1}
-        sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          backgroundColor: 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: 0,
-        }}
-      >
-        <Container maxWidth="xl">
-          <Box sx={{ py: 2 }}>
-            {/* Top Bar */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-              <IconButton
-                onClick={handleBackToHome}
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': {
-                    color: 'primary.main',
-                    backgroundColor: 'primary.light',
-                  },
-                }}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: 6 }}>
+        {/* Header */}
+        <Paper
+          elevation={1}
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 0,
+          }}
+        >
+          <Container maxWidth="xl">
+            <Box sx={{ py: 2 }}>
+              {/* Top Bar */}
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
               >
-                <HomeIcon />
-              </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <IconButton
+                    onClick={handleBackToHome}
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                        backgroundColor: 'primary.light',
+                      },
+                    }}
+                  >
+                    <HomeIcon />
+                  </IconButton>
 
-              <Divider orientation="vertical" flexItem />
+                  <Divider orientation="vertical" flexItem />
 
-              <Typography variant="h6" fontWeight={600} color="text.primary">
-                Wisdom UI
-              </Typography>
+                  <Typography variant="h6" fontWeight={600} color="text.primary">
+                    Wisdom UI
+                  </Typography>
 
-              <Box sx={{ flex: 1 }} />
+                  <Box sx={{ flex: 1 }} />
 
-              <Typography variant="body2" color="text.secondary">
-                Search Results
-              </Typography>
-            </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Search Results
+                  </Typography>
+                </Box>
+              </motion.div>
 
-            {/* Search Bar */}
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onFilterClick={() => setIsFilterOpen(true)}
-              variant="compact"
-            />
+              {/* Search Bar */}
+              <motion.div layoutId="search-bar">
+                <SearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onFilterClick={() => setIsFilterOpen(true)}
+                  variant="compact"
+                />
+              </motion.div>
 
             {/* Database Tabs */}
             <DatabaseTabs
@@ -198,14 +213,15 @@ const SearchResultsPage = () => {
         )}
       </Container>
 
-      {/* Filter Modal */}
-      <FilterModal
-        open={isFilterOpen}
-        onClose={() => setIsFilterOpen(false)}
-        onApply={handleApplyFilters}
-        initialFilters={filters}
-      />
-    </Box>
+        {/* Filter Modal */}
+        <FilterModal
+          open={isFilterOpen}
+          onClose={() => setIsFilterOpen(false)}
+          onApply={handleApplyFilters}
+          initialFilters={filters}
+        />
+      </Box>
+    </motion.div>
   );
 };
 
