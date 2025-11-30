@@ -135,10 +135,16 @@ const SearchBar = ({
       } else {
         // Split by spaces and check for keywords
         const words = part.value.split(/\s+/).filter(w => w);
-        words.forEach(word => {
+        words.forEach((word, index) => {
           if (isKeyword(word)) {
             newTokens.push({ type: 'keyword', value: word.toLowerCase() });
           } else {
+            // Add 'or' before this term if:
+            // 1. It's not the first word
+            // 2. The previous token is not a keyword
+            if (index > 0 && newTokens.length > 0 && newTokens[newTokens.length - 1].type !== 'keyword') {
+              newTokens.push({ type: 'keyword', value: 'or' });
+            }
             newTokens.push({ type: 'term', value: word });
           }
         });
@@ -224,9 +230,27 @@ const SearchBar = ({
     }
   };
 
-  // Remove a specific token
+  // Remove a specific token and its preceding keyword if present
   const removeToken = (index) => {
-    setTokens(prev => prev.filter((_, i) => i !== index));
+    setTokens(prev => {
+      const token = prev[index];
+
+      // If removing a term, also remove the preceding keyword if exists
+      if (token.type === 'term' && index > 0 && prev[index - 1].type === 'keyword') {
+        // Remove both the keyword and the term
+        return prev.filter((_, i) => i !== index - 1 && i !== index);
+      }
+
+      // Otherwise just remove the token
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // Clear all tokens and input
+  const clearAll = () => {
+    setTokens([]);
+    setCurrentInput('');
+    setIsInitialized(false);
   };
 
   const handleTransformChange = (e) => {
@@ -368,6 +392,23 @@ const SearchBar = ({
 
         {/* Transform dropdown and revert button */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
+          {(tokens.length > 0 || currentInput.trim()) && (
+            <Tooltip title="Clear all">
+              <IconButton
+                onClick={clearAll}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': {
+                    backgroundColor: 'error.light',
+                    color: 'error.main',
+                  },
+                }}
+              >
+                <Close fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {hasTransformed && (
             <Tooltip title="Revert to original">
               <IconButton
