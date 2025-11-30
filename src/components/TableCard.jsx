@@ -39,10 +39,9 @@ const HighlightedText = ({ text, query }) => {
             key={index}
             component="span"
             sx={{
-              backgroundColor: 'primary.light',
-              color: 'primary.contrastText',
-              fontWeight: 600,
-              px: 0.5,
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              color: 'primary.main',
+              fontWeight: 500,
               borderRadius: 0.5,
             }}
           >
