@@ -6,19 +6,23 @@ import {
   Typography,
   IconButton,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Collapse,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Divider,
+  Tooltip
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import {
   ExpandMore,
   ExpandLess,
   TableChart,
+  Info,
+  Close
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
 
@@ -58,14 +62,92 @@ const HighlightedText = ({ text, query }) => {
 
 /**
  * TableCard Component
- * Displays a single table with expandable data view
+ * Displays a single table with expandable data view using MUI components
  */
 const TableCard = ({ table, query }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
   };
+
+  const handleRowInfoClick = (row) => {
+    setSelectedRow(row);
+    setIsPopupOpen(true);
+  };
+
+  const handleClosePopup = () => {
+    setIsPopupOpen(false);
+    setSelectedRow(null);
+  };
+
+  // Transform data for DataGrid (add id field)
+  const dataGridRows = React.useMemo(() => {
+    return table.data.map((row, index) => ({
+      id: index,
+      ...row,
+    }));
+  }, [table.data]);
+
+  // Create DataGrid columns configuration
+  const dataGridColumns = React.useMemo(() => {
+    const columns = table.columns.map((column) => ({
+      field: column,
+      headerName: column,
+      flex: 1,
+      minWidth: 120,
+      renderCell: (params) => (
+        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={params.value || 'N/A'}
+          >
+            <HighlightedText text={params.value || 'N/A'} query={query} />
+          </Typography>
+        </Box>
+      ),
+    }));
+
+    // Add actions column
+    columns.push({
+      field: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Tooltip title="View full details">
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRowInfoClick(params.row);
+            }}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: 'primary.light',
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            <Info fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    });
+
+    return columns;
+  }, [table.columns, query]);
 
   return (
     <Card
@@ -165,86 +247,117 @@ const TableCard = ({ table, query }) => {
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer
-            component={Paper}
-            elevation={0}
+        <CardContent sx={{ p: 0, height: 400 }}>
+          <DataGrid
+            rows={dataGridRows}
+            columns={dataGridColumns}
+            hideFooterSelectedRowCount
             sx={{
-              maxHeight: 400,
-              '&::-webkit-scrollbar': {
-                width: 8,
-                height: 8,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              '& .MuiDataGrid-cell': {
+                borderBottom: '1px solid',
+                borderBottomColor: 'divider',
               },
-              '&::-webkit-scrollbar-track': {
-                backgroundColor: 'grey.100',
+              '& .MuiDataGrid-columnHeaders': {
+                backgroundColor: 'grey.50',
               },
-              '&::-webkit-scrollbar-thumb': {
-                backgroundColor: 'grey.400',
-                borderRadius: 4,
-                '&:hover': {
-                  backgroundColor: 'grey.500',
-                },
+              '& .MuiDataGrid-columnHeaderTitle': {
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                color: 'text.primary',
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: 'action.selected',
+              },
+              '& .MuiDataGrid-footerContainer': {
+                borderTop: '1px solid',
+                borderTopColor: 'divider',
               },
             }}
-          >
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  {table.columns.map((column) => (
-                    <TableCell
-                      key={column}
-                      sx={{
-                        backgroundColor: 'grey.100',
-                        fontWeight: 700,
-                        fontSize: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        whiteSpace: 'nowrap',
-                        borderRight: 1,
-                        borderColor: 'divider',
-                        '&:last-child': {
-                          borderRight: 0,
-                        },
-                      }}
-                    >
-                      {column}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {table.data.map((row, index) => (
-                  <TableRow
-                    key={index}
-                    hover
-                    sx={{
-                      '&:last-child td': {
-                        borderBottom: 0,
-                      },
-                    }}
-                  >
-                    {table.columns.map((column) => (
-                      <TableCell
-                        key={`${index}-${column}`}
-                        sx={{
-                          whiteSpace: 'nowrap',
-                          borderRight: 1,
-                          borderColor: 'grey.100',
-                          '&:last-child': {
-                            borderRight: 0,
-                          },
-                        }}
-                      >
-                        <HighlightedText text={row[column]} query={query} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          />
         </CardContent>
       </Collapse>
+
+      {/* Row Overview Popup */}
+      <Dialog
+        open={isPopupOpen}
+        onClose={handleClosePopup}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Info />
+            <Typography variant="h6" fontWeight={500}>
+              Row Details
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleClosePopup}
+            sx={{ color: 'primary.contrastText' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {selectedRow && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {table.columns.map((column, index) => (
+                <Box key={column}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      mb: 1,
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      fontWeight={500}  
+                    >
+                      {column}: 
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={300}  
+                    >
+                      {selectedRow[column] || 'N/A'}
+                    </Typography>
+                  </Box>
+                  {index < table.columns.length - 1 && <Divider sx={{ mt: 2 }} />}
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button
+            onClick={handleClosePopup}
+            variant="outlined"
+            startIcon={<Close />}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
