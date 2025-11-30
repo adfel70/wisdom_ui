@@ -119,11 +119,12 @@ const HomePage = () => {
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
+          justifyContent: 'flex-start',
           alignItems: 'center',
           backgroundColor: 'background.default',
           position: 'relative',
           overflow: 'hidden',
+          pt: { xs: 8, md: 12 },
         }}
       >
         <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
@@ -133,7 +134,7 @@ const HomePage = () => {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3 }}
           >
-            <Box sx={{ textAlign: 'center', mb: 6 }}>
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
               {/* Icon */}
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <School
