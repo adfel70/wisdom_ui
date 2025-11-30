@@ -374,10 +374,10 @@ const SearchBar = ({
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
-          py: isHome ? 2 : 1,
-          px: 2,
-          gap: 1,
-          minHeight: isHome ? 56 : 48,
+          py: isHome ? 0.875 : 0.75,
+          px: 1.25,
+          gap: 0.75,
+          minHeight: isHome ? 40 : 38,
           flexWrap: 'wrap',
           cursor: 'text',
           '&:hover': {
@@ -395,7 +395,7 @@ const SearchBar = ({
         <SearchIcon
           sx={{
             color: 'text.secondary',
-            fontSize: isHome ? '1.5rem' : '1.25rem',
+            fontSize: isHome ? '1.125rem' : '1rem',
           }}
         />
 
@@ -415,7 +415,7 @@ const SearchBar = ({
               border: token.type === 'term' ? '1px solid' : 'none',
               borderColor: token.type === 'term' ? '#d0e4f7' : 'transparent',
               borderRadius: token.type === 'term' ? 1 : 0,
-              fontSize: isHome ? '1rem' : '0.875rem',
+              fontSize: isHome ? '0.875rem' : '0.8125rem',
               color: token.type === 'keyword' ? 'text.disabled' : 'text.primary',
               fontWeight: token.type === 'term' ? 500 : 400,
               cursor: token.type === 'term' ? 'pointer' : 'default',
@@ -457,31 +457,44 @@ const SearchBar = ({
             border: 'none',
             outline: 'none',
             backgroundColor: 'transparent',
-            fontSize: isHome ? '1.125rem' : '1rem',
+            fontSize: isHome ? '0.875rem' : '0.8125rem',
             fontFamily: 'inherit',
             color: 'inherit',
           }}
         />
 
+        {/* Clear All button - before divider */}
+        {(tokens.length > 0 || currentInput.trim()) && (
+          <Tooltip title="Clear all">
+            <IconButton
+              onClick={clearAll}
+              size="small"
+              sx={{
+                color: 'text.secondary',
+                ml: 'auto',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  backgroundColor: 'rgba(244, 67, 54, 0.08)',
+                  color: 'error.main',
+                  transform: 'scale(1.05)',
+                },
+              }}
+            >
+              <Close fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+
         {/* Transform dropdown and revert button */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
-          {(tokens.length > 0 || currentInput.trim()) && (
-            <Tooltip title="Clear all">
-              <IconButton
-                onClick={clearAll}
-                size="small"
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': {
-                    backgroundColor: 'error.light',
-                    color: 'error.main',
-                  },
-                }}
-              >
-                <Close fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          ml: (tokens.length > 0 || currentInput.trim()) ? 0 : 'auto',
+          borderLeft: '1px solid',
+          borderColor: 'divider',
+          pl: 1.5,
+        }}>
           {hasTransformed && (
             <Tooltip title="Revert to original">
               <IconButton
@@ -489,9 +502,11 @@ const SearchBar = ({
                 size="small"
                 sx={{
                   color: 'primary.main',
+                  transition: 'all 0.2s',
                   '&:hover': {
                     backgroundColor: 'primary.light',
                     color: 'primary.dark',
+                    transform: 'scale(1.05)',
                   },
                 }}
               >
@@ -513,6 +528,7 @@ const SearchBar = ({
             sx={{
               minWidth: 'fit-content',
               borderRadius: '12px',
+              transition: 'all 0.2s',
               '& .MuiOutlinedInput-notchedOutline': {
                 borderColor: 'divider',
               },
@@ -527,6 +543,7 @@ const SearchBar = ({
               },
               '&:hover': {
                 backgroundColor: 'action.hover',
+                transform: 'translateY(-1px)',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: 'primary.main',
                 },
@@ -548,36 +565,24 @@ const SearchBar = ({
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button
-          type="button"
-          variant="outlined"
-          onClick={onFilterClick}
-          startIcon={<FilterList />}
-          sx={{
-            py: isHome ? 2 : 1.25,
-            px: 3,
-            whiteSpace: 'nowrap',
-            minWidth: 'fit-content',
-          }}
-        >
-          Filter Tables
-        </Button>
-
-        <Button
-          type="submit"
-          variant="contained"
-          endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
-          sx={{
-            py: isHome ? 2 : 1.25,
-            px: isHome ? 4 : 3,
-            fontSize: isHome ? '1rem' : '0.875rem',
-            fontWeight: 600,
-          }}
-        >
-          Search
-        </Button>
-      </Box>
+      <Button
+        type="submit"
+        variant="contained"
+        endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
+        sx={{
+          py: isHome ? 0.75 : 0.625,
+          px: isHome ? 2 : 1.75,
+          fontSize: isHome ? '0.8125rem' : '0.75rem',
+          fontWeight: 600,
+          transition: 'all 0.2s',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+          },
+        }}
+      >
+        Search
+      </Button>
     </Box>
   );
 };
