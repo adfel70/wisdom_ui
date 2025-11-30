@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Container, Typography, Paper, Button, Chip } from '@mui/material';
+import { School, FilterList } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -88,7 +89,7 @@ const HomePage = () => {
           overflow: 'hidden',
         }}
       >
-        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -96,6 +97,17 @@ const HomePage = () => {
             transition={{ duration: 0.3 }}
           >
             <Box sx={{ textAlign: 'center', mb: 6 }}>
+              {/* Icon */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <School
+                  sx={{
+                    fontSize: '4rem',
+                    color: 'primary.main',
+                    opacity: 0.9,
+                  }}
+                />
+              </Box>
+
               {/* Logo/Title */}
               <Typography
                 variant="h2"
@@ -133,18 +145,48 @@ const HomePage = () => {
             </Box>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 1, y: -250 }}
-            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-          >
+          {/* Search Section - Centered */}
+          <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+            {/* Filter Button - Completely Outside */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterList />}
+                  onClick={() => setIsFilterOpen(true)}
+                  sx={{
+                    py: 0.4,
+                    px: 1.5,
+                    fontSize: '0.75rem',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                    },
+                  }}
+                >
+                  Filter Tables
+                </Button>
+              </Box>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 1, y: -250 }}
+              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            >
             <Paper
               elevation={3}
               sx={{
                 backgroundColor: 'background.paper',
                 borderRadius: 2,
-                p: 3,
+                p: 2,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               }}
             >
@@ -222,6 +264,7 @@ const HomePage = () => {
               )}
             </Paper>
           </motion.div>
+          </Box>
 
           {/* Info Cards */}
           <motion.div
