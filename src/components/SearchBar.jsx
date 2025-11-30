@@ -22,6 +22,7 @@ const SearchBar = ({
   const inputRef = useRef(null);
 
   const [originalText, setOriginalText] = useState('');
+  const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const [transformValue, setTransformValue] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -305,11 +306,24 @@ const SearchBar = ({
 
     if (!transformId) return;
 
-    // Store original text before first transformation
+    // Store original text and tokens before first transformation
     if (!hasTransformed) {
       setOriginalText(currentInput);
+      setOriginalTokens(tokens);
       setHasTransformed(true);
     }
+
+    // Apply transformation to each token separately (only term tokens, not keywords)
+    const transformedTokens = tokens.map(token => {
+      if (token.type === 'term') {
+        return {
+          ...token,
+          value: applyTransformation(token.value, transformId)
+        };
+      }
+      return token; // Keep keywords unchanged
+    });
+    setTokens(transformedTokens);
 
     // Apply transformation to current input text (chainable)
     const transformed = applyTransformation(currentInput, transformId);
@@ -318,7 +332,9 @@ const SearchBar = ({
 
   const handleRevert = () => {
     setCurrentInput(originalText);
+    setTokens(originalTokens);
     setOriginalText('');
+    setOriginalTokens([]);
     setHasTransformed(false);
   };
 
