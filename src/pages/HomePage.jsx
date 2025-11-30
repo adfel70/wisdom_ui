@@ -17,6 +17,10 @@ const HomePage = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
   const [permutationId, setPermutationId] = useState('none');
+  const [permutationParams, setPermutationParams] = useState({});
+
+  // Get selected permutation metadata
+  const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
 
   const handleSearch = (query) => {
     if (!query || !query.trim()) return;
@@ -27,6 +31,11 @@ const HomePage = () => {
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
       params.append('permutation', permutationId);
+
+      // Add permutation parameters if any
+      if (Object.keys(permutationParams).length > 0) {
+        params.append('permutationParams', JSON.stringify(permutationParams));
+      }
     }
 
     // Add filters to URL if any
@@ -217,6 +226,47 @@ const HomePage = () => {
                     </MenuItem>
                   ))}
                 </Select>
+
+                {/* Parameter dropdowns - shown when permutation has parameters */}
+                {selectedPermutation?.parameters?.map((param) => (
+                  <Select
+                    key={param.id}
+                    value={permutationParams[param.id] || param.default}
+                    onChange={(e) => setPermutationParams({ ...permutationParams, [param.id]: e.target.value })}
+                    size="small"
+                    sx={{
+                      minWidth: 'fit-content',
+                      borderRadius: '8px',
+                      transition: 'all 0.2s',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'divider',
+                      },
+                      '& .MuiSelect-select': {
+                        py: 0.4,
+                        px: 1.5,
+                        fontSize: '0.75rem',
+                        color: 'text.primary',
+                        fontWeight: 500,
+                      },
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                        },
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                    }}
+                  >
+                    {param.options.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                ))}
 
                 <Button
                   variant="outlined"

@@ -24,15 +24,31 @@ export function reversePermutation(input) {
 
 /**
  * Mock permutation function: Original + Double
- * Returns the original string and the string repeated twice
- *
- * Example: "abc" → ["abc", "abcabc"]
+ * Returns the original string and the string repeated based on level
  *
  * @param {string} input - The input string
- * @returns {string[]} Array containing original and doubled string
+ * @param {Object} params - Parameters object with level property
+ * @param {string} params.level - Level: 'low', 'medium', or 'high'
+ * @returns {string[]} Array containing original and repeated strings
+ *
+ * Examples:
+ * - Low: "abc" → ["abc", "abcabc"]
+ * - Medium: "abc" → ["abc", "abcabc", "abcabcabc"]
+ * - High: "abc" → ["abc", "abcabc", "abcabcabc", "abcabcabcabc"]
  */
-export function doublePermutation(input) {
-  return [input, input + input];
+export function doublePermutation(input, params = {}) {
+  const level = params.level || 'low';
+  const results = [input];
+
+  let maxRepetitions = 2; // low
+  if (level === 'medium') maxRepetitions = 3;
+  if (level === 'high') maxRepetitions = 4;
+
+  for (let i = 2; i <= maxRepetitions; i++) {
+    results.push(input.repeat(i));
+  }
+
+  return results;
 }
 
 /**
@@ -44,10 +60,21 @@ export function doublePermutation(input) {
  * - label: Display name shown to users
  * - function: The actual permutation function
  * - description: Human-readable description of what the permutation does
+ * - parameters: (Optional) Array of parameter definitions for this permutation
  *
  * To add a new permutation:
  * 1. Create a new function above (or import from backend)
  * 2. Add an entry to this array
+ *
+ * To add parameters to a permutation:
+ * Add a 'parameters' array with objects defining each parameter:
+ * {
+ *   id: 'param_name',
+ *   label: 'Display Name',
+ *   type: 'select',
+ *   options: [{ value: 'option1', label: 'Option 1' }, ...],
+ *   default: 'option1'
+ * }
  *
  * To integrate with backend:
  * Replace the function references with API calls that return Promise<string[]>
@@ -69,7 +96,20 @@ export const PERMUTATION_FUNCTIONS = [
     id: 'double',
     label: 'Original + Double',
     function: doublePermutation,
-    description: 'Search both original and doubled strings'
+    description: 'Search original and repeated strings',
+    parameters: [
+      {
+        id: 'level',
+        label: 'Level',
+        type: 'select',
+        options: [
+          { value: 'low', label: 'Low (x2)' },
+          { value: 'medium', label: 'Medium (x3)' },
+          { value: 'high', label: 'High (x4)' }
+        ],
+        default: 'low'
+      }
+    ]
   }
 ];
 
@@ -99,9 +139,10 @@ export function getPermutationMetadata(permutationId) {
  *
  * @param {string} term - The search term to permute
  * @param {string} permutationId - The ID of the permutation to apply
+ * @param {Object} params - Optional parameters for the permutation function
  * @returns {string[]} Array of permuted variants (always includes original)
  */
-export function applyPermutation(term, permutationId) {
+export function applyPermutation(term, permutationId, params = {}) {
   const permutationFn = getPermutationFunction(permutationId);
-  return permutationFn(term);
+  return permutationFn(term, params);
 }

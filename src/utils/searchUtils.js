@@ -8,9 +8,10 @@ import { applyPermutation } from './permutationUtils';
  * Expand all terms in groups with permutations
  * @param {Array} groups - Array of AND groups (each group is an array of terms)
  * @param {string} permutationId - The permutation to apply (e.g., 'reverse', 'double', 'none')
+ * @param {Object} permutationParams - Parameters for the permutation function
  * @returns {Object} Object containing expanded groups and all variants for display
  */
-const expandGroupsWithPermutations = (groups, permutationId) => {
+const expandGroupsWithPermutations = (groups, permutationId, permutationParams = {}) => {
   if (!permutationId || permutationId === 'none') {
     return {
       expandedGroups: groups,
@@ -21,7 +22,7 @@ const expandGroupsWithPermutations = (groups, permutationId) => {
   const allVariants = {}; // Track all variants for each original term
   const expandedGroups = groups.map(group => {
     return group.map(term => {
-      const variants = applyPermutation(term, permutationId);
+      const variants = applyPermutation(term, permutationId, permutationParams);
       allVariants[term] = variants;
       return variants;
     });
@@ -172,9 +173,10 @@ const parseQueryString = (queryString) => {
  * @param {Array} tables - Array of table objects
  * @param {string|Object} query - Search query string OR object with {tokens, currentInput}
  * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Filtered tables with matching data
  */
-export const searchTables = (tables, query, permutationId = 'none') => {
+export const searchTables = (tables, query, permutationId = 'none', permutationParams = {}) => {
   // Handle empty query
   if (!query) return tables;
 
@@ -207,7 +209,7 @@ export const searchTables = (tables, query, permutationId = 'none') => {
   }
 
   // Apply permutations to expand terms
-  const { expandedGroups } = expandGroupsWithPermutations(groups, permutationId);
+  const { expandedGroups } = expandGroupsWithPermutations(groups, permutationId, permutationParams);
 
   // Filter tables
   return tables
@@ -285,9 +287,10 @@ export const filterTables = (tables, filters) => {
  * @param {string} query - Search query
  * @param {Object} filters - Filter criteria
  * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Filtered and searched tables
  */
-export const applySearchAndFilters = (tables, query, filters, permutationId = 'none') => {
+export const applySearchAndFilters = (tables, query, filters, permutationId = 'none', permutationParams = {}) => {
   let result = tables;
 
   // Apply filters first
@@ -297,7 +300,7 @@ export const applySearchAndFilters = (tables, query, filters, permutationId = 'n
 
   // Then apply search with permutations
   if (query && query.trim()) {
-    result = searchTables(result, query, permutationId);
+    result = searchTables(result, query, permutationId, permutationParams);
   }
 
   return result;
@@ -308,16 +311,17 @@ export const applySearchAndFilters = (tables, query, filters, permutationId = 'n
  * Returns the original terms and their permuted variants
  * @param {string} query - Search query string
  * @param {string} permutationId - The permutation ID to apply
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Object} Object with original terms and their variants
  */
-export const getExpandedQueryInfo = (query, permutationId) => {
+export const getExpandedQueryInfo = (query, permutationId, permutationParams = {}) => {
   if (!query || !permutationId || permutationId === 'none') {
     return null;
   }
 
   const tokens = parseQueryString(query);
   const groups = parseTokensToGroups(tokens);
-  const { allVariants } = expandGroupsWithPermutations(groups, permutationId);
+  const { allVariants } = expandGroupsWithPermutations(groups, permutationId, permutationParams);
 
   return allVariants;
 };
@@ -328,9 +332,10 @@ export const getExpandedQueryInfo = (query, permutationId) => {
  * @param {string} text - Text to highlight
  * @param {string|Object} query - Search query (string or {tokens, currentInput})
  * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Array of text parts with highlighting info
  */
-export const highlightText = (text, query, permutationId = 'none') => {
+export const highlightText = (text, query, permutationId = 'none', permutationParams = {}) => {
   if (!query || !text) return [{ text, highlight: false }];
 
   // Extract search terms from query (excluding keywords)
@@ -364,7 +369,7 @@ export const highlightText = (text, query, permutationId = 'none') => {
   if (permutationId && permutationId !== 'none') {
     allTermsToHighlight = [];
     searchTerms.forEach(term => {
-      const variants = applyPermutation(term, permutationId);
+      const variants = applyPermutation(term, permutationId, permutationParams);
       allTermsToHighlight.push(...variants);
     });
   }
