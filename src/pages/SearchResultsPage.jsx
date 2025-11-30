@@ -12,8 +12,10 @@ import {
   Stack,
   Alert,
   Button,
+  Select,
+  MenuItem,
 } from '@mui/material';
-import { Home as HomeIcon, FilterList } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Shuffle } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -21,7 +23,8 @@ import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
 import { getMockDatabases, getDatabaseMetadata } from '../data/mockDatabaseNew';
-import { applySearchAndFilters } from '../utils/searchUtils';
+import { applySearchAndFilters, getExpandedQueryInfo } from '../utils/searchUtils';
+import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
 
 /**
  * SearchResultsPage Component
@@ -39,6 +42,7 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [permutationId, setPermutationId] = useState('none');
   const [allDatabases, setAllDatabases] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -48,6 +52,7 @@ const SearchResultsPage = () => {
   // Initialize from URL params
   useEffect(() => {
     const query = searchParams.get('q') || '';
+    const permutation = searchParams.get('permutation') || 'none';
     const year = searchParams.get('year') || 'all';
     const category = searchParams.get('category') || 'all';
     const country = searchParams.get('country') || 'all';
@@ -59,6 +64,7 @@ const SearchResultsPage = () => {
 
     setSearchQuery(query);
     setInputValue(query);
+    setPermutationId(permutation);
     setFilters({
       year: year !== 'all' ? year : 'all',
       category: category !== 'all' ? category : 'all',
@@ -108,18 +114,18 @@ const SearchResultsPage = () => {
   // Apply filters to current database
   const currentTables = useMemo(() => {
     if (!currentDatabaseData) return [];
-    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters);
-  }, [currentDatabaseData, searchQuery, filters]);
+    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters, permutationId);
+  }, [currentDatabaseData, searchQuery, filters, permutationId]);
 
   // Calculate table counts for all databases
   const tableCounts = useMemo(() => {
     const counts = {};
     allDatabases.forEach(db => {
-      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters);
+      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters, permutationId);
       counts[db.id] = filteredTables.length;
     });
     return counts;
-  }, [allDatabases, searchQuery, filters]);
+  }, [allDatabases, searchQuery, filters, permutationId]);
 
   // Calculate total tables with results across all databases
   const totalTablesWithResults = useMemo(() => {
@@ -139,6 +145,11 @@ const SearchResultsPage = () => {
     );
   }, [filters]);
 
+  // Get expanded query information for permutations
+  const expandedQueryInfo = useMemo(() => {
+    return getExpandedQueryInfo(searchQuery, permutationId);
+  }, [searchQuery, permutationId]);
+
   const handleBackToHome = () => {
     navigate('/');
   };
@@ -149,6 +160,11 @@ const SearchResultsPage = () => {
 
     // Update search query and URL params
     const params = new URLSearchParams({ q: searchQuery });
+
+    // Add permutation if selected
+    if (permutationId && permutationId !== 'none') {
+      params.append('permutation', permutationId);
+    }
 
     // Add current filters to URL
     if (filters.year && filters.year !== 'all') {
@@ -181,6 +197,12 @@ const SearchResultsPage = () => {
 
     // Update URL with new filters (use inputValue to preserve current input)
     const params = new URLSearchParams({ q: inputValue });
+
+    // Add permutation if selected
+    if (permutationId && permutationId !== 'none') {
+      params.append('permutation', permutationId);
+    }
+
     if (newFilters.year && newFilters.year !== 'all') {
       params.append('year', newFilters.year);
     }
@@ -202,6 +224,43 @@ const SearchResultsPage = () => {
     if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
       params.append('selectedTables', newFilters.selectedTables.join(','));
     }
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
+  const handlePermutationChange = (newPermutationId) => {
+    setPermutationId(newPermutationId);
+
+    // Update URL with new permutation (preserve query and filters)
+    const params = new URLSearchParams({ q: inputValue });
+
+    // Add permutation if selected
+    if (newPermutationId && newPermutationId !== 'none') {
+      params.append('permutation', newPermutationId);
+    }
+
+    // Add current filters to URL
+    if (filters.year && filters.year !== 'all') {
+      params.append('year', filters.year);
+    }
+    if (filters.category && filters.category !== 'all') {
+      params.append('category', filters.category);
+    }
+    if (filters.country && filters.country !== 'all') {
+      params.append('country', filters.country);
+    }
+    if (filters.tableName) {
+      params.append('tableName', filters.tableName);
+    }
+    if (filters.minDate) {
+      params.append('minDate', filters.minDate);
+    }
+    if (filters.maxDate) {
+      params.append('maxDate', filters.maxDate);
+    }
+    if (filters.selectedTables && filters.selectedTables.length > 0) {
+      params.append('selectedTables', filters.selectedTables.join(','));
+    }
+
     navigate(`/search?${params.toString()}`, { replace: true });
   };
 
@@ -279,13 +338,68 @@ const SearchResultsPage = () => {
                 </Box>
               </motion.div>
 
-              {/* Filter Button - Completely Outside */}
+              {/* Action Buttons - Completely Outside */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2, delay: 0.1 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.75 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mb: 0.75 }}>
+                  <Select
+                    value={permutationId}
+                    onChange={(e) => handlePermutationChange(e.target.value)}
+                    size="small"
+                    renderValue={(value) => {
+                      const selected = PERMUTATION_FUNCTIONS.find(p => p.id === value);
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Shuffle sx={{ fontSize: '1rem' }} />
+                          <span>{selected?.label || 'Permutation'}</span>
+                        </Box>
+                      );
+                    }}
+                    sx={{
+                      minWidth: 'fit-content',
+                      borderRadius: '8px',
+                      transition: 'all 0.2s',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'divider',
+                      },
+                      '& .MuiSelect-select': {
+                        py: 0.35,
+                        px: 1.25,
+                        fontSize: '0.75rem',
+                        color: 'text.primary',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                      },
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                        },
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                    }}
+                  >
+                    {PERMUTATION_FUNCTIONS.map((permutation) => (
+                      <MenuItem key={permutation.id} value={permutation.id}>
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>
+                            {permutation.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {permutation.description}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+
                   <Button
                     variant="outlined"
                     startIcon={<FilterList />}
@@ -350,6 +464,25 @@ const SearchResultsPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
+            {/* Permutation Indicator */}
+            {expandedQueryInfo && permutationId && permutationId !== 'none' && (
+              <Alert
+                severity="success"
+                sx={{ mb: 2 }}
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Permutation Applied: {getPermutationMetadata(permutationId)?.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Searching with expanded terms: {Object.entries(expandedQueryInfo).map(([term, variants]) =>
+                      `${term} → [${variants.join(', ')}]`
+                    ).join(' | ')}
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
+
             {/* Active Filters Alert */}
             {hasActiveFilters && (
               <Alert

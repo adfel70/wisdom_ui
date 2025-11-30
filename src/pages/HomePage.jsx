@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper, Button, Chip } from '@mui/material';
-import { School, FilterList } from '@mui/icons-material';
+import { Box, Container, Typography, Paper, Button, Chip, Select, MenuItem } from '@mui/material';
+import { School, FilterList, Shuffle } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
+import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
 
 /**
  * HomePage Component
@@ -15,12 +16,18 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [permutationId, setPermutationId] = useState('none');
 
   const handleSearch = (query) => {
     if (!query || !query.trim()) return;
 
     // Navigate to results page with search params
     const params = new URLSearchParams({ q: query });
+
+    // Add permutation if selected
+    if (permutationId && permutationId !== 'none') {
+      params.append('permutation', permutationId);
+    }
 
     // Add filters to URL if any
     if (filters.year && filters.year !== 'all') {
@@ -147,14 +154,69 @@ const HomePage = () => {
 
           {/* Search Section - Centered */}
           <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-            {/* Filter Button - Completely Outside */}
+            {/* Action Buttons - Completely Outside */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3, delay: 0.1 }}
             >
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mb: 1 }}>
+                <Select
+                  value={permutationId}
+                  onChange={(e) => setPermutationId(e.target.value)}
+                  size="small"
+                  renderValue={(value) => {
+                    const selected = PERMUTATION_FUNCTIONS.find(p => p.id === value);
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Shuffle sx={{ fontSize: '1rem' }} />
+                        <span>{selected?.label || 'Permutation'}</span>
+                      </Box>
+                    );
+                  }}
+                  sx={{
+                    minWidth: 'fit-content',
+                    borderRadius: '8px',
+                    transition: 'all 0.2s',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'divider',
+                    },
+                    '& .MuiSelect-select': {
+                      py: 0.4,
+                      px: 1.5,
+                      fontSize: '0.75rem',
+                      color: 'text.primary',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                    },
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'primary.main',
+                    },
+                  }}
+                >
+                  {PERMUTATION_FUNCTIONS.map((permutation) => (
+                    <MenuItem key={permutation.id} value={permutation.id}>
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {permutation.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {permutation.description}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+
                 <Button
                   variant="outlined"
                   startIcon={<FilterList />}

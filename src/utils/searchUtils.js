@@ -2,6 +2,37 @@
  * Search and filter utilities for database operations
  */
 
+import { applyPermutation } from './permutationUtils';
+
+/**
+ * Expand all terms in groups with permutations
+ * @param {Array} groups - Array of AND groups (each group is an array of terms)
+ * @param {string} permutationId - The permutation to apply (e.g., 'reverse', 'double', 'none')
+ * @returns {Object} Object containing expanded groups and all variants for display
+ */
+const expandGroupsWithPermutations = (groups, permutationId) => {
+  if (!permutationId || permutationId === 'none') {
+    return {
+      expandedGroups: groups,
+      allVariants: {}
+    };
+  }
+
+  const allVariants = {}; // Track all variants for each original term
+  const expandedGroups = groups.map(group => {
+    return group.map(term => {
+      const variants = applyPermutation(term, permutationId);
+      allVariants[term] = variants;
+      return variants;
+    });
+  });
+
+  return {
+    expandedGroups,
+    allVariants
+  };
+};
+
 /**
  * Parse tokens into OR groups, where each group contains AND-connected terms
  * Example: [jake, and, sarah, or, mike, and, john] => [[jake, sarah], [mike, john]]
@@ -37,11 +68,22 @@ const parseTokensToGroups = (tokens) => {
 /**
  * Check if a row matches a group of AND-connected terms
  * @param {Object} row - Table row object
- * @param {Array} terms - Array of search terms (all must match)
+ * @param {Array} terms - Array of search terms or arrays of term variants (all must match)
  * @returns {boolean} True if row matches all terms
  */
 const rowMatchesAndGroup = (row, terms) => {
   return terms.every(term => {
+    // If term is an array (permutation variants), check if ANY variant matches (OR)
+    if (Array.isArray(term)) {
+      return term.some(variant => {
+        const lowerVariant = variant.toLowerCase();
+        return Object.values(row).some(value =>
+          String(value).toLowerCase().includes(lowerVariant)
+        );
+      });
+    }
+
+    // Single term (no permutation)
     const lowerTerm = term.toLowerCase();
     return Object.values(row).some(value =>
       String(value).toLowerCase().includes(lowerTerm)
@@ -129,9 +171,10 @@ const parseQueryString = (queryString) => {
  * Search through table data for matching values
  * @param {Array} tables - Array of table objects
  * @param {string|Object} query - Search query string OR object with {tokens, currentInput}
+ * @param {string} permutationId - Optional permutation to apply to search terms
  * @returns {Array} Filtered tables with matching data
  */
-export const searchTables = (tables, query) => {
+export const searchTables = (tables, query, permutationId = 'none') => {
   // Handle empty query
   if (!query) return tables;
 
@@ -163,11 +206,14 @@ export const searchTables = (tables, query) => {
     groups.push(...inputGroups);
   }
 
+  // Apply permutations to expand terms
+  const { expandedGroups } = expandGroupsWithPermutations(groups, permutationId);
+
   // Filter tables
   return tables
     .map(table => {
       const filteredData = table.data.filter(row =>
-        rowMatchesQuery(row, groups)
+        rowMatchesQuery(row, expandedGroups)
       );
 
       return {
@@ -238,9 +284,10 @@ export const filterTables = (tables, filters) => {
  * @param {Array} tables - Array of table objects
  * @param {string} query - Search query
  * @param {Object} filters - Filter criteria
+ * @param {string} permutationId - Optional permutation to apply to search terms
  * @returns {Array} Filtered and searched tables
  */
-export const applySearchAndFilters = (tables, query, filters) => {
+export const applySearchAndFilters = (tables, query, filters, permutationId = 'none') => {
   let result = tables;
 
   // Apply filters first
@@ -248,12 +295,31 @@ export const applySearchAndFilters = (tables, query, filters) => {
     result = filterTables(result, filters);
   }
 
-  // Then apply search
+  // Then apply search with permutations
   if (query && query.trim()) {
-    result = searchTables(result, query);
+    result = searchTables(result, query, permutationId);
   }
 
   return result;
+};
+
+/**
+ * Get expanded query information for display purposes
+ * Returns the original terms and their permuted variants
+ * @param {string} query - Search query string
+ * @param {string} permutationId - The permutation ID to apply
+ * @returns {Object} Object with original terms and their variants
+ */
+export const getExpandedQueryInfo = (query, permutationId) => {
+  if (!query || !permutationId || permutationId === 'none') {
+    return null;
+  }
+
+  const tokens = parseQueryString(query);
+  const groups = parseTokensToGroups(tokens);
+  const { allVariants } = expandGroupsWithPermutations(groups, permutationId);
+
+  return allVariants;
 };
 
 /**
@@ -315,5 +381,6 @@ export default {
   searchTables,
   filterTables,
   applySearchAndFilters,
-  highlightText
+  highlightText,
+  getExpandedQueryInfo
 };
