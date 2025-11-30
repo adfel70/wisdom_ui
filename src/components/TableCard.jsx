@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -21,7 +21,8 @@ import {
   ExpandLess,
   TableChart,
   Info,
-  Close
+  Close,
+  DragIndicator
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
 
@@ -60,6 +61,59 @@ const HighlightedText = ({ text, query }) => {
 };
 
 /**
+ * DraggableColumnHeader Component
+ * Custom column header with drag and drop functionality
+ */
+const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDragging, isDragOver }) => {
+  return (
+    <Box
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+        opacity: isDragging ? 0.5 : 1,
+        backgroundColor: isDragOver ? 'primary.light' : 'transparent',
+        border: isDragOver ? '2px dashed' : '2px solid transparent',
+        borderColor: isDragOver ? 'primary.main' : 'transparent',
+        borderRadius: 1,
+        transition: 'all 0.2s ease',
+        padding: '8px 12px',
+        minHeight: '40px',
+        width: '100%',
+        '&:hover': {
+          backgroundColor: isDragOver ? 'primary.light' : 'action.hover',
+        },
+      }}
+    >
+      <DragIndicator
+        sx={{
+          fontSize: '1rem',
+          color: 'text.secondary',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+      />
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+          fontSize: '0.875rem',
+          color: 'text.primary',
+          flex: 1,
+        }}
+      >
+        {column}
+      </Typography>
+    </Box>
+  );
+};
+
+/**
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
@@ -67,6 +121,25 @@ const TableCard = ({ table, query }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [columnOrder, setColumnOrder] = useState(table.columns);
+  const [draggedColumn, setDraggedColumn] = useState(null);
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+
+  // Update column order when table changes
+  useEffect(() => {
+    setColumnOrder(table.columns);
+  }, [table.columns]);
+
+  // Global drag end handler
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+    };
+
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    return () => document.removeEventListener('dragend', handleGlobalDragEnd);
+  }, []);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -82,6 +155,47 @@ const TableCard = ({ table, query }) => {
     setSelectedRow(null);
   };
 
+  // Drag and drop handlers for column reordering
+  const handleDragStart = (e, column) => {
+    setDraggedColumn(column);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, column) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(column);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const handleDrop = (e, targetColumn) => {
+    e.preventDefault();
+
+    if (!draggedColumn || draggedColumn === targetColumn) {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+      return;
+    }
+
+    const newOrder = [...columnOrder];
+    const draggedIndex = newOrder.indexOf(draggedColumn);
+    const targetIndex = newOrder.indexOf(targetColumn);
+
+    // Remove dragged column from its current position
+    newOrder.splice(draggedIndex, 1);
+
+    // Insert dragged column at target position
+    newOrder.splice(targetIndex, 0, draggedColumn);
+
+    setColumnOrder(newOrder);
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
   // Transform data for DataGrid (add id field)
   const dataGridRows = React.useMemo(() => {
     return table.data.map((row, index) => ({
@@ -92,11 +206,21 @@ const TableCard = ({ table, query }) => {
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
-    const columns = table.columns.map((column) => ({
+    const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
       flex: 1,
       minWidth: 120,
+      renderHeader: () => (
+        <DraggableColumnHeader
+          column={column}
+          onDragStart={(e) => handleDragStart(e, column)}
+          onDragOver={(e) => handleDragOver(e, column)}
+          onDrop={(e) => handleDrop(e, column)}
+          isDragging={draggedColumn === column}
+          isDragOver={dragOverColumn === column}
+        />
+      ),
       renderCell: (params) => (
         <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
           <Typography
@@ -146,7 +270,7 @@ const TableCard = ({ table, query }) => {
     });
 
     return columns;
-  }, [table.columns, query]);
+  }, [columnOrder, query, draggedColumn]);
 
   return (
     <Card
@@ -262,15 +386,26 @@ const TableCard = ({ table, query }) => {
               },
               '& .MuiDataGrid-columnHeaders': {
                 backgroundColor: 'grey.50',
+                minHeight: '56px !important',
+              },
+              '& .MuiDataGrid-columnHeader': {
+                padding: 0,
+                '&:focus': {
+                  outline: 'none',
+                },
+                '&:focus-within': {
+                  outline: 'none',
+                },
               },
               '& .MuiDataGrid-columnHeaderTitle': {
                 fontWeight: 600,
                 fontSize: '0.875rem',
                 color: 'text.primary',
+                display: 'none', // Hide default title since we use custom header
               },
               '& .MuiDataGrid-row:hover': {
                 backgroundColor: 'action.selected',
-              },       
+              },
             }}
           />
         </CardContent>
@@ -314,7 +449,7 @@ const TableCard = ({ table, query }) => {
         <DialogContent sx={{ p: 3 }}>
           {selectedRow && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {table.columns.map((column, index) => (
+              {columnOrder.map((column, index) => (
                 <Box key={column}>
                   <Box
                     sx={{
@@ -326,18 +461,18 @@ const TableCard = ({ table, query }) => {
                   >
                     <Typography
                       variant="body2"
-                      fontWeight={500}  
+                      fontWeight={500}
                     >
-                      {column}: 
+                      {column}:
                     </Typography>
                     <Typography
                       variant="body2"
-                      fontWeight={300}  
+                      fontWeight={300}
                     >
                       {selectedRow[column] || 'N/A'}
                     </Typography>
                   </Box>
-                  {index < table.columns.length - 1 && <Divider sx={{ mt: 2 }} />}
+                  {index < columnOrder.length - 1 && <Divider sx={{ mt: 2 }} />}
                 </Box>
               ))}
             </Box>
