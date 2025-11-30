@@ -348,7 +348,7 @@ const SearchBar = ({
           py: isHome ? 2 : 1,
           px: 2,
           gap: 1,
-          minHeight: isHome ? 56 : 48,
+          minHeight: isHome ? 48 : 44,
           flexWrap: 'wrap',
           cursor: 'text',
           '&:hover': {
@@ -435,7 +435,15 @@ const SearchBar = ({
         />
 
         {/* Transform dropdown and revert button */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          ml: 'auto',
+          borderLeft: '1px solid',
+          borderColor: 'divider',
+          pl: 1.5,
+        }}>
           {(tokens.length > 0 || currentInput.trim()) && (
             <Tooltip title="Clear all">
               <IconButton
@@ -443,9 +451,11 @@ const SearchBar = ({
                 size="small"
                 sx={{
                   color: 'text.secondary',
+                  transition: 'all 0.2s',
                   '&:hover': {
                     backgroundColor: 'error.light',
                     color: 'error.main',
+                    transform: 'scale(1.05)',
                   },
                 }}
               >
@@ -460,9 +470,11 @@ const SearchBar = ({
                 size="small"
                 sx={{
                   color: 'primary.main',
+                  transition: 'all 0.2s',
                   '&:hover': {
                     backgroundColor: 'primary.light',
                     color: 'primary.dark',
+                    transform: 'scale(1.05)',
                   },
                 }}
               >
@@ -484,6 +496,7 @@ const SearchBar = ({
             sx={{
               minWidth: 'fit-content',
               borderRadius: '12px',
+              transition: 'all 0.2s',
               '& .MuiOutlinedInput-notchedOutline': {
                 borderColor: 'divider',
               },
@@ -498,6 +511,7 @@ const SearchBar = ({
               },
               '&:hover': {
                 backgroundColor: 'action.hover',
+                transform: 'translateY(-1px)',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: 'primary.main',
                 },
@@ -519,36 +533,24 @@ const SearchBar = ({
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button
-          type="button"
-          variant="outlined"
-          onClick={onFilterClick}
-          startIcon={<FilterList />}
-          sx={{
-            py: isHome ? 2 : 1.25,
-            px: 3,
-            whiteSpace: 'nowrap',
-            minWidth: 'fit-content',
-          }}
-        >
-          Filter Tables
-        </Button>
-
-        <Button
-          type="submit"
-          variant="contained"
-          endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
-          sx={{
-            py: isHome ? 2 : 1.25,
-            px: isHome ? 4 : 3,
-            fontSize: isHome ? '1rem' : '0.875rem',
-            fontWeight: 600,
-          }}
-        >
-          Search
-        </Button>
-      </Box>
+      <Button
+        type="submit"
+        variant="contained"
+        endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
+        sx={{
+          py: isHome ? 1.5 : 1,
+          px: isHome ? 3.5 : 2.5,
+          fontSize: isHome ? '1rem' : '0.875rem',
+          fontWeight: 600,
+          transition: 'all 0.2s',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+          },
+        }}
+      >
+        Search
+      </Button>
     </Box>
   );
 };

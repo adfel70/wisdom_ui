@@ -295,6 +295,27 @@ const SearchResultsPage = () => {
                     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                   }}
                 >
+                  {/* Filter Button */}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FilterList />}
+                      onClick={() => setIsFilterOpen(true)}
+                      sx={{
+                        py: 0.75,
+                        px: 2,
+                        fontSize: '0.875rem',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                        },
+                      }}
+                    >
+                      Filter Tables
+                    </Button>
+                  </Box>
+
                   <SearchBar
                     value={inputValue}
                     onChange={setInputValue}

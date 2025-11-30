@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Container, Typography, Paper, Button, Chip } from '@mui/material';
+import { School, FilterList } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -88,7 +89,7 @@ const HomePage = () => {
           overflow: 'hidden',
         }}
       >
-        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -96,6 +97,17 @@ const HomePage = () => {
             transition={{ duration: 0.3 }}
           >
             <Box sx={{ textAlign: 'center', mb: 6 }}>
+              {/* Icon */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <School
+                  sx={{
+                    fontSize: '4rem',
+                    color: 'primary.main',
+                    opacity: 0.9,
+                  }}
+                />
+              </Box>
+
               {/* Logo/Title */}
               <Typography
                 variant="h2"
@@ -148,6 +160,27 @@ const HomePage = () => {
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               }}
             >
+              {/* Filter Button */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterList />}
+                  onClick={() => setIsFilterOpen(true)}
+                  sx={{
+                    py: 1,
+                    px: 2.5,
+                    fontSize: '0.875rem',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                    },
+                  }}
+                >
+                  Filter Tables
+                </Button>
+              </Box>
+
               <SearchBar
                 value={searchQuery}
                 onChange={setSearchQuery}
