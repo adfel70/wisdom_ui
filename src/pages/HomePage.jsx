@@ -230,7 +230,7 @@ const HomePage = () => {
                       onMouseEnter={(e) => {
                         if (permutation.parameters && permutation.parameters.length > 0) {
                           setNestedMenuPermutation({ permutation, anchorEl: e.currentTarget });
-                        } else {
+                        } else if (nestedMenuPermutation?.permutation?.id !== permutation.id) {
                           setNestedMenuPermutation(null);
                         }
                       }}
@@ -246,7 +246,8 @@ const HomePage = () => {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        minWidth: 250
+                        minWidth: 250,
+                        cursor: 'pointer'
                       }}
                     >
                       <Box>
