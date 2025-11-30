@@ -258,18 +258,57 @@ export const applySearchAndFilters = (tables, query, filters) => {
 
 /**
  * Highlight matching text in search results
+ * Supports both simple queries and complex AND/OR queries
  * @param {string} text - Text to highlight
- * @param {string} query - Search query
+ * @param {string|Object} query - Search query (string or {tokens, currentInput})
  * @returns {Array} Array of text parts with highlighting info
  */
 export const highlightText = (text, query) => {
   if (!query || !text) return [{ text, highlight: false }];
 
-  const parts = String(text).split(new RegExp(`(${query})`, 'gi'));
-  return parts.map(part => ({
-    text: part,
-    highlight: part.toLowerCase() === query.toLowerCase()
-  }));
+  // Extract search terms from query (excluding keywords)
+  let searchTerms = [];
+
+  if (typeof query === 'string') {
+    // Parse string query to extract terms
+    const tokens = parseQueryString(query);
+    searchTerms = tokens
+      .filter(token => token.type === 'term')
+      .map(token => token.value);
+  } else {
+    // Extract terms from token-based query
+    const tokens = query.tokens || [];
+    searchTerms = tokens
+      .filter(token => token.type === 'term')
+      .map(token => token.value);
+
+    // Also include current input if present
+    if (query.currentInput && query.currentInput.trim()) {
+      searchTerms.push(query.currentInput.trim());
+    }
+  }
+
+  if (searchTerms.length === 0) {
+    return [{ text, highlight: false }];
+  }
+
+  // Build regex pattern to match any of the search terms
+  const escapedTerms = searchTerms.map(term =>
+    term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  const pattern = `(${escapedTerms.join('|')})`;
+  const regex = new RegExp(pattern, 'gi');
+
+  const parts = String(text).split(regex);
+  return parts.map(part => {
+    const shouldHighlight = searchTerms.some(term =>
+      part.toLowerCase() === term.toLowerCase()
+    );
+    return {
+      text: part,
+      highlight: shouldHighlight
+    };
+  });
 };
 
 export default {

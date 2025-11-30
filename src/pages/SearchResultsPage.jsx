@@ -143,9 +143,12 @@ const SearchResultsPage = () => {
     navigate('/');
   };
 
-  const handleSearch = () => {
+  const handleSearch = (query) => {
+    // Accept query from SearchBar or use inputValue as fallback
+    const searchQuery = query || inputValue;
+
     // Update search query and URL params
-    const params = new URLSearchParams({ q: inputValue });
+    const params = new URLSearchParams({ q: searchQuery });
 
     // Add current filters to URL
     if (filters.year && filters.year !== 'all') {
