@@ -374,10 +374,10 @@ const SearchBar = ({
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
-          py: isHome ? 0.75 : 0.625,
+          py: isHome ? 0.875 : 0.75,
           px: 1.25,
           gap: 0.75,
-          minHeight: isHome ? 38 : 36,
+          minHeight: isHome ? 40 : 38,
           flexWrap: 'wrap',
           cursor: 'text',
           '&:hover': {
