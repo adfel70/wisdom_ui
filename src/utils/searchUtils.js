@@ -3,23 +3,172 @@
  */
 
 /**
+ * Parse tokens into OR groups, where each group contains AND-connected terms
+ * Example: [jake, and, sarah, or, mike, and, john] => [[jake, sarah], [mike, john]]
+ * @param {Array} tokens - Array of token objects {type: 'term'|'keyword', value: string}
+ * @returns {Array} Array of arrays, where each inner array is an AND group
+ */
+const parseTokensToGroups = (tokens) => {
+  const groups = [];
+  let currentGroup = [];
+
+  tokens.forEach(token => {
+    if (token.type === 'keyword' && token.value === 'or') {
+      // 'or' separates groups
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+        currentGroup = [];
+      }
+    } else if (token.type === 'term') {
+      // Add term to current group
+      currentGroup.push(token.value);
+    }
+    // 'and' keywords are implicit - they just connect terms in the same group
+  });
+
+  // Add the last group
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  return groups;
+};
+
+/**
+ * Check if a row matches a group of AND-connected terms
+ * @param {Object} row - Table row object
+ * @param {Array} terms - Array of search terms (all must match)
+ * @returns {boolean} True if row matches all terms
+ */
+const rowMatchesAndGroup = (row, terms) => {
+  return terms.every(term => {
+    const lowerTerm = term.toLowerCase();
+    return Object.values(row).some(value =>
+      String(value).toLowerCase().includes(lowerTerm)
+    );
+  });
+};
+
+/**
+ * Check if a row matches the query (OR of AND groups)
+ * @param {Object} row - Table row object
+ * @param {Array} groups - Array of AND groups
+ * @returns {boolean} True if row matches any group
+ */
+const rowMatchesQuery = (row, groups) => {
+  if (groups.length === 0) return false;
+
+  // Row matches if it matches ANY of the OR groups
+  return groups.some(group => rowMatchesAndGroup(row, group));
+};
+
+/**
+ * Parse a query string into tokens by detecting AND/OR keywords
+ * Handles quoted strings to escape keywords
+ * @param {string} queryString - The search query string
+ * @returns {Array} Array of token objects {type: 'term'|'keyword', value: string}
+ */
+const parseQueryString = (queryString) => {
+  const tokens = [];
+  const quotedRegex = /"([^"]*)"/g;
+  let remaining = queryString;
+  let match;
+  let lastIndex = 0;
+
+  // Extract quoted strings first
+  const quotedParts = [];
+  while ((match = quotedRegex.exec(queryString)) !== null) {
+    quotedParts.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      value: match[1]
+    });
+  }
+
+  // Build tokens by processing non-quoted and quoted parts
+  let currentPos = 0;
+  quotedParts.forEach(quoted => {
+    // Process non-quoted part before this quote
+    if (quoted.start > currentPos) {
+      const nonQuoted = queryString.substring(currentPos, quoted.start);
+      const words = nonQuoted.trim().split(/\s+/).filter(w => w);
+      words.forEach(word => {
+        const lower = word.toLowerCase();
+        if (lower === 'and' || lower === 'or') {
+          tokens.push({ type: 'keyword', value: lower });
+        } else {
+          tokens.push({ type: 'term', value: word });
+        }
+      });
+    }
+    // Add quoted part as a term
+    if (quoted.value) {
+      tokens.push({ type: 'term', value: quoted.value });
+    }
+    currentPos = quoted.end;
+  });
+
+  // Process remaining non-quoted part
+  if (currentPos < queryString.length) {
+    const remaining = queryString.substring(currentPos);
+    const words = remaining.trim().split(/\s+/).filter(w => w);
+    words.forEach(word => {
+      const lower = word.toLowerCase();
+      if (lower === 'and' || lower === 'or') {
+        tokens.push({ type: 'keyword', value: lower });
+      } else {
+        tokens.push({ type: 'term', value: word });
+      }
+    });
+  }
+
+  return tokens;
+};
+
+/**
  * Search through table data for matching values
  * @param {Array} tables - Array of table objects
- * @param {string} query - Search query string
+ * @param {string|Object} query - Search query string OR object with {tokens, currentInput}
  * @returns {Array} Filtered tables with matching data
  */
 export const searchTables = (tables, query) => {
-  if (!query || !query.trim()) return tables;
+  // Handle empty query
+  if (!query) return tables;
 
-  const lowerQuery = query.toLowerCase().trim();
+  let tokens = [];
+  let currentInput = '';
 
+  // Handle string queries (parse for AND/OR keywords)
+  if (typeof query === 'string') {
+    if (!query.trim()) return tables;
+    tokens = parseQueryString(query);
+  } else {
+    // Handle token-based queries
+    tokens = query.tokens || [];
+    currentInput = query.currentInput || '';
+  }
+
+  // If no tokens and no input, return all tables
+  if (tokens.length === 0 && !currentInput.trim()) {
+    return tables;
+  }
+
+  // Parse tokens into OR groups
+  const groups = parseTokensToGroups(tokens);
+
+  // If there's current input, parse it and add to groups
+  if (currentInput.trim()) {
+    const inputTokens = parseQueryString(currentInput);
+    const inputGroups = parseTokensToGroups(inputTokens);
+    groups.push(...inputGroups);
+  }
+
+  // Filter tables
   return tables
     .map(table => {
-      const filteredData = table.data.filter(row => {
-        return Object.values(row).some(value =>
-          String(value).toLowerCase().includes(lowerQuery)
-        );
-      });
+      const filteredData = table.data.filter(row =>
+        rowMatchesQuery(row, groups)
+      );
 
       return {
         ...table,
@@ -109,18 +258,57 @@ export const applySearchAndFilters = (tables, query, filters) => {
 
 /**
  * Highlight matching text in search results
+ * Supports both simple queries and complex AND/OR queries
  * @param {string} text - Text to highlight
- * @param {string} query - Search query
+ * @param {string|Object} query - Search query (string or {tokens, currentInput})
  * @returns {Array} Array of text parts with highlighting info
  */
 export const highlightText = (text, query) => {
   if (!query || !text) return [{ text, highlight: false }];
 
-  const parts = String(text).split(new RegExp(`(${query})`, 'gi'));
-  return parts.map(part => ({
-    text: part,
-    highlight: part.toLowerCase() === query.toLowerCase()
-  }));
+  // Extract search terms from query (excluding keywords)
+  let searchTerms = [];
+
+  if (typeof query === 'string') {
+    // Parse string query to extract terms
+    const tokens = parseQueryString(query);
+    searchTerms = tokens
+      .filter(token => token.type === 'term')
+      .map(token => token.value);
+  } else {
+    // Extract terms from token-based query
+    const tokens = query.tokens || [];
+    searchTerms = tokens
+      .filter(token => token.type === 'term')
+      .map(token => token.value);
+
+    // Also include current input if present
+    if (query.currentInput && query.currentInput.trim()) {
+      searchTerms.push(query.currentInput.trim());
+    }
+  }
+
+  if (searchTerms.length === 0) {
+    return [{ text, highlight: false }];
+  }
+
+  // Build regex pattern to match any of the search terms
+  const escapedTerms = searchTerms.map(term =>
+    term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  const pattern = `(${escapedTerms.join('|')})`;
+  const regex = new RegExp(pattern, 'gi');
+
+  const parts = String(text).split(regex);
+  return parts.map(part => {
+    const shouldHighlight = searchTerms.some(term =>
+      part.toLowerCase() === term.toLowerCase()
+    );
+    return {
+      text: part,
+      highlight: shouldHighlight
+    };
+  });
 };
 
 export default {
