@@ -345,10 +345,10 @@ const SearchBar = ({
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
-          py: isHome ? 2 : 1,
-          px: 2,
+          py: isHome ? 1 : 0.75,
+          px: 1.5,
           gap: 1,
-          minHeight: isHome ? 48 : 44,
+          minHeight: isHome ? 42 : 38,
           flexWrap: 'wrap',
           cursor: 'text',
           '&:hover': {
@@ -366,7 +366,7 @@ const SearchBar = ({
         <SearchIcon
           sx={{
             color: 'text.secondary',
-            fontSize: isHome ? '1.5rem' : '1.25rem',
+            fontSize: isHome ? '1.25rem' : '1.125rem',
           }}
         />
 
@@ -386,7 +386,7 @@ const SearchBar = ({
               border: token.type === 'term' ? '1px solid' : 'none',
               borderColor: token.type === 'term' ? '#d0e4f7' : 'transparent',
               borderRadius: token.type === 'term' ? 1 : 0,
-              fontSize: isHome ? '1rem' : '0.875rem',
+              fontSize: isHome ? '0.875rem' : '0.8125rem',
               color: token.type === 'keyword' ? 'text.disabled' : 'text.primary',
               fontWeight: token.type === 'term' ? 500 : 400,
               cursor: token.type === 'term' ? 'pointer' : 'default',
@@ -428,7 +428,7 @@ const SearchBar = ({
             border: 'none',
             outline: 'none',
             backgroundColor: 'transparent',
-            fontSize: isHome ? '1.125rem' : '1rem',
+            fontSize: isHome ? '0.9375rem' : '0.875rem',
             fontFamily: 'inherit',
             color: 'inherit',
           }}
@@ -538,9 +538,9 @@ const SearchBar = ({
         variant="contained"
         endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
         sx={{
-          py: isHome ? 1.5 : 1,
-          px: isHome ? 3.5 : 2.5,
-          fontSize: isHome ? '1rem' : '0.875rem',
+          py: isHome ? 1 : 0.75,
+          px: isHome ? 2.5 : 2,
+          fontSize: isHome ? '0.875rem' : '0.8125rem',
           fontWeight: 600,
           transition: 'all 0.2s',
           '&:hover': {
