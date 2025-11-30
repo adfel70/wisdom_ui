@@ -167,11 +167,12 @@ const HomePage = () => {
                   onChange={(e) => setPermutationId(e.target.value)}
                   size="small"
                   renderValue={(value) => {
-                    const selected = PERMUTATION_FUNCTIONS.find(p => p.id === value);
+                    const label = value === 'none' ? 'Permutations' :
+                                  PERMUTATION_FUNCTIONS.find(p => p.id === value)?.label || 'Permutations';
                     return (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Shuffle sx={{ fontSize: '1rem' }} />
-                        <span>{selected?.label || 'Permutation'}</span>
+                        <span>{label}</span>
                       </Box>
                     );
                   }}

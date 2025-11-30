@@ -324,12 +324,13 @@ export const getExpandedQueryInfo = (query, permutationId) => {
 
 /**
  * Highlight matching text in search results
- * Supports both simple queries and complex AND/OR queries
+ * Supports both simple queries and complex AND/OR queries with permutations
  * @param {string} text - Text to highlight
  * @param {string|Object} query - Search query (string or {tokens, currentInput})
+ * @param {string} permutationId - Optional permutation to apply to search terms
  * @returns {Array} Array of text parts with highlighting info
  */
-export const highlightText = (text, query) => {
+export const highlightText = (text, query, permutationId = 'none') => {
   if (!query || !text) return [{ text, highlight: false }];
 
   // Extract search terms from query (excluding keywords)
@@ -358,8 +359,18 @@ export const highlightText = (text, query) => {
     return [{ text, highlight: false }];
   }
 
-  // Build regex pattern to match any of the search terms
-  const escapedTerms = searchTerms.map(term =>
+  // Expand search terms with permutations if applicable
+  let allTermsToHighlight = searchTerms;
+  if (permutationId && permutationId !== 'none') {
+    allTermsToHighlight = [];
+    searchTerms.forEach(term => {
+      const variants = applyPermutation(term, permutationId);
+      allTermsToHighlight.push(...variants);
+    });
+  }
+
+  // Build regex pattern to match any of the search terms (including permutations)
+  const escapedTerms = allTermsToHighlight.map(term =>
     term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   );
   const pattern = `(${escapedTerms.join('|')})`;
@@ -367,7 +378,7 @@ export const highlightText = (text, query) => {
 
   const parts = String(text).split(regex);
   return parts.map(part => {
-    const shouldHighlight = searchTerms.some(term =>
+    const shouldHighlight = allTermsToHighlight.some(term =>
       part.toLowerCase() === term.toLowerCase()
     );
     return {

@@ -146,9 +146,11 @@ const SearchResultsPage = () => {
   }, [filters]);
 
   // Get expanded query information for permutations
+  // Use permutation from URL params (not state) to ensure it matches current results
+  const appliedPermutationId = searchParams.get('permutation') || 'none';
   const expandedQueryInfo = useMemo(() => {
-    return getExpandedQueryInfo(searchQuery, permutationId);
-  }, [searchQuery, permutationId]);
+    return getExpandedQueryInfo(searchQuery, appliedPermutationId);
+  }, [searchQuery, appliedPermutationId, searchParams]);
 
   const handleBackToHome = () => {
     navigate('/');
@@ -350,11 +352,12 @@ const SearchResultsPage = () => {
                     onChange={(e) => handlePermutationChange(e.target.value)}
                     size="small"
                     renderValue={(value) => {
-                      const selected = PERMUTATION_FUNCTIONS.find(p => p.id === value);
+                      const label = value === 'none' ? 'Permutations' :
+                                    PERMUTATION_FUNCTIONS.find(p => p.id === value)?.label || 'Permutations';
                       return (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                           <Shuffle sx={{ fontSize: '1rem' }} />
-                          <span>{selected?.label || 'Permutation'}</span>
+                          <span>{label}</span>
                         </Box>
                       );
                     }}
@@ -465,14 +468,14 @@ const SearchResultsPage = () => {
             transition={{ duration: 0.3, delay: 0.3 }}
           >
             {/* Permutation Indicator */}
-            {expandedQueryInfo && permutationId && permutationId !== 'none' && (
+            {expandedQueryInfo && appliedPermutationId && appliedPermutationId !== 'none' && (
               <Alert
                 severity="success"
                 sx={{ mb: 2 }}
               >
                 <Box>
                   <Typography variant="body2" fontWeight={600} gutterBottom>
-                    Permutation Applied: {getPermutationMetadata(permutationId)?.label}
+                    Permutation Applied: {getPermutationMetadata(appliedPermutationId)?.label}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Searching with expanded terms: {Object.entries(expandedQueryInfo).map(([term, variants]) =>
@@ -589,7 +592,7 @@ const SearchResultsPage = () => {
                   <EmptyState type={getEmptyStateType()} />
                 ) : (
                   currentTables.map((table) => (
-                    <TableCard key={table.id} table={table} query={searchQuery} />
+                    <TableCard key={table.id} table={table} query={searchQuery} permutationId={appliedPermutationId} />
                   ))
                 )}
               </>
