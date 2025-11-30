@@ -7,7 +7,6 @@ import {
   IconButton,
   Chip,
   Collapse,
-  Paper,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -251,7 +250,10 @@ const TableCard = ({ table, query }) => {
           <DataGrid
             rows={dataGridRows}
             columns={dataGridColumns}
-            hideFooterSelectedRowCount
+            hideFooter
+            initialState={{
+              pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+            }}
             sx={{
               border: '1px solid',
               borderColor: 'divider',
