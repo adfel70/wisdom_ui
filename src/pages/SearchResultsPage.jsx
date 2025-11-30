@@ -12,10 +12,10 @@ import {
   Stack,
   Alert,
   Button,
-  Select,
+  Menu,
   MenuItem,
 } from '@mui/material';
-import { Home as HomeIcon, FilterList, Shuffle } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -44,6 +44,8 @@ const SearchResultsPage = () => {
   const [filters, setFilters] = useState({});
   const [permutationId, setPermutationId] = useState('none');
   const [permutationParams, setPermutationParams] = useState({});
+  const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
+  const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
   const [allDatabases, setAllDatabases] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -52,6 +54,25 @@ const SearchResultsPage = () => {
 
   // Get selected permutation metadata
   const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
+
+  // Generate label for button
+  const getPermutationLabel = () => {
+    if (permutationId === 'none') return 'Permutations';
+    const perm = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
+    if (!perm) return 'Permutations';
+
+    // If has parameters, show them in label
+    if (perm.parameters && perm.parameters.length > 0) {
+      const paramLabels = perm.parameters.map(param => {
+        const value = permutationParams[param.id] || param.default;
+        const option = param.options.find(opt => opt.value === value);
+        return option ? option.label.split(' ')[0] : ''; // Get just the first word (Low, Medium, High)
+      }).filter(Boolean).join(', ');
+      return `${perm.label}${paramLabels ? ` - ${paramLabels}` : ''}`;
+    }
+
+    return perm.label;
+  };
 
   // Initialize from URL params
   useEffect(() => {
@@ -118,6 +139,11 @@ const SearchResultsPage = () => {
     return allDatabases.find(db => db.id === activeDatabase);
   }, [allDatabases, activeDatabase]);
 
+  // Get applied permutation from URL params (not state) to ensure it matches current results
+  const appliedPermutationId = searchParams.get('permutation') || 'none';
+  const appliedPermutationParamsStr = searchParams.get('permutationParams') || '';
+  const appliedPermutationParams = appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
+
   // Apply filters to current database
   const currentTables = useMemo(() => {
     if (!currentDatabaseData) return [];
@@ -153,10 +179,6 @@ const SearchResultsPage = () => {
   }, [filters]);
 
   // Get expanded query information for permutations
-  // Use permutation from URL params (not state) to ensure it matches current results
-  const appliedPermutationId = searchParams.get('permutation') || 'none';
-  const appliedPermutationParamsStr = searchParams.get('permutationParams') || '';
-  const appliedPermutationParams = appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
   const expandedQueryInfo = useMemo(() => {
     return getExpandedQueryInfo(searchQuery, appliedPermutationId, appliedPermutationParams);
   }, [searchQuery, appliedPermutationId, appliedPermutationParams, searchParams]);
@@ -371,50 +393,63 @@ const SearchResultsPage = () => {
                 transition={{ duration: 0.2, delay: 0.1 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mb: 0.75 }}>
-                  <Select
-                    value={permutationId}
-                    onChange={(e) => handlePermutationChange(e.target.value)}
-                    size="small"
-                    renderValue={(value) => {
-                      const label = value === 'none' ? 'Permutations' :
-                                    PERMUTATION_FUNCTIONS.find(p => p.id === value)?.label || 'Permutations';
-                      return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <Shuffle sx={{ fontSize: '1rem' }} />
-                          <span>{label}</span>
-                        </Box>
-                      );
-                    }}
+                  <Button
+                    variant="outlined"
+                    startIcon={<Shuffle />}
+                    onClick={(e) => setPermutationMenuAnchor(e.currentTarget)}
                     sx={{
-                      minWidth: 'fit-content',
+                      py: 0.35,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
                       borderRadius: '8px',
                       transition: 'all 0.2s',
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'divider',
-                      },
-                      '& .MuiSelect-select': {
-                        py: 0.35,
-                        px: 1.25,
-                        fontSize: '0.75rem',
-                        color: 'text.primary',
-                        fontWeight: 500,
-                        display: 'flex',
-                        alignItems: 'center',
-                      },
+                      textTransform: 'none',
                       '&:hover': {
                         transform: 'translateY(-1px)',
                         boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
-                        },
-                      },
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'primary.main',
                       },
                     }}
                   >
+                    {getPermutationLabel()}
+                  </Button>
+
+                  <Menu
+                    anchorEl={permutationMenuAnchor}
+                    open={Boolean(permutationMenuAnchor)}
+                    onClose={() => {
+                      setPermutationMenuAnchor(null);
+                      setNestedMenuPermutation(null);
+                    }}
+                    MenuListProps={{
+                      onMouseLeave: () => setNestedMenuPermutation(null)
+                    }}
+                  >
                     {PERMUTATION_FUNCTIONS.map((permutation) => (
-                      <MenuItem key={permutation.id} value={permutation.id}>
+                      <MenuItem
+                        key={permutation.id}
+                        onMouseEnter={(e) => {
+                          if (permutation.parameters && permutation.parameters.length > 0) {
+                            setNestedMenuPermutation({ permutation, anchorEl: e.currentTarget });
+                          } else {
+                            setNestedMenuPermutation(null);
+                          }
+                        }}
+                        onClick={() => {
+                          if (!permutation.parameters || permutation.parameters.length === 0) {
+                            handlePermutationChange(permutation.id);
+                            setPermutationParams({});
+                            setPermutationMenuAnchor(null);
+                            setNestedMenuPermutation(null);
+                          }
+                        }}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          minWidth: 250
+                        }}
+                      >
                         <Box>
                           <Typography variant="body2" fontWeight={500}>
                             {permutation.label}
@@ -423,50 +458,43 @@ const SearchResultsPage = () => {
                             {permutation.description}
                           </Typography>
                         </Box>
+                        {permutation.parameters && permutation.parameters.length > 0 && (
+                          <ChevronRight sx={{ ml: 2, color: 'text.secondary' }} />
+                        )}
                       </MenuItem>
                     ))}
-                  </Select>
+                  </Menu>
 
-                  {/* Parameter dropdowns - shown when permutation has parameters */}
-                  {selectedPermutation?.parameters?.map((param) => (
-                    <Select
-                      key={param.id}
-                      value={permutationParams[param.id] || param.default}
-                      onChange={(e) => setPermutationParams({ ...permutationParams, [param.id]: e.target.value })}
-                      size="small"
-                      sx={{
-                        minWidth: 'fit-content',
-                        borderRadius: '8px',
-                        transition: 'all 0.2s',
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'divider',
-                        },
-                        '& .MuiSelect-select': {
-                          py: 0.35,
-                          px: 1.25,
-                          fontSize: '0.75rem',
-                          color: 'text.primary',
-                          fontWeight: 500,
-                        },
-                        '&:hover': {
-                          transform: 'translateY(-1px)',
-                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
-                          '& .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main',
-                          },
-                        },
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
-                        },
+                  {/* Nested menu for parameters */}
+                  {nestedMenuPermutation && nestedMenuPermutation.permutation.parameters && (
+                    <Menu
+                      anchorEl={nestedMenuPermutation.anchorEl}
+                      open={Boolean(nestedMenuPermutation)}
+                      onClose={() => setNestedMenuPermutation(null)}
+                      anchorOrigin={{
+                        vertical: 'top',
+                        horizontal: 'right',
+                      }}
+                      transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'left',
                       }}
                     >
-                      {param.options.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
+                      {nestedMenuPermutation.permutation.parameters[0].options.map((option) => (
+                        <MenuItem
+                          key={option.value}
+                          onClick={() => {
+                            handlePermutationChange(nestedMenuPermutation.permutation.id);
+                            setPermutationParams({ [nestedMenuPermutation.permutation.parameters[0].id]: option.value });
+                            setPermutationMenuAnchor(null);
+                            setNestedMenuPermutation(null);
+                          }}
+                        >
                           {option.label}
                         </MenuItem>
                       ))}
-                    </Select>
-                  ))}
+                    </Menu>
+                  )}
 
                   <Button
                     variant="outlined"
