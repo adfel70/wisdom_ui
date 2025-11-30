@@ -152,7 +152,14 @@ const SearchBar = ({
     });
 
     if (newTokens.length > 0) {
-      setTokens(prev => [...prev, ...newTokens]);
+      setTokens(prev => {
+        // If there are existing tokens and the last one is a term (not a keyword),
+        // insert 'or' before the new tokens
+        if (prev.length > 0 && prev[prev.length - 1].type === 'term') {
+          return [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+        }
+        return [...prev, ...newTokens];
+      });
       setCurrentInput('');
       return true;
     }
@@ -230,15 +237,21 @@ const SearchBar = ({
     }
   };
 
-  // Remove a specific token and its preceding keyword if present
+  // Remove a specific token and its adjacent keyword
   const removeToken = (index) => {
     setTokens(prev => {
       const token = prev[index];
 
-      // If removing a term, also remove the preceding keyword if exists
-      if (token.type === 'term' && index > 0 && prev[index - 1].type === 'keyword') {
-        // Remove both the keyword and the term
-        return prev.filter((_, i) => i !== index - 1 && i !== index);
+      if (token.type === 'term') {
+        // If removing the first term and next token is a keyword, remove both
+        if (index === 0 && prev.length > 1 && prev[1].type === 'keyword') {
+          return prev.filter((_, i) => i !== 0 && i !== 1);
+        }
+
+        // If removing a non-first term with a preceding keyword, remove both
+        if (index > 0 && prev[index - 1].type === 'keyword') {
+          return prev.filter((_, i) => i !== index - 1 && i !== index);
+        }
       }
 
       // Otherwise just remove the token
@@ -250,7 +263,7 @@ const SearchBar = ({
   const clearAll = () => {
     setTokens([]);
     setCurrentInput('');
-    setIsInitialized(false);
+    // Don't reset isInitialized - we only want to initialize from value prop on mount
   };
 
   const handleTransformChange = (e) => {
