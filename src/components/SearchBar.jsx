@@ -96,16 +96,19 @@ const SearchBar = ({
 
   // Parse quoted strings and regular tokens
   const parseInput = (input) => {
+    // Replace commas with spaces (treat commas as separators)
+    const normalized = input.replace(/,/g, ' ');
+
     // Handle quoted strings
     const quotedRegex = /"([^"]*)"/g;
     const parts = [];
     let lastIndex = 0;
     let match;
 
-    while ((match = quotedRegex.exec(input)) !== null) {
+    while ((match = quotedRegex.exec(normalized)) !== null) {
       // Add non-quoted part before this quote
       if (match.index > lastIndex) {
-        parts.push({ type: 'normal', value: input.substring(lastIndex, match.index) });
+        parts.push({ type: 'normal', value: normalized.substring(lastIndex, match.index) });
       }
       // Add quoted part
       parts.push({ type: 'quoted', value: match[1] });
@@ -113,8 +116,8 @@ const SearchBar = ({
     }
 
     // Add remaining non-quoted part
-    if (lastIndex < input.length) {
-      parts.push({ type: 'normal', value: input.substring(lastIndex) });
+    if (lastIndex < normalized.length) {
+      parts.push({ type: 'normal', value: normalized.substring(lastIndex) });
     }
 
     return parts;
@@ -153,9 +156,11 @@ const SearchBar = ({
 
     if (newTokens.length > 0) {
       setTokens(prev => {
-        // If there are existing tokens and the last one is a term (not a keyword),
-        // insert 'or' before the new tokens
-        if (prev.length > 0 && prev[prev.length - 1].type === 'term') {
+        // Only insert 'or' if:
+        // 1. There are existing tokens
+        // 2. The last existing token is a term
+        // 3. The first new token is a term (not a keyword)
+        if (prev.length > 0 && prev[prev.length - 1].type === 'term' && newTokens[0].type === 'term') {
           return [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
         }
         return [...prev, ...newTokens];
@@ -194,16 +199,42 @@ const SearchBar = ({
 
     // Check if user just typed a space after a keyword
     if (newValue.endsWith(' ')) {
-      const words = newValue.trim().split(/\s+/);
+      // Replace commas with spaces for parsing
+      const normalized = newValue.replace(/,/g, ' ');
+      const words = normalized.trim().split(/\s+/).filter(w => w);
       const lastWord = words[words.length - 1];
 
       if (isKeyword(lastWord) && words.length > 1) {
-        // Auto-anchor: take all words before the keyword as terms, then add keyword
+        // Auto-anchor: parse all words before the keyword, then add keyword
         const termsBeforeKeyword = words.slice(0, -1);
-        const newTokens = termsBeforeKeyword.map(word => ({ type: 'term', value: word }));
+        const newTokens = [];
+
+        // Process each word - could be a keyword or term
+        termsBeforeKeyword.forEach((word, index) => {
+          if (isKeyword(word)) {
+            newTokens.push({ type: 'keyword', value: word.toLowerCase() });
+          } else {
+            // Add 'or' before this term if previous token is not a keyword
+            if (index > 0 && newTokens.length > 0 && newTokens[newTokens.length - 1].type !== 'keyword') {
+              newTokens.push({ type: 'keyword', value: 'or' });
+            }
+            newTokens.push({ type: 'term', value: word });
+          }
+        });
+
+        // Add the final keyword
         newTokens.push({ type: 'keyword', value: lastWord.toLowerCase() });
 
-        setTokens(prev => [...prev, ...newTokens]);
+        setTokens(prev => {
+          // Only insert 'or' if:
+          // 1. There are existing tokens
+          // 2. The last existing token is a term
+          // 3. The first new token is a term (not a keyword)
+          if (prev.length > 0 && prev[prev.length - 1].type === 'term' && newTokens[0].type === 'term') {
+            return [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+          }
+          return [...prev, ...newTokens];
+        });
         setCurrentInput('');
         return;
       }
@@ -351,18 +382,18 @@ const SearchBar = ({
               gap: 0.5,
               px: token.type === 'term' ? 1 : 0.5,
               py: 0.5,
-              backgroundColor: token.type === 'term' ? 'primary.light' : 'transparent',
+              backgroundColor: token.type === 'term' ? '#f0f7ff' : 'transparent',
               border: token.type === 'term' ? '1px solid' : 'none',
-              borderColor: token.type === 'term' ? 'primary.main' : 'transparent',
+              borderColor: token.type === 'term' ? '#d0e4f7' : 'transparent',
               borderRadius: token.type === 'term' ? 1 : 0,
               fontSize: isHome ? '1rem' : '0.875rem',
-              color: token.type === 'keyword' ? 'text.disabled' : 'primary.dark',
+              color: token.type === 'keyword' ? 'text.disabled' : 'text.primary',
               fontWeight: token.type === 'term' ? 500 : 400,
               cursor: token.type === 'term' ? 'pointer' : 'default',
               transition: 'all 0.2s',
               '&:hover': token.type === 'term' ? {
-                backgroundColor: 'primary.main',
-                color: 'primary.contrastText',
+                backgroundColor: '#e3f2fd',
+                borderColor: '#90caf9',
               } : {},
             }}
           >
