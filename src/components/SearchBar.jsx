@@ -345,10 +345,10 @@ const SearchBar = ({
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
-          py: isHome ? 1 : 0.75,
-          px: 1.5,
-          gap: 1,
-          minHeight: isHome ? 42 : 38,
+          py: isHome ? 0.75 : 0.625,
+          px: 1.25,
+          gap: 0.75,
+          minHeight: isHome ? 38 : 36,
           flexWrap: 'wrap',
           cursor: 'text',
           '&:hover': {
@@ -366,7 +366,7 @@ const SearchBar = ({
         <SearchIcon
           sx={{
             color: 'text.secondary',
-            fontSize: isHome ? '1.25rem' : '1.125rem',
+            fontSize: isHome ? '1.125rem' : '1rem',
           }}
         />
 
@@ -428,41 +428,44 @@ const SearchBar = ({
             border: 'none',
             outline: 'none',
             backgroundColor: 'transparent',
-            fontSize: isHome ? '0.9375rem' : '0.875rem',
+            fontSize: isHome ? '0.875rem' : '0.8125rem',
             fontFamily: 'inherit',
             color: 'inherit',
           }}
         />
+
+        {/* Clear All button - before divider */}
+        {(tokens.length > 0 || currentInput.trim()) && (
+          <Tooltip title="Clear all">
+            <IconButton
+              onClick={clearAll}
+              size="small"
+              sx={{
+                color: 'text.secondary',
+                ml: 'auto',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  backgroundColor: 'rgba(244, 67, 54, 0.08)',
+                  color: 'error.main',
+                  transform: 'scale(1.05)',
+                },
+              }}
+            >
+              <Close fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {/* Transform dropdown and revert button */}
         <Box sx={{
           display: 'flex',
           alignItems: 'center',
           gap: 0.5,
-          ml: 'auto',
+          ml: (tokens.length > 0 || currentInput.trim()) ? 0 : 'auto',
           borderLeft: '1px solid',
           borderColor: 'divider',
           pl: 1.5,
         }}>
-          {(tokens.length > 0 || currentInput.trim()) && (
-            <Tooltip title="Clear all">
-              <IconButton
-                onClick={clearAll}
-                size="small"
-                sx={{
-                  color: 'text.secondary',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    backgroundColor: 'error.light',
-                    color: 'error.main',
-                    transform: 'scale(1.05)',
-                  },
-                }}
-              >
-                <Close fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
           {hasTransformed && (
             <Tooltip title="Revert to original">
               <IconButton
@@ -538,9 +541,9 @@ const SearchBar = ({
         variant="contained"
         endIcon={isHome ? <ArrowForward /> : <SearchIcon />}
         sx={{
-          py: isHome ? 1 : 0.75,
-          px: isHome ? 2.5 : 2,
-          fontSize: isHome ? '0.875rem' : '0.8125rem',
+          py: isHome ? 0.75 : 0.625,
+          px: isHome ? 2 : 1.75,
+          fontSize: isHome ? '0.8125rem' : '0.75rem',
           fontWeight: 600,
           transition: 'all 0.2s',
           '&:hover': {

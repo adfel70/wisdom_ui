@@ -279,23 +279,21 @@ const SearchResultsPage = () => {
                 </Box>
               </motion.div>
 
-              {/* Search Bar */}
+              {/* Filter Button - Completely Outside */}
               <motion.div
-                initial={{ opacity: 1, y: 200 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 1, y: 200 }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, delay: 0.1 }}
               >
-                {/* Filter Button - Outside Paper */}
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.75 }}>
                   <Button
                     variant="outlined"
                     startIcon={<FilterList />}
                     onClick={() => setIsFilterOpen(true)}
                     sx={{
-                      py: 0.4,
-                      px: 1.5,
-                      fontSize: '0.8125rem',
+                      py: 0.35,
+                      px: 1.25,
+                      fontSize: '0.75rem',
                       transition: 'all 0.2s',
                       '&:hover': {
                         transform: 'translateY(-1px)',
@@ -306,13 +304,21 @@ const SearchResultsPage = () => {
                     Filter Tables
                   </Button>
                 </Box>
+              </motion.div>
 
+              {/* Search Bar */}
+              <motion.div
+                initial={{ opacity: 1, y: 200 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 1, y: 200 }}
+                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+              >
                 <Paper
                   elevation={3}
                   sx={{
                     backgroundColor: 'background.paper',
                     borderRadius: 2,
-                    p: 2,
+                    p: 1.75,
                     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                   }}
                 >
