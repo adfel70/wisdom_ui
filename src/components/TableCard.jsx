@@ -255,6 +255,7 @@ const TableCard = ({ table, query }) => {
               pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
             }}
             sx={{
+              borderRadius: 0,
               '& .MuiDataGrid-cell': {
                 borderBottom: '1px solid',
                 borderBottomColor: 'divider',
