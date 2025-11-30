@@ -221,9 +221,6 @@ const HomePage = () => {
                     setPermutationMenuAnchor(null);
                     setNestedMenuPermutation(null);
                   }}
-                  MenuListProps={{
-                    onMouseLeave: () => setNestedMenuPermutation(null)
-                  }}
                 >
                   {PERMUTATION_FUNCTIONS.map((permutation) => (
                     <MenuItem
@@ -231,7 +228,7 @@ const HomePage = () => {
                       onMouseEnter={(e) => {
                         if (permutation.parameters && permutation.parameters.length > 0) {
                           setNestedMenuPermutation({ permutation, anchorEl: e.currentTarget });
-                        } else if (nestedMenuPermutation?.permutation?.id !== permutation.id) {
+                        } else if (nestedMenuPermutation !== null) {
                           setNestedMenuPermutation(null);
                         }
                       }}
@@ -279,6 +276,9 @@ const HomePage = () => {
                     transformOrigin={{
                       vertical: 'top',
                       horizontal: 'left',
+                    }}
+                    MenuListProps={{
+                      onMouseLeave: () => setNestedMenuPermutation(null)
                     }}
                   >
                     {nestedMenuPermutation.permutation.parameters[0].options.map((option) => (
