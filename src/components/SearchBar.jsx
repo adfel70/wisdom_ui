@@ -22,6 +22,7 @@ const SearchBar = ({
   const inputRef = useRef(null);
 
   const [originalText, setOriginalText] = useState('');
+  const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const [transformValue, setTransformValue] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -87,6 +88,15 @@ const SearchBar = ({
       setIsInitialized(true);
     }
   }, [value, isInitialized]);
+
+  // Reset transform state when search bar becomes completely empty
+  useEffect(() => {
+    if (tokens.length === 0 && currentInput === '' && hasTransformed) {
+      setOriginalText('');
+      setOriginalTokens([]);
+      setHasTransformed(false);
+    }
+  }, [tokens, currentInput, hasTransformed]);
 
   // Check if a word is a keyword (case-insensitive)
   const isKeyword = (word) => {
@@ -294,6 +304,10 @@ const SearchBar = ({
   const clearAll = () => {
     setTokens([]);
     setCurrentInput('');
+    // Reset transform state when clearing
+    setOriginalText('');
+    setOriginalTokens([]);
+    setHasTransformed(false);
     // Don't reset isInitialized - we only want to initialize from value prop on mount
   };
 
@@ -305,11 +319,24 @@ const SearchBar = ({
 
     if (!transformId) return;
 
-    // Store original text before first transformation
+    // Store original text and tokens before first transformation
     if (!hasTransformed) {
       setOriginalText(currentInput);
+      setOriginalTokens(tokens);
       setHasTransformed(true);
     }
+
+    // Apply transformation to each token separately (only term tokens, not keywords)
+    const transformedTokens = tokens.map(token => {
+      if (token.type === 'term') {
+        return {
+          ...token,
+          value: applyTransformation(token.value, transformId)
+        };
+      }
+      return token; // Keep keywords unchanged
+    });
+    setTokens(transformedTokens);
 
     // Apply transformation to current input text (chainable)
     const transformed = applyTransformation(currentInput, transformId);
@@ -318,7 +345,9 @@ const SearchBar = ({
 
   const handleRevert = () => {
     setCurrentInput(originalText);
+    setTokens(originalTokens);
     setOriginalText('');
+    setOriginalTokens([]);
     setHasTransformed(false);
   };
 
