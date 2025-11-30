@@ -26,10 +26,10 @@ import { highlightText } from '../utils/searchUtils';
  * HighlightedText Component
  * Highlights matching text in search results
  */
-const HighlightedText = ({ text, query }) => {
+const HighlightedText = ({ text, query, permutationId = 'none', permutationParams = {} }) => {
   if (!query || !text) return <span>{text}</span>;
 
-  const parts = highlightText(text, query);
+  const parts = highlightText(text, query, permutationId, permutationParams);
 
   return (
     <span>
@@ -59,7 +59,7 @@ const HighlightedText = ({ text, query }) => {
  * TableCard Component
  * Displays a single table with expandable data view
  */
-const TableCard = ({ table, query }) => {
+const TableCard = ({ table, query, permutationId = 'none', permutationParams = {} }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const handleToggle = () => {
@@ -234,7 +234,7 @@ const TableCard = ({ table, query }) => {
                           },
                         }}
                       >
-                        <HighlightedText text={row[column]} query={query} />
+                        <HighlightedText text={row[column]} query={query} permutationId={permutationId} permutationParams={permutationParams} />
                       </TableCell>
                     ))}
                   </TableRow>

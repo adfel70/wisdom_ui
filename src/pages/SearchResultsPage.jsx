@@ -12,8 +12,10 @@ import {
   Stack,
   Alert,
   Button,
+  Menu,
+  MenuItem,
 } from '@mui/material';
-import { Home as HomeIcon, FilterList } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -21,7 +23,8 @@ import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
 import { getMockDatabases, getDatabaseMetadata } from '../data/mockDatabaseNew';
-import { applySearchAndFilters } from '../utils/searchUtils';
+import { applySearchAndFilters, getExpandedQueryInfo } from '../utils/searchUtils';
+import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
 
 /**
  * SearchResultsPage Component
@@ -39,15 +42,44 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [permutationId, setPermutationId] = useState('none');
+  const [permutationParams, setPermutationParams] = useState({});
+  const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
+  const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
   const [allDatabases, setAllDatabases] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
 
+  // Get selected permutation metadata
+  const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
+
+  // Generate label for button
+  const getPermutationLabel = () => {
+    if (permutationId === 'none') return 'Permutations';
+    const perm = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
+    if (!perm) return 'Permutations';
+
+    // If has parameters, show them in label
+    if (perm.parameters && perm.parameters.length > 0) {
+      const paramLabels = perm.parameters.map(param => {
+        const value = permutationParams[param.id] || param.default;
+        const option = param.options.find(opt => opt.value === value);
+        return option ? option.label.split(' ')[0] : ''; // Get just the first word (Low, Medium, High)
+      }).filter(Boolean).join(', ');
+      return `${perm.label}${paramLabels ? ` - ${paramLabels}` : ''}`;
+    }
+
+    return perm.label;
+  };
+
   // Initialize from URL params
   useEffect(() => {
     const query = searchParams.get('q') || '';
+    const permutation = searchParams.get('permutation') || 'none';
+    const permParamsStr = searchParams.get('permutationParams') || '';
+    const permParams = permParamsStr ? JSON.parse(permParamsStr) : {};
     const year = searchParams.get('year') || 'all';
     const category = searchParams.get('category') || 'all';
     const country = searchParams.get('country') || 'all';
@@ -59,6 +91,8 @@ const SearchResultsPage = () => {
 
     setSearchQuery(query);
     setInputValue(query);
+    setPermutationId(permutation);
+    setPermutationParams(permParams);
     setFilters({
       year: year !== 'all' ? year : 'all',
       category: category !== 'all' ? category : 'all',
@@ -105,21 +139,26 @@ const SearchResultsPage = () => {
     return allDatabases.find(db => db.id === activeDatabase);
   }, [allDatabases, activeDatabase]);
 
+  // Get applied permutation from URL params (not state) to ensure it matches current results
+  const appliedPermutationId = searchParams.get('permutation') || 'none';
+  const appliedPermutationParamsStr = searchParams.get('permutationParams') || '';
+  const appliedPermutationParams = appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
+
   // Apply filters to current database
   const currentTables = useMemo(() => {
     if (!currentDatabaseData) return [];
-    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters);
-  }, [currentDatabaseData, searchQuery, filters]);
+    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters, appliedPermutationId, appliedPermutationParams);
+  }, [currentDatabaseData, searchQuery, filters, appliedPermutationId, appliedPermutationParams]);
 
   // Calculate table counts for all databases
   const tableCounts = useMemo(() => {
     const counts = {};
     allDatabases.forEach(db => {
-      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters);
+      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters, appliedPermutationId, appliedPermutationParams);
       counts[db.id] = filteredTables.length;
     });
     return counts;
-  }, [allDatabases, searchQuery, filters]);
+  }, [allDatabases, searchQuery, filters, appliedPermutationId, appliedPermutationParams]);
 
   // Calculate total tables with results across all databases
   const totalTablesWithResults = useMemo(() => {
@@ -139,6 +178,11 @@ const SearchResultsPage = () => {
     );
   }, [filters]);
 
+  // Get expanded query information for permutations
+  const expandedQueryInfo = useMemo(() => {
+    return getExpandedQueryInfo(searchQuery, appliedPermutationId, appliedPermutationParams);
+  }, [searchQuery, appliedPermutationId, appliedPermutationParams, searchParams]);
+
   const handleBackToHome = () => {
     navigate('/');
   };
@@ -149,6 +193,16 @@ const SearchResultsPage = () => {
 
     // Update search query and URL params
     const params = new URLSearchParams({ q: searchQuery });
+
+    // Add permutation if selected
+    if (permutationId && permutationId !== 'none') {
+      params.append('permutation', permutationId);
+
+      // Add permutation parameters if any
+      if (Object.keys(permutationParams).length > 0) {
+        params.append('permutationParams', JSON.stringify(permutationParams));
+      }
+    }
 
     // Add current filters to URL
     if (filters.year && filters.year !== 'all') {
@@ -181,6 +235,17 @@ const SearchResultsPage = () => {
 
     // Update URL with new filters (use inputValue to preserve current input)
     const params = new URLSearchParams({ q: inputValue });
+
+    // Add permutation if selected
+    if (permutationId && permutationId !== 'none') {
+      params.append('permutation', permutationId);
+
+      // Add permutation parameters if any
+      if (Object.keys(permutationParams).length > 0) {
+        params.append('permutationParams', JSON.stringify(permutationParams));
+      }
+    }
+
     if (newFilters.year && newFilters.year !== 'all') {
       params.append('year', newFilters.year);
     }
@@ -202,6 +267,48 @@ const SearchResultsPage = () => {
     if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
       params.append('selectedTables', newFilters.selectedTables.join(','));
     }
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
+  const handlePermutationChange = (newPermutationId) => {
+    setPermutationId(newPermutationId);
+
+    // Update URL with new permutation (preserve query and filters)
+    const params = new URLSearchParams({ q: inputValue });
+
+    // Add permutation if selected
+    if (newPermutationId && newPermutationId !== 'none') {
+      params.append('permutation', newPermutationId);
+
+      // Add permutation parameters if any
+      if (Object.keys(permutationParams).length > 0) {
+        params.append('permutationParams', JSON.stringify(permutationParams));
+      }
+    }
+
+    // Add current filters to URL
+    if (filters.year && filters.year !== 'all') {
+      params.append('year', filters.year);
+    }
+    if (filters.category && filters.category !== 'all') {
+      params.append('category', filters.category);
+    }
+    if (filters.country && filters.country !== 'all') {
+      params.append('country', filters.country);
+    }
+    if (filters.tableName) {
+      params.append('tableName', filters.tableName);
+    }
+    if (filters.minDate) {
+      params.append('minDate', filters.minDate);
+    }
+    if (filters.maxDate) {
+      params.append('maxDate', filters.maxDate);
+    }
+    if (filters.selectedTables && filters.selectedTables.length > 0) {
+      params.append('selectedTables', filters.selectedTables.join(','));
+    }
+
     navigate(`/search?${params.toString()}`, { replace: true });
   };
 
@@ -279,13 +386,117 @@ const SearchResultsPage = () => {
                 </Box>
               </motion.div>
 
-              {/* Filter Button - Completely Outside */}
+              {/* Action Buttons - Completely Outside */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2, delay: 0.1 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.75 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mb: 0.75 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Shuffle />}
+                    onClick={(e) => setPermutationMenuAnchor(e.currentTarget)}
+                    sx={{
+                      py: 0.35,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      borderRadius: '8px',
+                      transition: 'all 0.2s',
+                      textTransform: 'none',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                      },
+                    }}
+                  >
+                    {getPermutationLabel()}
+                  </Button>
+
+                  <Menu
+                    anchorEl={permutationMenuAnchor}
+                    open={Boolean(permutationMenuAnchor)}
+                    onClose={() => {
+                      setPermutationMenuAnchor(null);
+                      setNestedMenuPermutation(null);
+                    }}
+                  >
+                    {PERMUTATION_FUNCTIONS.map((permutation) => (
+                      <MenuItem
+                        key={permutation.id}
+                        onMouseEnter={(e) => {
+                          if (permutation.parameters && permutation.parameters.length > 0) {
+                            setNestedMenuPermutation({ permutation, anchorEl: e.currentTarget });
+                          } else if (nestedMenuPermutation !== null) {
+                            setNestedMenuPermutation(null);
+                          }
+                        }}
+                        onClick={() => {
+                          if (!permutation.parameters || permutation.parameters.length === 0) {
+                            handlePermutationChange(permutation.id);
+                            setPermutationParams({});
+                            setPermutationMenuAnchor(null);
+                            setNestedMenuPermutation(null);
+                          }
+                        }}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          minWidth: 250,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>
+                            {permutation.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {permutation.description}
+                          </Typography>
+                        </Box>
+                        {permutation.parameters && permutation.parameters.length > 0 && (
+                          <ChevronRight sx={{ ml: 2, color: 'text.secondary' }} />
+                        )}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+
+                  {/* Nested menu for parameters */}
+                  {nestedMenuPermutation && nestedMenuPermutation.permutation.parameters && (
+                    <Menu
+                      anchorEl={nestedMenuPermutation.anchorEl}
+                      open={Boolean(nestedMenuPermutation)}
+                      onClose={() => setNestedMenuPermutation(null)}
+                      anchorOrigin={{
+                        vertical: 'top',
+                        horizontal: 'right',
+                      }}
+                      transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'left',
+                      }}
+                      MenuListProps={{
+                        onMouseLeave: () => setNestedMenuPermutation(null)
+                      }}
+                    >
+                      {nestedMenuPermutation.permutation.parameters[0].options.map((option) => (
+                        <MenuItem
+                          key={option.value}
+                          onClick={() => {
+                            handlePermutationChange(nestedMenuPermutation.permutation.id);
+                            setPermutationParams({ [nestedMenuPermutation.permutation.parameters[0].id]: option.value });
+                            setPermutationMenuAnchor(null);
+                            setNestedMenuPermutation(null);
+                          }}
+                        >
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Menu>
+                  )}
+
                   <Button
                     variant="outlined"
                     startIcon={<FilterList />}
@@ -350,6 +561,25 @@ const SearchResultsPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
           >
+            {/* Permutation Indicator */}
+            {expandedQueryInfo && appliedPermutationId && appliedPermutationId !== 'none' && (
+              <Alert
+                severity="success"
+                sx={{ mb: 2 }}
+              >
+                <Box>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Permutation Applied: {getPermutationMetadata(appliedPermutationId)?.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Searching with expanded terms: {Object.entries(expandedQueryInfo).map(([term, variants]) =>
+                      `${term} → [${variants.join(', ')}]`
+                    ).join(' | ')}
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
+
             {/* Active Filters Alert */}
             {hasActiveFilters && (
               <Alert
@@ -456,7 +686,7 @@ const SearchResultsPage = () => {
                   <EmptyState type={getEmptyStateType()} />
                 ) : (
                   currentTables.map((table) => (
-                    <TableCard key={table.id} table={table} query={searchQuery} />
+                    <TableCard key={table.id} table={table} query={searchQuery} permutationId={appliedPermutationId} permutationParams={appliedPermutationParams} />
                   ))
                 )}
               </>
