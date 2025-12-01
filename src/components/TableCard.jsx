@@ -398,8 +398,8 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 backgroundColor: 'grey.50',
                 minHeight: '56px !important',
               },
-              "&.MuiDataGrid-root": {
-                "--DataGrid-containerBackground": "#EAF3FF",
+              "& .MuiDataGrid-root": {
+                "--DataGrid-containerBackground": "#F5F5F5",
               },
               '& .MuiDataGrid-columnHeader': {
                 padding: 0.5,
