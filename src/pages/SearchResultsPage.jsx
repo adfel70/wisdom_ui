@@ -920,6 +920,16 @@ const SearchResultsPage = () => {
               alignItems: 'flex-start'
             }}
           >
+            <TableSidePanel
+              databaseId={activeDatabase}
+              databaseName={currentDatabaseInfo?.name}
+              tableIds={matchingTableIds[activeDatabase] || []}
+              visibleTableIds={visibleTableIds}
+              pendingTableIds={pendingTableIds}
+              isSearching={isSearching}
+              onSelectTable={handleSidePanelSelect}
+            />
+
             <Box sx={{ flex: 1, width: '100%' }}>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -1088,16 +1098,6 @@ const SearchResultsPage = () => {
                 )}
               </motion.div>
             </Box>
-
-            <TableSidePanel
-              databaseId={activeDatabase}
-              databaseName={currentDatabaseInfo?.name}
-              tableIds={matchingTableIds[activeDatabase] || []}
-              visibleTableIds={visibleTableIds}
-              pendingTableIds={pendingTableIds}
-              isSearching={isSearching}
-              onSelectTable={handleSidePanelSelect}
-            />
           </Box>
         </Container>
 
