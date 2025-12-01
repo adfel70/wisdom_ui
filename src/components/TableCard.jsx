@@ -384,6 +384,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
             rows={dataGridRows}
             columns={dataGridColumns}
             hideFooter
+            rowHeight={40}
             initialState={{
               pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
             }}
