@@ -13,6 +13,7 @@ const SearchBar = ({
   onChange,
   onSubmit,
   onFilterClick,
+  onQueryBuilderClick,
   variant = 'home', // 'home' or 'compact'
   placeholder = 'Search by Value (e.g., Name, ID, Location)...'
 }) => {
@@ -41,43 +42,83 @@ const SearchBar = ({
             quotedParts.push({
               start: match.index,
               end: match.index + match[0].length,
-              value: match[1]
+              value: match[1],
+              quoted: true
             });
           }
 
           const tokens = [];
           let currentPos = 0;
 
+          // Helper to parse non-quoted text
+          const parseNonQuoted = (text) => {
+            const result = [];
+            let i = 0;
+            let word = '';
+
+            while (i < text.length) {
+              const char = text[i];
+
+              // Check for parentheses
+              if (char === '(' || char === ')') {
+                // Add accumulated word if any
+                if (word.trim()) {
+                  const lower = word.trim().toLowerCase();
+                  if (lower === 'and' || lower === 'or') {
+                    result.push({ type: 'keyword', value: lower });
+                  } else {
+                    result.push({ type: 'term', value: word.trim() });
+                  }
+                  word = '';
+                }
+                // Add parenthesis token
+                result.push({ type: 'parenthesis', value: char });
+                i++;
+              } else if (char === ' ' || char === '\t' || char === '\n') {
+                // Whitespace - complete current word
+                if (word.trim()) {
+                  const lower = word.trim().toLowerCase();
+                  if (lower === 'and' || lower === 'or') {
+                    result.push({ type: 'keyword', value: lower });
+                  } else {
+                    result.push({ type: 'term', value: word.trim() });
+                  }
+                  word = '';
+                }
+                i++;
+              } else {
+                word += char;
+                i++;
+              }
+            }
+
+            // Add final word if any
+            if (word.trim()) {
+              const lower = word.trim().toLowerCase();
+              if (lower === 'and' || lower === 'or') {
+                result.push({ type: 'keyword', value: lower });
+              } else {
+                result.push({ type: 'term', value: word.trim() });
+              }
+            }
+
+            return result;
+          };
+
           quotedParts.forEach(quoted => {
             if (quoted.start > currentPos) {
               const nonQuoted = str.substring(currentPos, quoted.start);
-              const words = nonQuoted.trim().split(/\s+/).filter(w => w);
-              words.forEach(word => {
-                const lower = word.toLowerCase();
-                if (lower === 'and' || lower === 'or') {
-                  tokens.push({ type: 'keyword', value: lower });
-                } else {
-                  tokens.push({ type: 'term', value: word });
-                }
-              });
+              tokens.push(...parseNonQuoted(nonQuoted));
             }
             if (quoted.value) {
-              tokens.push({ type: 'term', value: quoted.value });
+              tokens.push({ type: 'term', value: quoted.value, quoted: true });
             }
             currentPos = quoted.end;
           });
 
           if (currentPos < str.length) {
             const remaining = str.substring(currentPos);
-            const words = remaining.trim().split(/\s+/).filter(w => w);
-            words.forEach(word => {
-              const lower = word.toLowerCase();
-              if (lower === 'and' || lower === 'or') {
-                tokens.push({ type: 'keyword', value: lower });
-              } else {
-                tokens.push({ type: 'term', value: word });
-              }
-            });
+            tokens.push(...parseNonQuoted(remaining));
           }
 
           return tokens;
@@ -245,6 +286,7 @@ const SearchBar = ({
       if (token.quoted) {
         return `"${token.value}"`;
       }
+      // Parentheses don't need spaces around them in some cases, but we'll keep consistent spacing
       return token.value;
     }).join(' ');
     return tokenString + (currentInput ? ' ' + currentInput : '');
@@ -380,8 +422,69 @@ const SearchBar = ({
         filtered = prev.filter((_, i) => i !== index);
       }
 
-      return cleanupTokens(filtered);
+      // Clean up and check for empty parenthesis groups
+      const cleaned = cleanupTokens(filtered);
+      return removeEmptyParenthesisGroups(cleaned);
     });
+  };
+
+  // Remove empty parenthesis groups: () or groups with only keywords
+  const removeEmptyParenthesisGroups = (tokens) => {
+    let result = [...tokens];
+    let changed = true;
+
+    // Keep iterating until no more empty groups are found
+    while (changed) {
+      changed = false;
+      const newResult = [];
+
+      for (let i = 0; i < result.length; i++) {
+        const token = result[i];
+
+        // Check if this is an opening parenthesis
+        if (token.type === 'parenthesis' && token.value === '(') {
+          // Find the matching closing parenthesis
+          let depth = 1;
+          let closingIndex = -1;
+
+          for (let j = i + 1; j < result.length; j++) {
+            if (result[j].type === 'parenthesis') {
+              if (result[j].value === '(') {
+                depth++;
+              } else if (result[j].value === ')') {
+                depth--;
+                if (depth === 0) {
+                  closingIndex = j;
+                  break;
+                }
+              }
+            }
+          }
+
+          // If we found a matching closing parenthesis
+          if (closingIndex !== -1) {
+            // Extract tokens between parentheses
+            const innerTokens = result.slice(i + 1, closingIndex);
+
+            // Check if group is empty or contains only keywords
+            const hasTerms = innerTokens.some(t => t.type === 'term');
+
+            if (!hasTerms) {
+              // Skip the opening paren, inner tokens, and closing paren
+              changed = true;
+              i = closingIndex; // Skip to closing paren (loop will increment)
+              continue;
+            }
+          }
+        }
+
+        newResult.push(token);
+      }
+
+      result = newResult;
+    }
+
+    return result;
   };
 
   // Clear all tokens and input
@@ -500,7 +603,7 @@ const SearchBar = ({
               borderColor: token.type === 'term' ? '#d0e4f7' : 'transparent',
               borderRadius: token.type === 'term' ? 1 : 0,
               fontSize: isHome ? '0.875rem' : '0.8125rem',
-              color: token.type === 'keyword' ? 'text.disabled' : 'text.primary',
+              color: (token.type === 'keyword' || token.type === 'parenthesis') ? 'text.disabled' : 'text.primary',
               fontWeight: token.type === 'term' ? 500 : 400,
               cursor: token.type === 'term' ? 'pointer' : 'default',
               transition: 'all 0.2s',

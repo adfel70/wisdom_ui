@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Container, Typography, Paper, Button, Chip, Menu, MenuItem } from '@mui/material';
-import { School, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
+import { School, FilterList, Shuffle, ChevronRight, AccountTree } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
+import QueryBuilderModal from '../components/QueryBuilderModal';
 import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
 
 /**
@@ -15,6 +16,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [filters, setFilters] = useState({});
   const [permutationId, setPermutationId] = useState('none');
   const [permutationParams, setPermutationParams] = useState({});
@@ -104,6 +106,11 @@ const HomePage = () => {
       clearedFilters[filterKey] = '';
     }
     setFilters(clearedFilters);
+  };
+
+  const handleQueryBuilderApply = (queryString) => {
+    setSearchQuery(queryString);
+    setIsQueryBuilderOpen(false);
   };
 
   return (
@@ -299,6 +306,23 @@ const HomePage = () => {
 
                 <Button
                   variant="outlined"
+                  startIcon={<AccountTree />}
+                  onClick={() => setIsQueryBuilderOpen(true)}
+                  sx={{
+                    py: 0.4,
+                    px: 1.5,
+                    fontSize: '0.75rem',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                    },
+                  }}
+                >
+                  Query Builder
+                </Button>
+                <Button
+                  variant="outlined"
                   startIcon={<FilterList />}
                   onClick={() => setIsFilterOpen(true)}
                   sx={{
@@ -467,6 +491,12 @@ const HomePage = () => {
           onClose={() => setIsFilterOpen(false)}
           onApply={handleApplyFilters}
           initialFilters={filters}
+        />
+
+        <QueryBuilderModal
+          open={isQueryBuilderOpen}
+          onClose={() => setIsQueryBuilderOpen(false)}
+          onApply={handleQueryBuilderApply}
         />
       </Box>
     </motion.div>
