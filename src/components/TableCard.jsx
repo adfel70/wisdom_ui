@@ -14,19 +14,23 @@ import {
   Button,
   Divider,
   Tooltip,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
   Skeleton
 } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
 import {
   ExpandMore,
   ExpandLess,
   TableChart,
   Info,
   Close,
-  DragIndicator
+  DragIndicator,
+  ContentCopy
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
-
+ 
 /**
  * HighlightedText Component
  * Highlights matching text in search results
@@ -57,6 +61,47 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
         )
       )}
     </span>
+  );
+};
+
+/**
+ * CustomColumnMenu Component
+ * Custom column menu that extends the default MUI DataGrid column menu
+ */
+const CustomColumnMenu = (props) => {
+  const { hideMenu, colDef } = props;
+
+  const handleCopyColumnName = async () => {
+    try {
+      const text = colDef.headerName ?? colDef.field;
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy column name:', err);
+    } finally {
+      hideMenu?.();
+    }
+  };
+
+  return (
+    <GridColumnMenuContainer 
+      {...props}
+      sx={{
+        borderRadius: 1,              
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
+    }}>
+      <GridColumnMenuSortItem colDef={colDef} onClick={hideMenu} />
+      <Divider />
+      <GridColumnMenuFilterItem colDef={colDef} onClick={hideMenu} />
+      <Divider />
+      <GridColumnMenuHideItem colDef={colDef} onClick={hideMenu} />
+      <GridColumnMenuManageItem colDef={colDef} onClick={hideMenu} />
+      <MenuItem onClick={handleCopyColumnName}>
+        <ListItemIcon>
+          <ContentCopy fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Copy column name" />
+      </MenuItem>
+    </GridColumnMenuContainer>
   );
 };
 
@@ -155,6 +200,21 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
   const handleClosePopup = () => {
     setIsPopupOpen(false);
     setSelectedRow(null);
+  };
+
+  const handleCopyRow = async () => {
+    if (!selectedRow) return;
+
+    const rowContent = columnOrder
+      .map(column => `${column}: ${selectedRow[column] || 'N/A'}`)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(rowContent);
+      // Could add a toast notification here if desired
+    } catch (err) {
+      console.error('Failed to copy row content:', err);
+    }
   };
 
   // Drag and drop handlers for column reordering
@@ -402,11 +462,12 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
               initialState={{
                 pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
               }}
+              slots={{
+                columnMenu: CustomColumnMenu,
+              }}
               sx={{
                 borderRadius: 0,
                 '& .MuiDataGrid-cell': {
-                  borderBottom: '1px solid',
-                  borderBottomColor: 'divider',
                   borderRight: '0.5px solid',
                   borderRightColor: 'divider',
                 },
@@ -415,6 +476,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                   minHeight: '56px !important',
                 },
                 '& .MuiDataGrid-columnHeader': {
+                  backgroundColor: '#F1F1F1',
                   padding: 0.5,
                   borderRight: '0.5px solid',
                   borderRightColor: 'divider',
@@ -473,12 +535,23 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
               Row Details
             </Typography>
           </Box>
-          <IconButton
-            onClick={handleClosePopup}
-            sx={{ color: 'primary.contrastText' }}
-          >
-            <Close />
-          </IconButton>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Copy row content">
+              <IconButton
+                onClick={handleCopyRow}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.light',
+                  },
+                }}
+              >
+                <ContentCopy fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </DialogTitle>
 
         <DialogContent sx={{ p: 3 }}>
