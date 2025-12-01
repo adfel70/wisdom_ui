@@ -16,7 +16,8 @@ import {
   Tooltip,
   MenuItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Skeleton
 } from '@mui/material';
 import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
 import {
@@ -161,18 +162,20 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query, permutationId = 'none', permutationParams = {} }) => {
+const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState(table.columns);
+  const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
   // Update column order when table changes
   useEffect(() => {
-    setColumnOrder(table.columns);
-  }, [table.columns]);
+    if (table?.columns) {
+      setColumnOrder(table.columns);
+    }
+  }, [table?.columns]);
 
   // Global drag end handler
   useEffect(() => {
@@ -257,11 +260,12 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
 
   // Transform data for DataGrid (add id field)
   const dataGridRows = React.useMemo(() => {
+    if (!table?.data) return [];
     return table.data.map((row, index) => ({
       id: index,
       ...row,
     }));
-  }, [table.data]);
+  }, [table?.data]);
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
@@ -440,49 +444,67 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <CardContent sx={{ p: 0, height: 400 }}>
-          <DataGrid
-            rows={dataGridRows}
-            columns={dataGridColumns}
-            hideFooter
-            rowHeight={40}
-            initialState={{
-              pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
-            }}
-            slots={{
-              columnMenu: CustomColumnMenu,
-            }}
-            sx={{
-              borderRadius: 0,
-              '& .MuiDataGrid-cell': {
-                borderRight: '0.5px solid',
-                borderRightColor: 'divider',
-              },
-              '& .MuiDataGrid-columnHeaders': {
-                minHeight: '56px !important',
-              },
-              '& .MuiDataGrid-columnHeader': {
-                backgroundColor: '#F1F1F1',
-                padding: 0.5,
-                borderRight: '1px solid',
-                borderRightColor: 'divider',
-                '&:last-child': {
-                  borderRight: 'none',
+          {isLoading ? (
+            <Box sx={{ p: 3 }}>
+              <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
+              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
+              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
+              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
+              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
+              <Skeleton variant="rectangular" height={48} animation="wave" />
+            </Box>
+          ) : (
+            <DataGrid
+              rows={dataGridRows}
+              columns={dataGridColumns}
+              hideFooter
+              rowHeight={40}
+              initialState={{
+                pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+              }}
+              slots={{
+                columnMenu: CustomColumnMenu,
+              }}
+              sx={{
+                borderRadius: 0,
+                '& .MuiDataGrid-cell': {
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
                 },
-              },
-              '& .MuiDataGrid-columnHeaderTitle': {
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                color: 'text.primary',
-                display: 'none', // Hide default title since we use custom header
-              },
-              '& .MuiDataGrid-row:hover': {
-                backgroundColor: 'action.selected',
-              },
-              '& .MuiDataGrid-menuIcon': {
-                marginRight: 0,
-              },
-            }}
-         />
+                '& .MuiDataGrid-columnHeaders': {
+                  backgroundColor: 'grey.50',
+                  minHeight: '56px !important',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  backgroundColor: '#F1F1F1',
+                  padding: 0.5,
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
+                  '&:last-child': {
+                    borderRight: 'none',
+                  },
+                  '&:focus': {
+                    outline: 'none',
+                  },
+                  '&:focus-within': {
+                    outline: 'none',
+                  },
+                },
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  color: 'text.primary',
+                  display: 'none', // Hide default title since we use custom header
+                },
+                '& .MuiDataGrid-row:hover': {
+                  backgroundColor: 'action.selected',
+                },
+                '& .MuiDataGrid-menuIcon': {
+                  marginRight: 0,
+                },
+              }}
+            />
+          )}
         </CardContent>
       </Collapse>
 

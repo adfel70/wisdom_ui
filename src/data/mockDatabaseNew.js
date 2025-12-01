@@ -6,7 +6,8 @@
  * Data is NOT loaded at module import time - it's fetched on-demand.
  */
 
-import { get_tables_metadata, db1, db2, db3, db4, getDatabaseConfig } from '../api/backend.js';
+import { get_tables_metadata, db1, db2, db3, db4, getDatabaseConfig, getTablesMetadataForDatabase, getTableData } from '../api/backend.js';
+import { applySearchAndFilters } from '../utils/searchUtils.js';
 
 // Get metadata and config (small, loaded upfront)
 const metadata = get_tables_metadata();
@@ -180,4 +181,125 @@ export function getDatabaseMetadata() {
     { id: 'db3', name: dbConfig.db3.name, description: dbConfig.db3.description },
     { id: 'db4', name: dbConfig.db4.name, description: dbConfig.db4.description },
   ];
+}
+
+/**
+ * Search tables and return matching table IDs (metadata only, no data)
+ * This is step 1 of the two-step pagination query
+ * @param {string} dbId - Database ID (db1, db2, db3, db4)
+ * @param {string} query - Search query
+ * @param {Object} filters - Filter criteria
+ * @param {string} permutationId - Permutation to apply
+ * @param {Object} permutationParams - Permutation parameters
+ * @returns {Promise<Object>} Object with tableIds array and total count
+ */
+export async function searchTablesByQuery(dbId, query, filters, permutationId = 'none', permutationParams = {}) {
+  // Get metadata for all tables in this database
+  const tablesMetadata = getTablesMetadataForDatabase(dbId);
+
+  // Create table objects with metadata but with empty data arrays
+  // This allows us to use existing search/filter logic
+  const tablesWithoutData = tablesMetadata.map(meta => ({
+    ...meta,
+    data: [] // Empty data array
+  }));
+
+  // If no search query, just apply filters
+  if (!query || !query.trim()) {
+    // Apply only filters (no search)
+    const filtered = filters && Object.keys(filters).length > 0
+      ? tablesWithoutData.filter(table => {
+          const { tableName, year, category, country, selectedTables } = filters;
+
+          if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
+            return false;
+          }
+          if (tableName && !table.name.toLowerCase().includes(tableName.toLowerCase())) {
+            return false;
+          }
+          if (year && year !== 'all' && table.year !== parseInt(year)) {
+            return false;
+          }
+          if (category && category !== 'all' && !table.categories.includes(category)) {
+            return false;
+          }
+          if (country && country !== 'all' && table.country !== country) {
+            return false;
+          }
+          return true;
+        })
+      : tablesWithoutData;
+
+    return {
+      tableIds: filtered.map(t => t.id),
+      total: filtered.length
+    };
+  }
+
+  // For search queries, we need to fetch the data and search through it
+  const dbFunctions = { db1, db2, db3, db4 };
+  const dbQueryFunc = dbFunctions[dbId];
+
+  if (!dbQueryFunc) {
+    throw new Error(`Database ${dbId} not found`);
+  }
+
+  // Fetch all data for this database
+  const allRecords = await dbQueryFunc();
+
+  // Group records by tableKey
+  const recordsByTable = {};
+  allRecords.forEach(record => {
+    const { tableKey } = record;
+    if (!recordsByTable[tableKey]) {
+      recordsByTable[tableKey] = [];
+    }
+    recordsByTable[tableKey].push(record);
+  });
+
+  // Create full table objects with data
+  const tablesWithData = tablesMetadata.map(meta => {
+    const records = recordsByTable[meta.id] || [];
+    const data = records.map(record => {
+      const { tableKey: _, ...rowData } = record;
+      return rowData;
+    });
+    return {
+      ...meta,
+      data: data
+    };
+  });
+
+  // Apply search and filters
+  const matchingTables = applySearchAndFilters(
+    tablesWithData,
+    query,
+    filters,
+    permutationId,
+    permutationParams
+  );
+
+  return {
+    tableIds: matchingTables.map(t => t.id),
+    total: matchingTables.length
+  };
+}
+
+/**
+ * Get table data by ID (step 2 of pagination query)
+ * @param {string} tableId - Table ID
+ * @returns {Promise<Object>} Table object with data
+ */
+export async function getTableDataById(tableId) {
+  return await getTableData(tableId);
+}
+
+/**
+ * Get multiple tables data for pagination
+ * @param {Array} tableIds - Array of table IDs to fetch
+ * @returns {Promise<Array>} Array of table objects with data
+ */
+export async function getMultipleTablesData(tableIds) {
+  const promises = tableIds.map(id => getTableData(id));
+  return await Promise.all(promises);
 }
