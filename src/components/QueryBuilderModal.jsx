@@ -381,12 +381,21 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       >
         {/* Operator dropdown - only show if not the first condition */}
         {!isFirst && (
-          <FormControl size="small" sx={{ minWidth: 80 }}>
+          <FormControl size="small" sx={{ minWidth: 76 }}>
             <Select
               value={condition.operator}
               onChange={(e) => updateNodeOperator(condition.id, e.target.value)}
               sx={{
-                fontSize: '0.875rem',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                backgroundColor: 'rgba(37, 99, 235, 0.06)',
+                borderRadius: '6px',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.light',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                },
               }}
             >
               <MenuItem value="and">AND</MenuItem>
@@ -451,18 +460,22 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       >
         {/* Group container with visual styling */}
         <Paper
-          elevation={isRoot ? 0 : 1}
+          elevation={isRoot ? 0 : 2}
           sx={{
             p: 2.5,
             pt: isRoot ? 0 : 3.5,
-            border: isRoot ? 'none' : '1px solid',
-            borderColor: isRoot ? 'transparent' : 'grey.200',
-            backgroundColor: isRoot ? 'transparent' : '#ffffff',
+            pl: isRoot ? 0 : 3,
+            border: isRoot ? 'none' : 'none',
+            borderLeft: isRoot ? 'none' : '3px solid',
+            borderLeftColor: isRoot ? 'transparent' : 'primary.main',
+            borderColor: isRoot ? 'transparent' : 'transparent',
+            backgroundColor: isRoot ? 'transparent' : '#f0f7ff',
             position: 'relative',
-            transition: 'all 0.2s ease',
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': !isRoot ? {
-              borderColor: 'grey.300',
-              boxShadow: '0 2px 4px -1px rgb(0 0 0 / 0.08)',
+              elevation: 3,
+              boxShadow: '0 10px 25px -5px rgb(37, 99, 235, 0.15), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+              backgroundColor: '#ffffff',
               '& .delete-group-btn': {
                 color: 'error.main',
               }
@@ -475,26 +488,36 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               size="small"
               sx={{
                 position: 'absolute',
-                top: -12,
-                left: 16,
-                minWidth: 80,
-                backgroundColor: 'white',
-                zIndex: 1,
+                top: -11,
+                left: 20,
+                minWidth: 76,
+                zIndex: 2,
               }}
             >
               <Select
                 value={group.operator}
                 onChange={(e) => updateNodeOperator(group.id, e.target.value)}
                 sx={{
-                  fontSize: '0.875rem',
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  borderRadius: '6px',
+                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
+                  transition: 'all 0.2s ease',
                   '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
-                    borderWidth: 1.5,
+                    borderColor: 'transparent',
+                  },
+                  '&:hover': {
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: 'white',
                   },
                 }}
               >
-                <MenuItem value="and">AND</MenuItem>
-                <MenuItem value="or">OR</MenuItem>
+                <MenuItem value="and" sx={{ fontSize: '0.875rem' }}>AND</MenuItem>
+                <MenuItem value="or" sx={{ fontSize: '0.875rem' }}>OR</MenuItem>
               </Select>
             </FormControl>
           )}
@@ -534,27 +557,51 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           </Box>
 
           {/* Add buttons */}
-          <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1, mt: 2.5 }}>
             <Button
-              variant="outlined"
+              variant="contained"
               size="small"
               startIcon={<Add />}
               onClick={() => addCondition(group.id)}
               sx={{
                 fontSize: '0.8125rem',
-                padding: '6px 12px',
+                padding: '6px 14px',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                color: 'primary.main',
+                fontWeight: 600,
+                boxShadow: 'none',
+                border: '1px solid',
+                borderColor: 'rgba(37, 99, 235, 0.2)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                  borderColor: 'primary.main',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.15)',
+                }
               }}
             >
               Add Condition
             </Button>
             <Button
-              variant="outlined"
+              variant="contained"
               size="small"
               startIcon={<Add />}
               onClick={() => addGroup(group.id)}
               sx={{
                 fontSize: '0.8125rem',
-                padding: '6px 12px',
+                padding: '6px 14px',
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                color: 'text.secondary',
+                fontWeight: 600,
+                boxShadow: 'none',
+                border: '1px solid',
+                borderColor: 'rgba(37, 99, 235, 0.15)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                  borderColor: 'rgba(37, 99, 235, 0.3)',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.1)',
+                }
               }}
             >
               Add Group
