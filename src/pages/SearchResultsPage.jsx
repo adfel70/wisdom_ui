@@ -490,7 +490,7 @@ const SearchResultsPage = () => {
       transition={{ duration: 0.2 }}
       style={{ position: 'absolute', width: '100%', minHeight: '100vh' }}
     >
-      <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: 6 }}>
+      <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: totalPages > 1 ? 10 : 6 }}>
         {/* Header */}
         <Paper
           elevation={1}
@@ -850,28 +850,54 @@ const SearchResultsPage = () => {
                         isLoading={isLoadingTableData}
                       />
                     ))}
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                        <Pagination
-                          count={totalPages}
-                          page={currentPage}
-                          onChange={handlePageChange}
-                          color="primary"
-                          size="large"
-                          showFirstButton
-                          showLastButton
-                          disabled={isLoadingTableData}
-                        />
-                      </Box>
-                    )}
                   </>
                 )}
               </>
             )}
           </motion.div>
         </Container>
+
+        {/* Pinned Pagination at Bottom */}
+        {!isSearching && totalPages > 1 && (
+          <Box
+            sx={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 50,
+              background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 15%, rgba(255, 255, 255, 0.98) 100%)',
+              backdropFilter: 'blur(8px)',
+              borderTop: '1px solid',
+              borderColor: 'rgba(0, 0, 0, 0.06)',
+              py: 1.5,
+            }}
+          >
+            <Container maxWidth="xl">
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Pagination
+                  count={totalPages}
+                  page={currentPage}
+                  onChange={handlePageChange}
+                  color="primary"
+                  size="medium"
+                  showFirstButton
+                  showLastButton
+                  siblingCount={1}
+                  boundaryCount={1}
+                  disabled={isLoadingTableData}
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      fontSize: '0.875rem',
+                      minWidth: '32px',
+                      height: '32px',
+                    },
+                  }}
+                />
+              </Box>
+            </Container>
+          </Box>
+        )}
 
         {/* Filter Modal */}
         <FilterModal
