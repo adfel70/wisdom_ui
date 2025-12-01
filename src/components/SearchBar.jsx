@@ -98,6 +98,14 @@ const SearchBar = ({
     }
   }, [tokens, currentInput, hasTransformed]);
 
+  // Notify parent component of changes to keep state synchronized
+  useEffect(() => {
+    if (onChange) {
+      const query = buildQueryFromTokens().trim();
+      onChange(query);
+    }
+  }, [tokens, currentInput]);
+
   // Check if a word is a keyword (case-insensitive)
   const isKeyword = (word) => {
     const lower = word.toLowerCase();
@@ -180,8 +188,8 @@ const SearchBar = ({
 
     parsed.forEach(part => {
       if (part.type === 'quoted') {
-        // Quoted strings are anchored as-is
-        newTokens.push({ type: 'term', value: part.value });
+        // Quoted strings are anchored as-is with a quoted flag
+        newTokens.push({ type: 'term', value: part.value, quoted: true });
       } else {
         // Split by spaces and check for keywords
         const words = part.value.split(/\s+/).filter(w => w);
@@ -223,7 +231,14 @@ const SearchBar = ({
 
   // Build query string from tokens for submission
   const buildQueryFromTokens = () => {
-    return tokens.map(token => token.value).join(' ') + (currentInput ? ' ' + currentInput : '');
+    const tokenString = tokens.map(token => {
+      // Wrap quoted terms in quotes to preserve them
+      if (token.quoted) {
+        return `"${token.value}"`;
+      }
+      return token.value;
+    }).join(' ');
+    return tokenString + (currentInput ? ' ' + currentInput : '');
   };
 
   // Execute search with current tokens
