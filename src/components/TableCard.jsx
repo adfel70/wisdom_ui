@@ -28,7 +28,7 @@ import {
   Close,
   DragIndicator,
   ContentCopy,
-  VerticalAlignBottom
+  ReplyAll
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
  
@@ -443,7 +443,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                     },
                   }}
                 >
-                  <VerticalAlignBottom />
+                  <ReplyAll />
                 </IconButton>
               </Tooltip>
             )}
