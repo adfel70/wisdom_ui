@@ -507,10 +507,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                   borderRadius: '20px',
                   backgroundColor: 'white',
                   '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'grey.300',
+                    borderColor: 'rgba(37, 99, 235, 0.3)',
+                    borderWidth: '1.5px',
                   },
                   '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'grey.400',
+                    borderColor: 'rgba(37, 99, 235, 0.4)',
                   },
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'primary.light',
