@@ -392,10 +392,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                 borderRadius: '20px',
                 backgroundColor: 'white',
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'rgba(37, 99, 235, 0.2)',
+                  borderColor: isRoot ? 'rgba(37, 99, 235, 0.2)' : 'rgba(37, 99, 235, 0.3)',
+                  borderWidth: isRoot ? '1px' : '1.5px',
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'rgba(37, 99, 235, 0.3)',
+                  borderColor: 'rgba(37, 99, 235, 0.4)',
                 },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                   borderColor: 'primary.light',
@@ -417,7 +418,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           sx={{
             width: '50%',
             '& .MuiOutlinedInput-root': {
-              backgroundColor: isRoot ? 'rgba(240, 247, 255, 0.5)' : 'transparent',
+              backgroundColor: isRoot ? 'rgba(240, 247, 255, 0.3)' : 'transparent',
               transition: 'all 0.2s ease',
               '&:hover': {
                 borderColor: 'primary.light',
