@@ -225,13 +225,23 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
         />
       ),
       renderCell: (params) => (
-        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Box
+          sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: 'flex',
+            alignItems: 'center',
+            height: '100%'
+          }}
+        >
           <Typography
             variant="body2"
             sx={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
+              textAlign: 'left',
+              flex: 1,
             }}
             title={params.value || 'N/A'}
           >
@@ -388,6 +398,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
               rows={dataGridRows}
               columns={dataGridColumns}
               hideFooter
+              rowHeight={40}
               initialState={{
                 pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
               }}
@@ -396,13 +407,20 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 '& .MuiDataGrid-cell': {
                   borderBottom: '1px solid',
                   borderBottomColor: 'divider',
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
                 },
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'grey.50',
                   minHeight: '56px !important',
                 },
                 '& .MuiDataGrid-columnHeader': {
-                  padding: 0,
+                  padding: 0.5,
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
+                  '&:last-child': {
+                    borderRight: 'none',
+                  },
                   '&:focus': {
                     outline: 'none',
                   },
@@ -418,6 +436,9 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 },
                 '& .MuiDataGrid-row:hover': {
                   backgroundColor: 'action.selected',
+                },
+                '& .MuiDataGrid-menuIcon': {
+                  marginRight: 0,
                 },
               }}
             />
