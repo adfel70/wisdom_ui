@@ -364,8 +364,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Render a condition (input field)
   const renderCondition = (condition, isFirst, parentId) => {
-    const [hoverCondition, setHoverCondition] = useState(false);
-
     return (
       <Box
         key={condition.id}
@@ -380,8 +378,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             }
           }
         }}
-        onMouseEnter={() => setHoverCondition(true)}
-        onMouseLeave={() => setHoverCondition(false)}
       >
         {/* Operator dropdown - only show if not the first condition */}
         {!isFirst && (
@@ -444,7 +440,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   // Render a group (nested container with conditions and/or groups)
   const renderGroup = (group, isRoot = false) => {
     const children = group.children || [];
-    const [hoverGroup, setHoverGroup] = useState(false);
 
     return (
       <Box
@@ -457,8 +452,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         {/* Group container with visual styling */}
         <Paper
           elevation={isRoot ? 0 : 1}
-          onMouseEnter={() => setHoverGroup(true)}
-          onMouseLeave={() => setHoverGroup(false)}
           sx={{
             p: 2.5,
             pt: isRoot ? 0 : 3.5,
@@ -470,6 +463,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             '&:hover': !isRoot ? {
               borderColor: 'grey.300',
               boxShadow: '0 2px 4px -1px rgb(0 0 0 / 0.08)',
+              '& .delete-group-btn': {
+                color: 'error.main',
+              }
             } : {},
           }}
         >
@@ -506,16 +502,16 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           {/* Delete button for groups - distinctly styled */}
           {!isRoot && (
             <IconButton
+              className="delete-group-btn"
               size="small"
               onClick={() => deleteNode(group.id)}
               sx={{
                 position: 'absolute',
                 top: 8,
                 right: 8,
-                color: hoverGroup ? 'error.main' : 'text.secondary',
+                color: 'text.secondary',
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  backgroundColor: 'error.light',
                   backgroundColor: 'rgba(239, 68, 68, 0.12)',
                   color: 'error.main',
                 }
