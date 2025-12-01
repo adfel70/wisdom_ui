@@ -27,7 +27,8 @@ import {
   Info,
   Close,
   DragIndicator,
-  ContentCopy
+  ContentCopy,
+  VerticalAlignBottom
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
  
@@ -162,7 +163,7 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false }) => {
+const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false, onSendToLastPage }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -392,6 +393,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 size="small"
                 color="primary"
                 variant="outlined"
+                sx={{ fontWeight: 500 }}
               />
             </Box>
 
@@ -423,21 +425,42 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
             </Box>
           </Box>
 
-          {/* Right: Toggle Button */}
-          <IconButton
-            onClick={handleToggle}
-            sx={{
-              alignSelf: { xs: 'flex-end', md: 'center' },
-              backgroundColor: 'background.paper',
-              border: 1,
-              borderColor: 'divider',
-              '&:hover': {
-                backgroundColor: 'grey.100',
-              },
-            }}
-          >
-            {isExpanded ? <ExpandLess /> : <ExpandMore />}
-          </IconButton>
+          {/* Right: Toggle Button and Actions */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', alignSelf: { xs: 'flex-end', md: 'center' } }}>
+            {onSendToLastPage && (
+              <Tooltip title="Send to Last Page">
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSendToLastPage(table.id);
+                  }}
+                  sx={{
+                    backgroundColor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                    '&:hover': {
+                      backgroundColor: 'grey.100',
+                    },
+                  }}
+                >
+                  <VerticalAlignBottom />
+                </IconButton>
+              </Tooltip>
+            )}
+            <IconButton
+              onClick={handleToggle}
+              sx={{
+                backgroundColor: 'background.paper',
+                border: 1,
+                borderColor: 'divider',
+                '&:hover': {
+                  backgroundColor: 'grey.100',
+                },
+              }}
+            >
+              {isExpanded ? <ExpandLess /> : <ExpandMore />}
+            </IconButton>
+          </Box>
         </Box>
       </Box>
 

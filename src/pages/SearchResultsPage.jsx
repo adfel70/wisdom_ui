@@ -17,7 +17,7 @@ import {
   Pagination,
 } from '@mui/material';
 import { Home as HomeIcon, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
@@ -26,6 +26,7 @@ import EmptyState from '../components/EmptyState';
 import { getDatabaseMetadata, searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
 import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
+import { useTableContext } from '../context/TableContext';
 
 const TABLES_PER_PAGE = 6;
 
@@ -41,6 +42,18 @@ const SearchResultsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resultsContainerRef = useRef(null);
+  
+  // Cache for loaded table data to avoid refetching
+  const tableDataCache = useRef(new Map());
+
+  // Use global context for matching table IDs to persist order
+  const { 
+    matchingTableIds, 
+    setMatchingTableIds, 
+    updateTableOrder, 
+    lastSearchSignature,
+    setLastSearchSignature
+  } = useTableContext();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
@@ -58,14 +71,6 @@ const SearchResultsPage = () => {
     db2: 1,
     db3: 1,
     db4: 1
-  });
-
-  // Store matching table IDs per database (from search step 1)
-  const [matchingTableIds, setMatchingTableIds] = useState({
-    db1: [],
-    db2: [],
-    db3: [],
-    db4: []
   });
 
   // Store loaded table data (only for current page)
@@ -150,7 +155,22 @@ const SearchResultsPage = () => {
   useEffect(() => {
     let isCancelled = false;
 
+    // Create a signature for the current search criteria
+    const currentSignature = JSON.stringify({
+      query: searchQuery,
+      filters,
+      permutationId: appliedPermutationId,
+      permutationParams: appliedPermutationParamsStr
+    });
+
     const searchAllDatabases = async () => {
+      // If we already have results for this exact search, don't re-run it
+      // This preserves manual ordering changes within the same search context
+      if (lastSearchSignature === currentSignature && matchingTableIds[activeDatabase].length > 0) {
+         setIsSearching(false);
+         return;
+      }
+      
       setIsSearching(true);
       try {
         // Search all databases in parallel
@@ -161,12 +181,18 @@ const SearchResultsPage = () => {
         const results = await Promise.all(searchPromises);
 
         if (!isCancelled) {
+          // Update global context state
           setMatchingTableIds({
             db1: results[0].tableIds,
             db2: results[1].tableIds,
             db3: results[2].tableIds,
             db4: results[3].tableIds
           });
+          
+          setLastSearchSignature(currentSignature);
+          
+          // Clear cache on new search
+          tableDataCache.current.clear();
         }
       } catch (error) {
         console.error('Failed to search databases:', error);
@@ -190,7 +216,7 @@ const SearchResultsPage = () => {
     return () => {
       isCancelled = true;
     };
-  }, [searchQuery, filters, appliedPermutationId, appliedPermutationParamsStr]);
+  }, [searchQuery, filters, appliedPermutationId, appliedPermutationParamsStr, activeDatabase]); // Added activeDatabase to dependencies but logic handles global state
 
   // Step 2: Load table data for current page of active database
   useEffect(() => {
@@ -210,16 +236,30 @@ const SearchResultsPage = () => {
         const endIndex = startIndex + TABLES_PER_PAGE;
         const pageTableIds = tableIds.slice(startIndex, endIndex);
 
-        // Fetch table data
-        const tables = await getMultipleTablesData(pageTableIds);
+        // Identify which tables are not in cache
+        const idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
+
+        // Fetch missing tables
+        if (idsToFetch.length > 0) {
+          const newTables = await getMultipleTablesData(idsToFetch);
+          newTables.forEach(t => tableDataCache.current.set(t.id, t));
+        }
 
         if (!isCancelled) {
-          setLoadedTables(tables);
+          // Construct loaded tables list from cache
+          const currentTables = pageTableIds
+            .map(id => tableDataCache.current.get(id))
+            .filter(Boolean);
+          
+          setLoadedTables(currentTables);
         }
       } catch (error) {
         console.error('Failed to load table data:', error);
         if (!isCancelled) {
-          setLoadedTables([]);
+           // Keep existing loaded tables if possible, or clear? 
+           // Better to not break UI completely, but for now we follow existing pattern
+           // In a real app we might show an error toast.
+           // setLoadedTables([]); 
         }
       } finally {
         if (!isCancelled) {
@@ -457,6 +497,15 @@ const SearchResultsPage = () => {
     const newDbPage = databasePages[newDbId] || 1;
     params.set('page', newDbPage.toString());
     navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
+  const handleSendToLastPage = (tableId) => {
+    const currentIds = matchingTableIds[activeDatabase];
+    const newIds = currentIds.filter(id => id !== tableId);
+    newIds.push(tableId);
+
+    // Update global context directly
+    updateTableOrder(activeDatabase, newIds);
   };
 
   // Determine empty state type
@@ -839,18 +888,27 @@ const SearchResultsPage = () => {
                 {tableCounts[activeDatabase] === 0 ? (
                   <EmptyState type={getEmptyStateType()} />
                 ) : (
-                  <>
+                  <AnimatePresence mode='popLayout'>
                     {loadedTables.map((table) => (
-                      <TableCard
+                      <motion.div
                         key={table.id}
-                        table={table}
-                        query={searchQuery}
-                        permutationId={appliedPermutationId}
-                        permutationParams={appliedPermutationParams}
-                        isLoading={isLoadingTableData}
-                      />
+                        layout
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <TableCard
+                          table={table}
+                          query={searchQuery}
+                          permutationId={appliedPermutationId}
+                          permutationParams={appliedPermutationParams}
+                          isLoading={isLoadingTableData}
+                          onSendToLastPage={handleSendToLastPage}
+                        />
+                      </motion.div>
                     ))}
-                  </>
+                  </AnimatePresence>
                 )}
               </>
             )}
