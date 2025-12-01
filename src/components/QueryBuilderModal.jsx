@@ -372,6 +372,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           alignItems: 'center',
           gap: 1,
           mb: 1.5,
+          mt: isFirst ? 2 : 0,
           '&:hover': {
             '& .delete-condition-btn': {
               opacity: 1,
@@ -389,12 +390,12 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                 fontSize: '0.8125rem',
                 fontWeight: 600,
                 borderRadius: '20px',
-                backgroundColor: 'white',
+                backgroundColor: 'rgba(240, 247, 255, 0.7)',
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'grey.300',
+                  borderColor: 'rgba(37, 99, 235, 0.2)',
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'grey.400',
+                  borderColor: 'rgba(37, 99, 235, 0.3)',
                 },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                   borderColor: 'primary.light',
@@ -468,11 +469,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             p: 2.5,
             pt: isRoot ? 0 : 4.5,
             pl: isRoot ? 0 : 3,
-            border: isRoot ? 'none' : 'none',
+            border: isRoot ? 'none' : '1px solid',
             borderLeft: isRoot ? 'none' : '3px solid',
             borderLeftColor: isRoot ? 'transparent' : 'primary.main',
-            borderColor: isRoot ? 'transparent' : 'transparent',
-            backgroundColor: isRoot ? 'transparent' : '#ffffff',
+            borderColor: isRoot ? 'transparent' : 'rgba(37, 99, 235, 0.15)',
+            backgroundColor: isRoot ? 'transparent' : 'rgba(240, 247, 255, 0.5)',
             position: 'relative',
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': !isRoot ? {
@@ -555,26 +556,25 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           </Box>
 
           {/* Add buttons */}
-          <Box sx={{ display: 'flex', gap: 1, mt: 2.5 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
             <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
               onClick={() => addCondition(group.id)}
               sx={{
-                fontSize: '0.8125rem',
-                padding: '6px 14px',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                color: 'primary.main',
-                fontWeight: 600,
+                fontSize: '0.75rem',
+                padding: '4px 10px',
+                backgroundColor: 'rgba(37, 99, 235, 0.06)',
+                color: 'text.secondary',
+                fontWeight: 500,
                 boxShadow: 'none',
                 border: '1px solid',
-                borderColor: 'rgba(37, 99, 235, 0.2)',
+                borderColor: 'rgba(37, 99, 235, 0.15)',
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  backgroundColor: 'rgba(37, 99, 235, 0.15)',
-                  borderColor: 'primary.main',
-                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.15)',
+                  backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                  borderColor: 'rgba(37, 99, 235, 0.25)',
                 }
               }}
             >
@@ -586,19 +586,18 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               startIcon={<Add />}
               onClick={() => addGroup(group.id)}
               sx={{
-                fontSize: '0.8125rem',
-                padding: '6px 14px',
-                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                fontSize: '0.75rem',
+                padding: '4px 10px',
+                backgroundColor: 'rgba(37, 99, 235, 0.04)',
                 color: 'text.secondary',
-                fontWeight: 600,
+                fontWeight: 500,
                 boxShadow: 'none',
                 border: '1px solid',
-                borderColor: 'rgba(37, 99, 235, 0.15)',
+                borderColor: 'rgba(37, 99, 235, 0.1)',
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
-                  borderColor: 'rgba(37, 99, 235, 0.3)',
-                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.1)',
+                  backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                  borderColor: 'rgba(37, 99, 235, 0.2)',
                 }
               }}
             >
