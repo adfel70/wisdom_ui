@@ -156,6 +156,39 @@ const SearchResultsPage = () => {
     };
   }, []);
 
+  const pruneCacheToVisibleTables = useCallback((visibleIds) => {
+    if (!visibleIds || visibleIds.length === 0) {
+      tableDataCache.current.clear();
+      return;
+    }
+
+    const visibleSet = new Set(visibleIds);
+    tableDataCache.current.forEach((_, id) => {
+      if (!visibleSet.has(id)) {
+        tableDataCache.current.delete(id);
+      }
+    });
+  }, []);
+
+  const syncPendingTableIdsWithVisible = useCallback((visibleIds) => {
+    const pendingSet = pendingTableIdsRef.current;
+    if (pendingSet.size === 0) return;
+
+    const visibleSet = new Set(visibleIds);
+    let changed = false;
+
+    pendingSet.forEach(id => {
+      if (!visibleSet.has(id)) {
+        pendingSet.delete(id);
+        changed = true;
+      }
+    });
+
+    if (changed && isMountedRef.current) {
+      forcePendingRender(tick => tick + 1);
+    }
+  }, [forcePendingRender]);
+
   const addPendingTableIds = useCallback((ids) => {
     if (!ids || ids.length === 0) return;
     const pendingSet = pendingTableIdsRef.current;
@@ -266,57 +299,62 @@ const SearchResultsPage = () => {
 
     const loadCurrentPageData = async () => {
       const tableIds = matchingTableIds[activeDatabase] || [];
+
+      if (!isCancelled) {
+        setIsLoadingTableData(false);
+      }
+
       if (tableIds.length === 0) {
+        tableDataCache.current.clear();
+        syncPendingTableIdsWithVisible([]);
         setLoadedTables([]);
         return;
       }
 
-      let needsFetch = false;
-      let idsToFetch = [];
+      // Calculate which tables to load for current page
+      const startIndex = (currentPage - 1) * TABLES_PER_PAGE;
+      const endIndex = startIndex + TABLES_PER_PAGE;
+      const pageTableIds = tableIds.slice(startIndex, endIndex);
+
+      pruneCacheToVisibleTables(pageTableIds);
+      syncPendingTableIdsWithVisible(pageTableIds);
+
+      const cachedTables = pageTableIds
+        .map(id => tableDataCache.current.get(id))
+        .filter(Boolean);
+
+      if (!isCancelled) {
+        setLoadedTables(cachedTables);
+      }
+
+      const idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
+      if (idsToFetch.length === 0) {
+        return;
+      }
+
+      addPendingTableIds(idsToFetch);
+      if (!isCancelled) {
+        setIsLoadingTableData(true);
+      }
 
       try {
-        // Calculate which tables to load for current page
-        const startIndex = (currentPage - 1) * TABLES_PER_PAGE;
-        const endIndex = startIndex + TABLES_PER_PAGE;
-        const pageTableIds = tableIds.slice(startIndex, endIndex);
-
-        // Identify which tables are not in cache
-        idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
-        needsFetch = idsToFetch.length > 0;
-
-        if (needsFetch) {
-          addPendingTableIds(idsToFetch);
-          setIsLoadingTableData(true);
-        }
-
-        // Fetch missing tables
-        if (needsFetch) {
-          const newTables = await getMultipleTablesData(idsToFetch);
-          newTables.forEach(t => tableDataCache.current.set(t.id, t));
-        }
-
+        const newTables = await getMultipleTablesData(idsToFetch);
         if (!isCancelled) {
-          // Construct loaded tables list from cache
+          newTables.forEach(t => tableDataCache.current.set(t.id, t));
           const currentTables = pageTableIds
             .map(id => tableDataCache.current.get(id))
             .filter(Boolean);
-          
           setLoadedTables(currentTables);
         }
       } catch (error) {
         console.error('Failed to load table data:', error);
         if (!isCancelled) {
-           // Keep existing loaded tables if possible, or clear? 
-           // Better to not break UI completely, but for now we follow existing pattern
-           // In a real app we might show an error toast.
-           // setLoadedTables([]); 
+          // In a real app we might show an error toast.
         }
       } finally {
-        if (needsFetch) {
-          removePendingTableIds(idsToFetch);
-          if (!isCancelled) {
-            setIsLoadingTableData(false);
-          }
+        removePendingTableIds(idsToFetch);
+        if (!isCancelled) {
+          setIsLoadingTableData(false);
         }
       }
     };
@@ -326,7 +364,15 @@ const SearchResultsPage = () => {
     return () => {
       isCancelled = true;
     };
-  }, [activeDatabase, currentPage, matchingTableIds]);
+  }, [
+    activeDatabase,
+    currentPage,
+    matchingTableIds,
+    addPendingTableIds,
+    removePendingTableIds,
+    pruneCacheToVisibleTables,
+    syncPendingTableIdsWithVisible
+  ]);
 
   // Calculate table counts for all databases
   const tableCounts = useMemo(() => {
