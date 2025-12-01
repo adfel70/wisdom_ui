@@ -182,77 +182,80 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     };
 
     // Convert AST to builder tree format
-    const astToBuilderTree = (astNode, firstOperator = 'and') => {
+    // Preserves nested structure from parentheses
+    const astToBuilderTree = (astNode, parentOperator = 'and', isFirst = true) => {
       if (!astNode) return null;
 
+      // Base case: term node becomes a condition
       if (astNode.type === 'term') {
         return {
           id: generateId(),
           type: 'condition',
           value: astNode.value,
-          operator: firstOperator
+          operator: isFirst ? parentOperator : astNode.operator || parentOperator
         };
       }
 
-      // Handle AND/OR nodes - flatten into children array
-      const flattenOperator = (node, operator) => {
-        const children = [];
+      // Recursive case: AND/OR node
+      const nodeOperator = astNode.type; // 'and' or 'or'
 
-        const collect = (n, isFirst) => {
-          if (n.type === operator) {
-            // Same operator - flatten
-            collect(n.left, isFirst);
-            collect(n.right, false);
-          } else if (n.type === 'term') {
-            children.push({
-              id: generateId(),
-              type: 'condition',
-              value: n.value,
-              operator: isFirst ? firstOperator : operator
-            });
-          } else {
-            // Different operator or nested - create a group
-            const nestedGroup = astToBuilderTree(n, isFirst ? firstOperator : operator);
-            if (nestedGroup) {
-              if (nestedGroup.type === 'condition') {
-                children.push(nestedGroup);
-              } else {
-                children.push({
-                  ...nestedGroup,
-                  operator: isFirst ? firstOperator : operator
-                });
-              }
-            }
-          }
-        };
+      // Collect all children with the same operator (flatten)
+      const collectSameOperator = (node, op) => {
+        if (!node) return [];
 
-        collect(node, true);
-        return children;
+        if (node.type === op) {
+          // Same operator - recurse on both sides
+          return [
+            ...collectSameOperator(node.left, op),
+            ...collectSameOperator(node.right, op)
+          ];
+        } else {
+          // Different operator or term - this becomes a child
+          return [node];
+        }
       };
 
-      if (astNode.type === 'and') {
-        const children = flattenOperator(astNode, 'and');
-        if (children.length === 1) return children[0];
-        return {
-          id: generateId(),
-          type: 'group',
-          operator: firstOperator,
-          children
-        };
+      const flattenedNodes = collectSameOperator(astNode, nodeOperator);
+
+      // Convert each flattened node to builder format
+      const children = flattenedNodes.map((node, index) => {
+        if (node.type === 'term') {
+          return {
+            id: generateId(),
+            type: 'condition',
+            value: node.value,
+            operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
+          };
+        } else {
+          // This is a nested group with different operator
+          const nestedTree = astToBuilderTree(node, nodeOperator, index === 0);
+          if (nestedTree && nestedTree.type === 'condition') {
+            // Single condition, just return it with correct operator
+            return {
+              ...nestedTree,
+              operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
+            };
+          }
+          // Return nested group with correct operator
+          return {
+            ...nestedTree,
+            operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
+          };
+        }
+      }).filter(Boolean);
+
+      // If only one child and it's a condition, return it directly
+      if (children.length === 1 && children[0].type === 'condition') {
+        return children[0];
       }
 
-      if (astNode.type === 'or') {
-        const children = flattenOperator(astNode, 'or');
-        if (children.length === 1) return children[0];
-        return {
-          id: generateId(),
-          type: 'group',
-          operator: firstOperator,
-          children
-        };
-      }
-
-      return null;
+      // Return as a group
+      return {
+        id: generateId(),
+        type: 'group',
+        operator: isFirst ? parentOperator : nodeOperator,
+        children
+      };
     };
 
     const tokens = parseTokens(queryString);

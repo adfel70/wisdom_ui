@@ -212,8 +212,14 @@ const SearchResultsPage = () => {
         const endIndex = startIndex + TABLES_PER_PAGE;
         const pageTableIds = tableIds.slice(startIndex, endIndex);
 
-        // Fetch table data
-        const tables = await getMultipleTablesData(pageTableIds);
+        // Fetch table data with search filtering
+        const tables = await getMultipleTablesData(
+          pageTableIds,
+          searchQuery,
+          filters,
+          permutationId,
+          permutationParams
+        );
 
         if (!isCancelled) {
           setLoadedTables(tables);
