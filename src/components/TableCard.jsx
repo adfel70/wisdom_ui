@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -6,19 +6,23 @@ import {
   Typography,
   IconButton,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Collapse,
-  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Divider,
+  Tooltip
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import {
   ExpandMore,
   ExpandLess,
   TableChart,
+  Info,
+  Close,
+  DragIndicator
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
 
@@ -56,15 +60,216 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
 };
 
 /**
+ * DraggableColumnHeader Component
+ * Custom column header with drag and drop functionality
+ */
+const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDragging, isDragOver }) => {
+  return (
+    <Box
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+        opacity: isDragging ? 0.5 : 1,
+        backgroundColor: isDragOver ? 'primary.light' : 'transparent',
+        border: isDragOver ? '2px dashed' : '2px solid transparent',
+        borderColor: isDragOver ? 'primary.main' : 'transparent',
+        borderRadius: 1,
+        transition: 'all 0.2s ease',
+        padding: '8px 12px',
+        minHeight: '40px',
+        width: '100%',
+        '&:hover': {
+          backgroundColor: isDragOver ? 'primary.light' : 'action.hover',
+        },
+      }}
+    >
+      <DragIndicator
+        sx={{
+          fontSize: '1rem',
+          color: 'text.secondary',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+      />
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+          fontSize: '0.875rem',
+          color: 'text.primary',
+          flex: 1,
+        }}
+      >
+        {column}
+      </Typography>
+    </Box>
+  );
+};
+
+/**
  * TableCard Component
- * Displays a single table with expandable data view
+ * Displays a single table with expandable data view using MUI components
  */
 const TableCard = ({ table, query, permutationId = 'none', permutationParams = {} }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [columnOrder, setColumnOrder] = useState(table.columns);
+  const [draggedColumn, setDraggedColumn] = useState(null);
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+
+  // Update column order when table changes
+  useEffect(() => {
+    setColumnOrder(table.columns);
+  }, [table.columns]);
+
+  // Global drag end handler
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+    };
+
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    return () => document.removeEventListener('dragend', handleGlobalDragEnd);
+  }, []);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
   };
+
+  const handleRowInfoClick = (row) => {
+    setSelectedRow(row);
+    setIsPopupOpen(true);
+  };
+
+  const handleClosePopup = () => {
+    setIsPopupOpen(false);
+    setSelectedRow(null);
+  };
+
+  // Drag and drop handlers for column reordering
+  const handleDragStart = (e, column) => {
+    setDraggedColumn(column);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, column) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(column);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const handleDrop = (e, targetColumn) => {
+    e.preventDefault();
+
+    if (!draggedColumn || draggedColumn === targetColumn) {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+      return;
+    }
+
+    const newOrder = [...columnOrder];
+    const draggedIndex = newOrder.indexOf(draggedColumn);
+    const targetIndex = newOrder.indexOf(targetColumn);
+
+    // Remove dragged column from its current position
+    newOrder.splice(draggedIndex, 1);
+
+    // Insert dragged column at target position
+    newOrder.splice(targetIndex, 0, draggedColumn);
+
+    setColumnOrder(newOrder);
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  // Transform data for DataGrid (add id field)
+  const dataGridRows = React.useMemo(() => {
+    return table.data.map((row, index) => ({
+      id: index,
+      ...row,
+    }));
+  }, [table.data]);
+
+  // Create DataGrid columns configuration
+  const dataGridColumns = React.useMemo(() => {
+    const columns = columnOrder.map((column) => ({
+      field: column,
+      headerName: column,
+      flex: 1,
+      minWidth: 120,
+      renderHeader: () => (
+        <DraggableColumnHeader
+          column={column}
+          onDragStart={(e) => handleDragStart(e, column)}
+          onDragOver={(e) => handleDragOver(e, column)}
+          onDrop={(e) => handleDrop(e, column)}
+          isDragging={draggedColumn === column}
+          isDragOver={dragOverColumn === column}
+        />
+      ),
+      renderCell: (params) => (
+        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={params.value || 'N/A'}
+          >
+            <HighlightedText text={params.value || 'N/A'} query={query} />
+          </Typography>
+        </Box>
+      ),
+    }));
+
+    // Add actions column
+    columns.push({
+      field: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Tooltip title="View full details">
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRowInfoClick(params.row);
+            }}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: 'primary.light',
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            <Info fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    });
+
+    return columns;
+  }, [columnOrder, query, draggedColumn]);
 
   return (
     <Card
@@ -164,86 +369,125 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer
-            component={Paper}
-            elevation={0}
+        <CardContent sx={{ p: 0, height: 400 }}>
+          <DataGrid
+            rows={dataGridRows}
+            columns={dataGridColumns}
+            hideFooter
+            initialState={{
+              pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+            }}
             sx={{
-              maxHeight: 400,
-              '&::-webkit-scrollbar': {
-                width: 8,
-                height: 8,
+              borderRadius: 0,
+              '& .MuiDataGrid-cell': {
+                borderBottom: '1px solid',
+                borderBottomColor: 'divider',
               },
-              '&::-webkit-scrollbar-track': {
-                backgroundColor: 'grey.100',
+              '& .MuiDataGrid-columnHeaders': {
+                backgroundColor: 'grey.50',
+                minHeight: '56px !important',
               },
-              '&::-webkit-scrollbar-thumb': {
-                backgroundColor: 'grey.400',
-                borderRadius: 4,
-                '&:hover': {
-                  backgroundColor: 'grey.500',
+              '& .MuiDataGrid-columnHeader': {
+                padding: 0,
+                '&:focus': {
+                  outline: 'none',
+                },
+                '&:focus-within': {
+                  outline: 'none',
                 },
               },
+              '& .MuiDataGrid-columnHeaderTitle': {
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                color: 'text.primary',
+                display: 'none', // Hide default title since we use custom header
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: 'action.selected',
+              },
             }}
-          >
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  {table.columns.map((column) => (
-                    <TableCell
-                      key={column}
-                      sx={{
-                        backgroundColor: 'grey.100',
-                        fontWeight: 700,
-                        fontSize: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        whiteSpace: 'nowrap',
-                        borderRight: 1,
-                        borderColor: 'divider',
-                        '&:last-child': {
-                          borderRight: 0,
-                        },
-                      }}
-                    >
-                      {column}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {table.data.map((row, index) => (
-                  <TableRow
-                    key={index}
-                    hover
-                    sx={{
-                      '&:last-child td': {
-                        borderBottom: 0,
-                      },
-                    }}
-                  >
-                    {table.columns.map((column) => (
-                      <TableCell
-                        key={`${index}-${column}`}
-                        sx={{
-                          whiteSpace: 'nowrap',
-                          borderRight: 1,
-                          borderColor: 'grey.100',
-                          '&:last-child': {
-                            borderRight: 0,
-                          },
-                        }}
-                      >
-                        <HighlightedText text={row[column]} query={query} permutationId={permutationId} permutationParams={permutationParams} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+         />
         </CardContent>
       </Collapse>
+
+      {/* Row Overview Popup */}
+      <Dialog
+        open={isPopupOpen}
+        onClose={handleClosePopup}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Info />
+            <Typography variant="h6" fontWeight={500}>
+              Row Details
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleClosePopup}
+            sx={{ color: 'primary.contrastText' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {selectedRow && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {columnOrder.map((column, index) => (
+                <Box key={column}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      mb: 1,
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      fontWeight={500}
+                    >
+                      {column}:
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={300}
+                    >
+                      {selectedRow[column] || 'N/A'}
+                    </Typography>
+                  </Box>
+                  {index < columnOrder.length - 1 && <Divider sx={{ mt: 2 }} />}
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button
+            onClick={handleClosePopup}
+            variant="outlined"
+            startIcon={<Close />}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
