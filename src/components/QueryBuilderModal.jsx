@@ -373,11 +373,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           gap: 1,
           mb: 1.5,
           mt: isFirst ? 2 : 0,
-          p: isRoot ? 2 : 0,
-          backgroundColor: isRoot ? 'rgba(240, 247, 255, 0.5)' : 'transparent',
-          borderRadius: isRoot ? '8px' : '0px',
-          border: isRoot ? '1px solid' : 'none',
-          borderColor: isRoot ? 'rgba(0, 0, 0, 0.06)' : 'transparent',
           '&:hover': {
             '& .delete-condition-btn': {
               opacity: 1,
@@ -422,6 +417,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           sx={{
             width: '50%',
             '& .MuiOutlinedInput-root': {
+              backgroundColor: isRoot ? 'rgba(240, 247, 255, 0.5)' : 'transparent',
               transition: 'all 0.2s ease',
               '&:hover': {
                 borderColor: 'primary.light',
