@@ -83,7 +83,7 @@ const SearchBar = ({
       };
 
       const parsedTokens = parseValueToTokens(value);
-      setTokens(parsedTokens);
+      setTokens(cleanupTokens(parsedTokens));
       setCurrentInput('');
       setIsInitialized(true);
     }
@@ -98,10 +98,55 @@ const SearchBar = ({
     }
   }, [tokens, currentInput, hasTransformed]);
 
+  // Notify parent component of changes to keep state synchronized
+  useEffect(() => {
+    if (onChange) {
+      const query = buildQueryFromTokens().trim();
+      onChange(query);
+    }
+  }, [tokens, currentInput]);
+
   // Check if a word is a keyword (case-insensitive)
   const isKeyword = (word) => {
     const lower = word.toLowerCase();
     return lower === 'and' || lower === 'or';
+  };
+
+  // Check if there's an unclosed quote in the input
+  const hasUnclosedQuote = (str) => {
+    const quoteCount = (str.match(/"/g) || []).length;
+    return quoteCount % 2 !== 0;
+  };
+
+  // Clean up tokens: remove leading/trailing keywords and consecutive keywords
+  const cleanupTokens = (tokens, removeTrailing = true) => {
+    if (tokens.length === 0) return tokens;
+
+    let cleaned = [...tokens];
+
+    // Remove leading keywords
+    while (cleaned.length > 0 && cleaned[0].type === 'keyword') {
+      cleaned.shift();
+    }
+
+    // Remove trailing keywords (optional - skip during auto-parsing)
+    if (removeTrailing) {
+      while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === 'keyword') {
+        cleaned.pop();
+      }
+    }
+
+    // Remove consecutive keywords (keep first, remove rest)
+    const result = [];
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i].type === 'keyword' && i > 0 && result[result.length - 1].type === 'keyword') {
+        // Skip this keyword (it's consecutive to the previous one)
+        continue;
+      }
+      result.push(cleaned[i]);
+    }
+
+    return result;
   };
 
   // Parse quoted strings and regular tokens
@@ -143,8 +188,8 @@ const SearchBar = ({
 
     parsed.forEach(part => {
       if (part.type === 'quoted') {
-        // Quoted strings are anchored as-is
-        newTokens.push({ type: 'term', value: part.value });
+        // Quoted strings are anchored as-is with a quoted flag
+        newTokens.push({ type: 'term', value: part.value, quoted: true });
       } else {
         // Split by spaces and check for keywords
         const words = part.value.split(/\s+/).filter(w => w);
@@ -170,10 +215,13 @@ const SearchBar = ({
         // 1. There are existing tokens
         // 2. The last existing token is a term
         // 3. The first new token is a term (not a keyword)
+        let combined;
         if (prev.length > 0 && prev[prev.length - 1].type === 'term' && newTokens[0].type === 'term') {
-          return [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+          combined = [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+        } else {
+          combined = [...prev, ...newTokens];
         }
-        return [...prev, ...newTokens];
+        return cleanupTokens(combined);
       });
       setCurrentInput('');
       return true;
@@ -183,7 +231,14 @@ const SearchBar = ({
 
   // Build query string from tokens for submission
   const buildQueryFromTokens = () => {
-    return tokens.map(token => token.value).join(' ') + (currentInput ? ' ' + currentInput : '');
+    const tokenString = tokens.map(token => {
+      // Wrap quoted terms in quotes to preserve them
+      if (token.quoted) {
+        return `"${token.value}"`;
+      }
+      return token.value;
+    }).join(' ');
+    return tokenString + (currentInput ? ' ' + currentInput : '');
   };
 
   // Execute search with current tokens
@@ -209,6 +264,12 @@ const SearchBar = ({
 
     // Check if user just typed a space after a keyword
     if (newValue.endsWith(' ')) {
+      // Don't auto-parse if we're inside an open quote
+      if (hasUnclosedQuote(newValue)) {
+        setCurrentInput(newValue);
+        return;
+      }
+
       // Replace commas with spaces for parsing
       const normalized = newValue.replace(/,/g, ' ');
       const words = normalized.trim().split(/\s+/).filter(w => w);
@@ -240,11 +301,19 @@ const SearchBar = ({
           // 1. There are existing tokens
           // 2. The last existing token is a term
           // 3. The first new token is a term (not a keyword)
+          let combined;
           if (prev.length > 0 && prev[prev.length - 1].type === 'term' && newTokens[0].type === 'term') {
-            return [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+            combined = [...prev, { type: 'keyword', value: 'or' }, ...newTokens];
+          } else {
+            combined = [...prev, ...newTokens];
           }
-          return [...prev, ...newTokens];
+          return cleanupTokens(combined, false); // Don't remove trailing during auto-parse
         });
+        setCurrentInput('');
+        return;
+      } else if (isKeyword(lastWord) && words.length === 1 && tokens.length > 0) {
+        // Single keyword after existing tokens (e.g., typing "or " after pressing Enter)
+        setTokens(prev => cleanupTokens([...prev, { type: 'keyword', value: lastWord.toLowerCase() }], false)); // Don't remove trailing during auto-parse
         setCurrentInput('');
         return;
       }
@@ -273,7 +342,7 @@ const SearchBar = ({
     if (e.key === 'Backspace' && currentInput === '' && tokens.length > 0) {
       e.preventDefault();
       // Delete the last token
-      setTokens(prev => prev.slice(0, -1));
+      setTokens(prev => cleanupTokens(prev.slice(0, -1)));
       return;
     }
   };
@@ -282,21 +351,27 @@ const SearchBar = ({
   const removeToken = (index) => {
     setTokens(prev => {
       const token = prev[index];
+      let filtered;
 
       if (token.type === 'term') {
         // If removing the first term and next token is a keyword, remove both
         if (index === 0 && prev.length > 1 && prev[1].type === 'keyword') {
-          return prev.filter((_, i) => i !== 0 && i !== 1);
+          filtered = prev.filter((_, i) => i !== 0 && i !== 1);
         }
-
         // If removing a non-first term with a preceding keyword, remove both
-        if (index > 0 && prev[index - 1].type === 'keyword') {
-          return prev.filter((_, i) => i !== index - 1 && i !== index);
+        else if (index > 0 && prev[index - 1].type === 'keyword') {
+          filtered = prev.filter((_, i) => i !== index - 1 && i !== index);
         }
+        // Otherwise just remove the token
+        else {
+          filtered = prev.filter((_, i) => i !== index);
+        }
+      } else {
+        // Otherwise just remove the token
+        filtered = prev.filter((_, i) => i !== index);
       }
 
-      // Otherwise just remove the token
-      return prev.filter((_, i) => i !== index);
+      return cleanupTokens(filtered);
     });
   };
 
@@ -336,7 +411,7 @@ const SearchBar = ({
       }
       return token; // Keep keywords unchanged
     });
-    setTokens(transformedTokens);
+    setTokens(cleanupTokens(transformedTokens));
 
     // Apply transformation to current input text (chainable)
     const transformed = applyTransformation(currentInput, transformId);
@@ -345,7 +420,7 @@ const SearchBar = ({
 
   const handleRevert = () => {
     setCurrentInput(originalText);
-    setTokens(originalTokens);
+    setTokens(cleanupTokens(originalTokens));
     setOriginalText('');
     setOriginalTokens([]);
     setHasTransformed(false);
