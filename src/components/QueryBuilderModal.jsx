@@ -472,8 +472,8 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             border: isRoot ? 'none' : '1px solid',
             borderLeft: isRoot ? 'none' : '3px solid',
             borderLeftColor: isRoot ? 'transparent' : 'primary.main',
-            borderColor: isRoot ? 'transparent' : 'rgba(37, 99, 235, 0.15)',
-            backgroundColor: isRoot ? 'transparent' : 'rgba(240, 247, 255, 0.5)',
+            borderColor: isRoot ? 'transparent' : 'rgba(0, 0, 0, 0.06)',
+            backgroundColor: isRoot ? 'transparent' : '#ffffff',
             position: 'relative',
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': !isRoot ? {
