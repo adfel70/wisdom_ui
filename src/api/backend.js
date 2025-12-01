@@ -158,3 +158,62 @@ export function getDataStats() {
     }))
   };
 }
+
+/**
+ * Get metadata for tables in a specific database
+ * Returns lightweight table information without records
+ * @param {string} dbKey - Database key (e.g., 'db1')
+ * @returns {Array} Array of table metadata objects
+ */
+export function getTablesMetadataForDatabase(dbKey) {
+  const tableKeys = DATABASE_ASSIGNMENTS[dbKey];
+  if (!tableKeys) {
+    return [];
+  }
+
+  return tableKeys.map(tableKey => {
+    const meta = METADATA[tableKey];
+    return {
+      id: tableKey,
+      name: meta.name,
+      year: meta.year,
+      country: meta.country,
+      categories: meta.categories,
+      count: meta.recordCount,
+      columns: meta.columns.map(col => col.name)
+    };
+  });
+}
+
+/**
+ * Get data for a specific table (lazy loading)
+ * Fetches only the records for one table
+ * @param {string} tableKey - Table key (e.g., 't1')
+ * @returns {Promise<Object>} Table object with data
+ */
+export async function getTableData(tableKey) {
+  const meta = METADATA[tableKey];
+  if (!meta) {
+    throw new Error(`Table ${tableKey} not found`);
+  }
+
+  // Get records for this table
+  const records = await getTableRecords(tableKey);
+
+  // Remove tableKey field from records
+  const data = records.map(record => {
+    const { tableKey: _, ...rowData } = record;
+    return rowData;
+  });
+
+  return {
+    id: tableKey,
+    name: meta.name,
+    year: meta.year,
+    country: meta.country,
+    categories: meta.categories,
+    count: meta.recordCount,
+    columns: meta.columns.map(col => col.name),
+    data: data
+  };
+}

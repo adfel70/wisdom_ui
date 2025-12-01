@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -14,6 +14,7 @@ import {
   Button,
   Menu,
   MenuItem,
+  Pagination,
 } from '@mui/material';
 import { Home as HomeIcon, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -22,20 +23,24 @@ import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import EmptyState from '../components/EmptyState';
-import { getMockDatabases, getDatabaseMetadata } from '../data/mockDatabaseNew';
-import { applySearchAndFilters, getExpandedQueryInfo } from '../utils/searchUtils';
+import { getDatabaseMetadata, searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
+import { getExpandedQueryInfo } from '../utils/searchUtils';
 import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
+
+const TABLES_PER_PAGE = 6;
 
 /**
  * SearchResultsPage Component
- * Displays search results with database tabs and filtered tables
+ * Displays search results with database tabs and paginated tables
  *
- * IMPORTANT: Loads all databases upfront for fast tab switching.
- * Files are still separated for organization and backend architecture matching.
+ * IMPORTANT: Uses lazy loading with pagination (6 tables per page).
+ * Step 1: Search to get matching table IDs
+ * Step 2: Fetch data only for current page's tables
  */
 const SearchResultsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const resultsContainerRef = useRef(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
@@ -46,8 +51,29 @@ const SearchResultsPage = () => {
   const [permutationParams, setPermutationParams] = useState({});
   const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
-  const [allDatabases, setAllDatabases] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Pagination state: store page number per database
+  const [databasePages, setDatabasePages] = useState({
+    db1: 1,
+    db2: 1,
+    db3: 1,
+    db4: 1
+  });
+
+  // Store matching table IDs per database (from search step 1)
+  const [matchingTableIds, setMatchingTableIds] = useState({
+    db1: [],
+    db2: [],
+    db3: [],
+    db4: []
+  });
+
+  // Store loaded table data (only for current page)
+  const [loadedTables, setLoadedTables] = useState([]);
+
+  // Loading states
+  const [isSearching, setIsSearching] = useState(true); // Step 1: searching for table IDs
+  const [isLoadingTableData, setIsLoadingTableData] = useState(false); // Step 2: loading table data
 
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
@@ -74,6 +100,9 @@ const SearchResultsPage = () => {
     return perm.label;
   };
 
+  // Get current page for active database
+  const currentPage = databasePages[activeDatabase] || 1;
+
   // Initialize from URL params
   useEffect(() => {
     const query = searchParams.get('q') || '';
@@ -88,6 +117,8 @@ const SearchResultsPage = () => {
     const maxDate = searchParams.get('maxDate') || '';
     const selectedTablesParam = searchParams.get('selectedTables') || '';
     const selectedTables = selectedTablesParam ? selectedTablesParam.split(',') : [];
+    const pageParam = searchParams.get('page');
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
 
     setSearchQuery(query);
     setInputValue(query);
@@ -102,68 +133,128 @@ const SearchResultsPage = () => {
       maxDate: maxDate || '',
       selectedTables: selectedTables,
     });
-  }, [searchParams]);
 
-  // Load ALL databases on mount (fetch all at once)
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadAllDatabases = async () => {
-      setIsLoading(true);
-      try {
-        const databases = await getMockDatabases();
-        if (!isCancelled) {
-          setAllDatabases(databases);
-        }
-      } catch (error) {
-        console.error('Failed to load databases:', error);
-        if (!isCancelled) {
-          setAllDatabases([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadAllDatabases();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []); // Only run once on mount
-
-  // Get current database data (no fetching, just filtering from loaded data)
-  const currentDatabaseData = useMemo(() => {
-    return allDatabases.find(db => db.id === activeDatabase);
-  }, [allDatabases, activeDatabase]);
+    // Update page for active database from URL
+    setDatabasePages(prev => ({
+      ...prev,
+      [activeDatabase]: page
+    }));
+  }, [searchParams, activeDatabase]);
 
   // Get applied permutation from URL params (not state) to ensure it matches current results
   const appliedPermutationId = searchParams.get('permutation') || 'none';
   const appliedPermutationParamsStr = searchParams.get('permutationParams') || '';
   const appliedPermutationParams = appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
 
-  // Apply filters to current database
-  const currentTables = useMemo(() => {
-    if (!currentDatabaseData) return [];
-    return applySearchAndFilters(currentDatabaseData.tables, searchQuery, filters, appliedPermutationId, appliedPermutationParams);
-  }, [currentDatabaseData, searchQuery, filters, appliedPermutationId, appliedPermutationParams]);
+  // Step 1: Search all databases for matching table IDs
+  useEffect(() => {
+    let isCancelled = false;
+
+    const searchAllDatabases = async () => {
+      setIsSearching(true);
+      try {
+        // Search all databases in parallel
+        const searchPromises = ['db1', 'db2', 'db3', 'db4'].map(dbId =>
+          searchTablesByQuery(dbId, searchQuery, filters, appliedPermutationId, appliedPermutationParams)
+        );
+
+        const results = await Promise.all(searchPromises);
+
+        if (!isCancelled) {
+          setMatchingTableIds({
+            db1: results[0].tableIds,
+            db2: results[1].tableIds,
+            db3: results[2].tableIds,
+            db4: results[3].tableIds
+          });
+        }
+      } catch (error) {
+        console.error('Failed to search databases:', error);
+        if (!isCancelled) {
+          setMatchingTableIds({
+            db1: [],
+            db2: [],
+            db3: [],
+            db4: []
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsSearching(false);
+        }
+      }
+    };
+
+    searchAllDatabases();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [searchQuery, filters, appliedPermutationId, appliedPermutationParamsStr]);
+
+  // Step 2: Load table data for current page of active database
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadCurrentPageData = async () => {
+      const tableIds = matchingTableIds[activeDatabase] || [];
+      if (tableIds.length === 0) {
+        setLoadedTables([]);
+        return;
+      }
+
+      setIsLoadingTableData(true);
+      try {
+        // Calculate which tables to load for current page
+        const startIndex = (currentPage - 1) * TABLES_PER_PAGE;
+        const endIndex = startIndex + TABLES_PER_PAGE;
+        const pageTableIds = tableIds.slice(startIndex, endIndex);
+
+        // Fetch table data
+        const tables = await getMultipleTablesData(pageTableIds);
+
+        if (!isCancelled) {
+          setLoadedTables(tables);
+        }
+      } catch (error) {
+        console.error('Failed to load table data:', error);
+        if (!isCancelled) {
+          setLoadedTables([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingTableData(false);
+        }
+      }
+    };
+
+    loadCurrentPageData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeDatabase, currentPage, matchingTableIds]);
 
   // Calculate table counts for all databases
   const tableCounts = useMemo(() => {
-    const counts = {};
-    allDatabases.forEach(db => {
-      const filteredTables = applySearchAndFilters(db.tables, searchQuery, filters, appliedPermutationId, appliedPermutationParams);
-      counts[db.id] = filteredTables.length;
-    });
-    return counts;
-  }, [allDatabases, searchQuery, filters, appliedPermutationId, appliedPermutationParams]);
+    return {
+      db1: matchingTableIds.db1.length,
+      db2: matchingTableIds.db2.length,
+      db3: matchingTableIds.db3.length,
+      db4: matchingTableIds.db4.length
+    };
+  }, [matchingTableIds]);
 
   // Calculate total tables with results across all databases
   const totalTablesWithResults = useMemo(() => {
     return Object.values(tableCounts).reduce((sum, count) => sum + count, 0);
   }, [tableCounts]);
+
+  // Calculate total pages for current database
+  const totalPages = useMemo(() => {
+    const tableIds = matchingTableIds[activeDatabase] || [];
+    return Math.ceil(tableIds.length / TABLES_PER_PAGE);
+  }, [matchingTableIds, activeDatabase]);
 
   // Check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -191,8 +282,16 @@ const SearchResultsPage = () => {
     // Accept query from SearchBar or use inputValue as fallback
     const searchQuery = query || inputValue;
 
-    // Update search query and URL params
-    const params = new URLSearchParams({ q: searchQuery });
+    // Reset all database pages to 1 on new search
+    setDatabasePages({
+      db1: 1,
+      db2: 1,
+      db3: 1,
+      db4: 1
+    });
+
+    // Update search query and URL params (page resets to 1)
+    const params = new URLSearchParams({ q: searchQuery, page: '1' });
 
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
@@ -233,8 +332,16 @@ const SearchResultsPage = () => {
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
 
+    // Reset all database pages to 1 when filters change
+    setDatabasePages({
+      db1: 1,
+      db2: 1,
+      db3: 1,
+      db4: 1
+    });
+
     // Update URL with new filters (use inputValue to preserve current input)
-    const params = new URLSearchParams({ q: inputValue });
+    const params = new URLSearchParams({ q: inputValue, page: '1' });
 
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
@@ -273,8 +380,16 @@ const SearchResultsPage = () => {
   const handlePermutationChange = (newPermutationId) => {
     setPermutationId(newPermutationId);
 
+    // Reset all database pages to 1 when permutation changes
+    setDatabasePages({
+      db1: 1,
+      db2: 1,
+      db3: 1,
+      db4: 1
+    });
+
     // Update URL with new permutation (preserve query and filters)
-    const params = new URLSearchParams({ q: inputValue });
+    const params = new URLSearchParams({ q: inputValue, page: '1' });
 
     // Add permutation if selected
     if (newPermutationId && newPermutationId !== 'none') {
@@ -312,6 +427,38 @@ const SearchResultsPage = () => {
     navigate(`/search?${params.toString()}`, { replace: true });
   };
 
+  // Handle page change
+  const handlePageChange = (event, newPage) => {
+    // Update page for current database
+    setDatabasePages(prev => ({
+      ...prev,
+      [activeDatabase]: newPage
+    }));
+
+    // Update URL with new page
+    const params = new URLSearchParams(searchParams);
+    params.set('page', newPage.toString());
+    navigate(`/search?${params.toString()}`, { replace: true });
+
+    // Scroll to top
+    if (resultsContainerRef.current) {
+      resultsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Handle database tab change (preserve page number per database)
+  const handleDatabaseChange = (newDbId) => {
+    setActiveDatabase(newDbId);
+
+    // Update URL with page for the new database
+    const params = new URLSearchParams(searchParams);
+    const newDbPage = databasePages[newDbId] || 1;
+    params.set('page', newDbPage.toString());
+    navigate(`/search?${params.toString()}`, { replace: true });
+  };
+
   // Determine empty state type
   const getEmptyStateType = () => {
     const hasFilters = Object.values(filters).some(v => {
@@ -319,15 +466,21 @@ const SearchResultsPage = () => {
       return v && v !== 'all';
     });
     const hasSearch = searchQuery.trim() !== '';
+    const currentTableCount = matchingTableIds[activeDatabase]?.length || 0;
 
-    if (currentDatabaseData?.tables.length === 0 && !hasFilters && !hasSearch) {
+    if (currentTableCount === 0 && !hasFilters && !hasSearch) {
       return 'empty-database';
     }
-    if (hasFilters && currentTables.length === 0) {
+    if (hasFilters && currentTableCount === 0) {
       return 'filter-empty';
     }
     return 'no-results';
   };
+
+  // Get current database info
+  const currentDatabaseInfo = useMemo(() => {
+    return databaseMetadata.find(db => db.id === activeDatabase);
+  }, [activeDatabase, databaseMetadata]);
 
   return (
     <motion.div
@@ -547,7 +700,7 @@ const SearchResultsPage = () => {
             <DatabaseTabs
               databases={databaseMetadata}
               activeDatabase={activeDatabase}
-              onChange={setActiveDatabase}
+              onChange={handleDatabaseChange}
               tableCounts={tableCounts}
             />
           </Box>
@@ -555,7 +708,7 @@ const SearchResultsPage = () => {
       </Paper>
 
         {/* Results Content */}
-        <Container maxWidth="xl" sx={{ mt: 4 }}>
+        <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -650,7 +803,7 @@ const SearchResultsPage = () => {
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="h5" fontWeight={600}>
-                  {currentDatabaseData?.name || 'Loading...'}
+                  {currentDatabaseInfo?.name || 'Loading...'}
                 </Typography>
                 {searchQuery && totalTablesWithResults > 0 && (
                   <Chip
@@ -661,33 +814,59 @@ const SearchResultsPage = () => {
                   />
                 )}
               </Box>
-              {currentDatabaseData?.description && (
+              {currentDatabaseInfo?.description && (
                 <Typography variant="body2" color="text.secondary">
-                  {currentDatabaseData.description}
+                  {currentDatabaseInfo.description}
                 </Typography>
               )}
-              {!isLoading && currentTables.length > 0 && (
+              {!isSearching && tableCounts[activeDatabase] > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Found <strong>{currentTables.length}</strong> table{currentTables.length !== 1 ? 's' : ''} in this database
+                  Found <strong>{tableCounts[activeDatabase]}</strong> table{tableCounts[activeDatabase] !== 1 ? 's' : ''} in this database
                   {searchQuery && ` matching "${searchQuery}"`}
+                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
                 </Typography>
               )}
             </Box>
 
-            {/* Loading State */}
-            {isLoading ? (
+            {/* Loading State - Initial Search */}
+            {isSearching ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress />
               </Box>
             ) : (
               <>
                 {/* Table Cards or Empty State */}
-                {currentTables.length === 0 ? (
+                {tableCounts[activeDatabase] === 0 ? (
                   <EmptyState type={getEmptyStateType()} />
                 ) : (
-                  currentTables.map((table) => (
-                    <TableCard key={table.id} table={table} query={searchQuery} permutationId={appliedPermutationId} permutationParams={appliedPermutationParams} />
-                  ))
+                  <>
+                    {loadedTables.map((table) => (
+                      <TableCard
+                        key={table.id}
+                        table={table}
+                        query={searchQuery}
+                        permutationId={appliedPermutationId}
+                        permutationParams={appliedPermutationParams}
+                        isLoading={isLoadingTableData}
+                      />
+                    ))}
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+                        <Pagination
+                          count={totalPages}
+                          page={currentPage}
+                          onChange={handlePageChange}
+                          color="primary"
+                          size="large"
+                          showFirstButton
+                          showLastButton
+                          disabled={isLoadingTableData}
+                        />
+                      </Box>
+                    )}
+                  </>
                 )}
               </>
             )}
