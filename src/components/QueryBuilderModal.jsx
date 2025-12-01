@@ -363,7 +363,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   };
 
   // Render a condition (input field)
-  const renderCondition = (condition, isFirst, parentId) => {
+  const renderCondition = (condition, isFirst, parentId, isRoot = false) => {
     return (
       <Box
         key={condition.id}
@@ -373,6 +373,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           gap: 1,
           mb: 1.5,
           mt: isFirst ? 2 : 0,
+          p: isRoot ? 2 : 0,
+          backgroundColor: isRoot ? 'rgba(240, 247, 255, 0.5)' : 'transparent',
+          borderRadius: isRoot ? '8px' : '0px',
+          border: isRoot ? '1px solid' : 'none',
+          borderColor: isRoot ? 'rgba(0, 0, 0, 0.06)' : 'transparent',
           '&:hover': {
             '& .delete-condition-btn': {
               opacity: 1,
@@ -390,7 +395,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                 fontSize: '0.8125rem',
                 fontWeight: 600,
                 borderRadius: '20px',
-                backgroundColor: 'rgba(240, 247, 255, 0.7)',
+                backgroundColor: 'white',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: 'rgba(37, 99, 235, 0.2)',
                 },
@@ -547,7 +552,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           <Box sx={{ mt: isRoot ? 0 : 0 }}>
             {children.map((child, index) => {
               if (child.type === 'condition') {
-                return renderCondition(child, index === 0, group.id);
+                return renderCondition(child, index === 0, group.id, isRoot);
               } else if (child.type === 'group') {
                 return renderGroup(child, false);
               }
