@@ -163,7 +163,15 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false, onSendToLastPage }) => {
+const TableCard = ({
+  table,
+  query,
+  permutationId = 'none',
+  permutationParams = {},
+  isLoading = false,
+  onSendToLastPage,
+  isFocused = false
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -351,9 +359,13 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
       sx={{
         mb: 3,
         overflow: 'visible',
-        transition: 'box-shadow 0.3s ease',
+        transition: 'box-shadow 0.3s ease, transform 0.2s ease, border-color 0.2s ease',
+        border: '2px solid',
+        borderColor: isFocused ? 'primary.main' : 'transparent',
+        boxShadow: isFocused ? 6 : 1,
+        transform: isFocused ? 'translateY(-2px)' : 'none',
         '&:hover': {
-          boxShadow: 4,
+          boxShadow: isFocused ? 6 : 4,
         },
       }}
     >
