@@ -28,9 +28,11 @@ button {
   font-family: inherit;
 }
 
-/* Smooth scroll behavior */
+/* Smooth scroll behavior and stable scrollbar gutter */
 html {
   scroll-behavior: smooth;
+  /* Reserve space for scrollbar to prevent layout shift */
+  scrollbar-gutter: stable;
 }
 
 /* Custom scrollbar for webkit browsers */

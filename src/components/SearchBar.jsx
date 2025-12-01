@@ -29,28 +29,47 @@ const SearchBar = ({
 
   // Initialize tokens from external value prop on mount
   useEffect(() => {
-    if (!isInitialized && value && typeof value === 'string') {
-      // Parse the value string into tokens
-      const parseValueToTokens = (str) => {
-        const quotedRegex = /"([^"]*)"/g;
-        const quotedParts = [];
-        let match;
+    if (!isInitialized) {
+      if (value && typeof value === 'string') {
+        // Parse the value string into tokens
+        const parseValueToTokens = (str) => {
+          const quotedRegex = /"([^"]*)"/g;
+          const quotedParts = [];
+          let match;
 
-        while ((match = quotedRegex.exec(str)) !== null) {
-          quotedParts.push({
-            start: match.index,
-            end: match.index + match[0].length,
-            value: match[1]
+          while ((match = quotedRegex.exec(str)) !== null) {
+            quotedParts.push({
+              start: match.index,
+              end: match.index + match[0].length,
+              value: match[1]
+            });
+          }
+
+          const tokens = [];
+          let currentPos = 0;
+
+          quotedParts.forEach(quoted => {
+            if (quoted.start > currentPos) {
+              const nonQuoted = str.substring(currentPos, quoted.start);
+              const words = nonQuoted.trim().split(/\s+/).filter(w => w);
+              words.forEach(word => {
+                const lower = word.toLowerCase();
+                if (lower === 'and' || lower === 'or') {
+                  tokens.push({ type: 'keyword', value: lower });
+                } else {
+                  tokens.push({ type: 'term', value: word });
+                }
+              });
+            }
+            if (quoted.value) {
+              tokens.push({ type: 'term', value: quoted.value });
+            }
+            currentPos = quoted.end;
           });
-        }
 
-        const tokens = [];
-        let currentPos = 0;
-
-        quotedParts.forEach(quoted => {
-          if (quoted.start > currentPos) {
-            const nonQuoted = str.substring(currentPos, quoted.start);
-            const words = nonQuoted.trim().split(/\s+/).filter(w => w);
+          if (currentPos < str.length) {
+            const remaining = str.substring(currentPos);
+            const words = remaining.trim().split(/\s+/).filter(w => w);
             words.forEach(word => {
               const lower = word.toLowerCase();
               if (lower === 'and' || lower === 'or') {
@@ -60,31 +79,16 @@ const SearchBar = ({
               }
             });
           }
-          if (quoted.value) {
-            tokens.push({ type: 'term', value: quoted.value });
-          }
-          currentPos = quoted.end;
-        });
 
-        if (currentPos < str.length) {
-          const remaining = str.substring(currentPos);
-          const words = remaining.trim().split(/\s+/).filter(w => w);
-          words.forEach(word => {
-            const lower = word.toLowerCase();
-            if (lower === 'and' || lower === 'or') {
-              tokens.push({ type: 'keyword', value: lower });
-            } else {
-              tokens.push({ type: 'term', value: word });
-            }
-          });
-        }
+          return tokens;
+        };
 
-        return tokens;
-      };
-
-      const parsedTokens = parseValueToTokens(value);
-      setTokens(cleanupTokens(parsedTokens));
-      setCurrentInput('');
+        const parsedTokens = parseValueToTokens(value);
+        setTokens(cleanupTokens(parsedTokens));
+        setCurrentInput('');
+      }
+      // Always set initialized to true after first effect run, even if value is empty
+      // This prevents subsequent typing from triggering the initialization logic
       setIsInitialized(true);
     }
   }, [value, isInitialized]);
@@ -99,10 +103,15 @@ const SearchBar = ({
   }, [tokens, currentInput, hasTransformed]);
 
   // Notify parent component of changes to keep state synchronized
+  // Debounced to prevent excessive re-renders and improve typing performance
   useEffect(() => {
     if (onChange) {
-      const query = buildQueryFromTokens().trim();
-      onChange(query);
+      const timeoutId = setTimeout(() => {
+        const query = buildQueryFromTokens().trim();
+        onChange(query);
+      }, 50); // 50ms debounce for smooth typing
+
+      return () => clearTimeout(timeoutId);
     }
   }, [tokens, currentInput]);
 
