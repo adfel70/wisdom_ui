@@ -13,9 +13,12 @@ import {
   DialogActions,
   Button,
   Divider,
-  Tooltip
+  Tooltip,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
 import {
   ExpandMore,
   ExpandLess,
@@ -26,7 +29,7 @@ import {
   ContentCopy
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
-
+ 
 /**
  * HighlightedText Component
  * Highlights matching text in search results
@@ -57,6 +60,48 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
         )
       )}
     </span>
+  );
+};
+
+/**
+ * CustomColumnMenu Component
+ * Custom column menu that extends the default MUI DataGrid column menu
+ */
+const CustomColumnMenu = (props) => {
+  const { hideMenu, colDef } = props;
+
+  const handleCopyColumnName = async () => {
+    try {
+      const text = colDef.headerName ?? colDef.field;
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy column name:', err);
+    } finally {
+      hideMenu?.();
+    }
+  };
+
+  return (
+    <GridColumnMenuContainer 
+      {...props}
+      sx={{
+        border: '0.5px solid gray',
+        borderRadius: 2,              
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
+    }}>
+      <GridColumnMenuSortItem colDef={colDef} onClick={hideMenu} />
+      <Divider />
+      <GridColumnMenuFilterItem colDef={colDef} onClick={hideMenu} />
+      <Divider />
+      <GridColumnMenuHideItem colDef={colDef} onClick={hideMenu} />
+      <GridColumnMenuManageItem colDef={colDef} onClick={hideMenu} />
+      <MenuItem onClick={handleCopyColumnName}>
+        <ListItemIcon>
+          <ContentCopy fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Copy column name" />
+      </MenuItem>
+    </GridColumnMenuContainer>
   );
 };
 
@@ -403,6 +448,9 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
             rowHeight={40}
             initialState={{
               pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+            }}
+            slots={{
+              columnMenu: CustomColumnMenu,
             }}
             sx={{
               borderRadius: 0,
