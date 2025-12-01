@@ -27,7 +27,8 @@ import {
   Info,
   Close,
   DragIndicator,
-  ContentCopy
+  ContentCopy,
+  ReplyAll
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
  
@@ -162,7 +163,7 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false }) => {
+const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false, onSendToLastPage }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -392,6 +393,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 size="small"
                 color="primary"
                 variant="outlined"
+                sx={{ fontWeight: 500 }}
               />
             </Box>
 
@@ -423,21 +425,42 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
             </Box>
           </Box>
 
-          {/* Right: Toggle Button */}
-          <IconButton
-            onClick={handleToggle}
-            sx={{
-              alignSelf: { xs: 'flex-end', md: 'center' },
-              backgroundColor: 'background.paper',
-              border: 1,
-              borderColor: 'divider',
-              '&:hover': {
-                backgroundColor: 'grey.100',
-              },
-            }}
-          >
-            {isExpanded ? <ExpandLess /> : <ExpandMore />}
-          </IconButton>
+          {/* Right: Toggle Button and Actions */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', alignSelf: { xs: 'flex-end', md: 'center' } }}>
+            {onSendToLastPage && (
+              <Tooltip title="Send to Last Page">
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSendToLastPage(table.id);
+                  }}
+                  sx={{
+                    backgroundColor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                    '&:hover': {
+                      backgroundColor: 'grey.100',
+                    },
+                  }}
+                >
+                  <ReplyAll />
+                </IconButton>
+              </Tooltip>
+            )}
+            <IconButton
+              onClick={handleToggle}
+              sx={{
+                backgroundColor: 'background.paper',
+                border: 1,
+                borderColor: 'divider',
+                '&:hover': {
+                  backgroundColor: 'grey.100',
+                },
+              }}
+            >
+              {isExpanded ? <ExpandLess /> : <ExpandMore />}
+            </IconButton>
+          </Box>
         </Box>
       </Box>
 
@@ -601,4 +624,29 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
   );
 };
 
-export default TableCard;
+const shallowEqualObject = (a = {}, b = {}) => {
+  if (a === b) return true;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i += 1) {
+    const key = aKeys[i];
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const areEqual = (prev, next) => {
+  return (
+    prev.table === next.table &&
+    prev.query === next.query &&
+    prev.permutationId === next.permutationId &&
+    shallowEqualObject(prev.permutationParams, next.permutationParams) &&
+    prev.isLoading === next.isLoading &&
+    prev.onSendToLastPage === next.onSendToLastPage
+  );
+};
+
+export default React.memo(TableCard, areEqual);
