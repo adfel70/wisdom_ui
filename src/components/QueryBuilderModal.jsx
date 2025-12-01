@@ -182,85 +182,85 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     };
 
     // Convert AST to builder tree format
-    // Preserves nested structure from parentheses
-    const astToBuilderTree = (astNode, parentOperator = 'and', isFirst = true) => {
+    // MUST preserve nested groups from parentheses
+    const astToBuilderTree = (astNode) => {
       if (!astNode) return null;
 
-      // Base case: term node becomes a condition
+      // Base case: term becomes a condition
       if (astNode.type === 'term') {
         return {
           id: generateId(),
           type: 'condition',
           value: astNode.value,
-          operator: isFirst ? parentOperator : astNode.operator || parentOperator
+          operator: 'and' // will be set by parent
         };
       }
 
-      // Recursive case: AND/OR node
-      const nodeOperator = astNode.type; // 'and' or 'or'
+      // Recursive case: AND/OR node becomes a group
+      const currentOperator = astNode.type; // 'and' or 'or'
 
-      // Collect all children with the same operator (flatten)
-      const collectSameOperator = (node, op) => {
+      // Flatten only nodes with the SAME operator at THIS level
+      const flattenSameOperator = (node) => {
         if (!node) return [];
 
-        if (node.type === op) {
-          // Same operator - recurse on both sides
+        if (node.type === currentOperator) {
+          // Same operator - flatten recursively
           return [
-            ...collectSameOperator(node.left, op),
-            ...collectSameOperator(node.right, op)
+            ...flattenSameOperator(node.left),
+            ...flattenSameOperator(node.right)
           ];
         } else {
-          // Different operator or term - this becomes a child
+          // Different operator or term - this is ONE child, don't flatten further
           return [node];
         }
       };
 
-      const flattenedNodes = collectSameOperator(astNode, nodeOperator);
+      const flattenedChildren = flattenSameOperator(astNode);
 
-      // Convert each flattened node to builder format
-      const children = flattenedNodes.map((node, index) => {
-        if (node.type === 'term') {
+      // Convert each child node
+      const children = flattenedChildren.map((childNode, index) => {
+        // Operator connects this child to previous sibling
+        const connectingOperator = (index === 0) ? 'and' : currentOperator;
+
+        if (childNode.type === 'term') {
+          // Term becomes condition
           return {
             id: generateId(),
             type: 'condition',
-            value: node.value,
-            operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
+            value: childNode.value,
+            operator: connectingOperator
           };
         } else {
-          // This is a nested group with different operator
-          const nestedTree = astToBuilderTree(node, nodeOperator, index === 0);
-          if (nestedTree && nestedTree.type === 'condition') {
-            // Single condition, just return it with correct operator
+          // Different operator - recurse to create nested group
+          const nested = astToBuilderTree(childNode);
+
+          // Set the operator that connects this group to its previous sibling
+          if (nested.type === 'group') {
             return {
-              ...nestedTree,
-              operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
+              ...nested,
+              operator: connectingOperator
+            };
+          } else {
+            // Single condition (shouldn't happen but handle it)
+            return {
+              ...nested,
+              operator: connectingOperator
             };
           }
-          // Return nested group with correct operator
-          return {
-            ...nestedTree,
-            operator: index === 0 ? (isFirst ? parentOperator : nodeOperator) : nodeOperator
-          };
         }
-      }).filter(Boolean);
+      });
 
-      // If only one child and it's a condition, return it directly
-      if (children.length === 1 && children[0].type === 'condition') {
-        return children[0];
-      }
-
-      // Return as a group
       return {
         id: generateId(),
         type: 'group',
-        operator: isFirst ? parentOperator : nodeOperator,
+        operator: 'and', // will be overridden by parent
         children
       };
     };
 
     const tokens = parseTokens(queryString);
     const ast = buildAST(tokens);
-    const builderTree = astToBuilderTree(ast, 'and');
+    const builderTree = astToBuilderTree(ast);
 
     if (!builderTree) {
       return {
