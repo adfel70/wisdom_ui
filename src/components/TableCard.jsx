@@ -22,7 +22,8 @@ import {
   TableChart,
   Info,
   Close,
-  DragIndicator
+  DragIndicator,
+  ContentCopy
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
 
@@ -152,6 +153,21 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
   const handleClosePopup = () => {
     setIsPopupOpen(false);
     setSelectedRow(null);
+  };
+
+  const handleCopyRow = async () => {
+    if (!selectedRow) return;
+
+    const rowContent = columnOrder
+      .map(column => `${column}: ${selectedRow[column] || 'N/A'}`)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(rowContent);
+      // Could add a toast notification here if desired
+    } catch (err) {
+      console.error('Failed to copy row content:', err);
+    }
   };
 
   // Drag and drop handlers for column reordering
@@ -453,12 +469,23 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
               Row Details
             </Typography>
           </Box>
-          <IconButton
-            onClick={handleClosePopup}
-            sx={{ color: 'primary.contrastText' }}
-          >
-            <Close />
-          </IconButton>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Copy row content">
+              <IconButton
+                onClick={handleCopyRow}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'primary.light',
+                  },
+                }}
+              >
+                <ContentCopy fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </DialogTitle>
 
         <DialogContent sx={{ p: 3 }}>
