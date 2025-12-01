@@ -22,6 +22,7 @@ import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
+import TableCardSkeleton from '../components/TableCardSkeleton';
 import EmptyState from '../components/EmptyState';
 import { getDatabaseMetadata, searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
@@ -74,8 +75,8 @@ const SearchResultsPage = () => {
     db4: 1
   });
 
-  // Store loaded table data (only for current page)
-  const [loadedTables, setLoadedTables] = useState([]);
+  // Track which table IDs should be visible for the current page
+  const [visibleTableIds, setVisibleTableIds] = useState([]);
 
   // Loading states
   const [isSearching, setIsSearching] = useState(true); // Step 1: searching for table IDs
@@ -300,14 +301,13 @@ const SearchResultsPage = () => {
     const loadCurrentPageData = async () => {
       const tableIds = matchingTableIds[activeDatabase] || [];
 
-      if (!isCancelled) {
-        setIsLoadingTableData(false);
-      }
-
       if (tableIds.length === 0) {
         tableDataCache.current.clear();
         syncPendingTableIdsWithVisible([]);
-        setLoadedTables([]);
+        if (!isCancelled) {
+          setVisibleTableIds([]);
+          setIsLoadingTableData(false);
+        }
         return;
       }
 
@@ -319,16 +319,15 @@ const SearchResultsPage = () => {
       pruneCacheToVisibleTables(pageTableIds);
       syncPendingTableIdsWithVisible(pageTableIds);
 
-      const cachedTables = pageTableIds
-        .map(id => tableDataCache.current.get(id))
-        .filter(Boolean);
-
       if (!isCancelled) {
-        setLoadedTables(cachedTables);
+        setVisibleTableIds(pageTableIds);
       }
 
       const idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
       if (idsToFetch.length === 0) {
+        if (!isCancelled) {
+          setIsLoadingTableData(false);
+        }
         return;
       }
 
@@ -341,16 +340,10 @@ const SearchResultsPage = () => {
         const newTables = await getMultipleTablesData(idsToFetch);
         if (!isCancelled) {
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
-          const currentTables = pageTableIds
-            .map(id => tableDataCache.current.get(id))
-            .filter(Boolean);
-          setLoadedTables(currentTables);
+          forcePendingRender(tick => tick + 1);
         }
       } catch (error) {
         console.error('Failed to load table data:', error);
-        if (!isCancelled) {
-          // In a real app we might show an error toast.
-        }
       } finally {
         removePendingTableIds(idsToFetch);
         if (!isCancelled) {
@@ -371,7 +364,8 @@ const SearchResultsPage = () => {
     addPendingTableIds,
     removePendingTableIds,
     pruneCacheToVisibleTables,
-    syncPendingTableIdsWithVisible
+    syncPendingTableIdsWithVisible,
+    forcePendingRender
   ]);
 
   // Calculate table counts for all databases
@@ -995,25 +989,34 @@ const SearchResultsPage = () => {
                   <EmptyState type={getEmptyStateType()} />
                 ) : (
                   <AnimatePresence mode='popLayout'>
-                    {loadedTables.map((table) => (
-                      <motion.div
-                        key={table.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <TableCard
-                          table={table}
-                          query={searchQuery}
-                          permutationId={appliedPermutationId}
-                          permutationParams={appliedPermutationParams}
-                          isLoading={pendingTableIdsRef.current.has(table.id)}
-                          onSendToLastPage={handleSendToLastPage}
-                        />
-                      </motion.div>
-                    ))}
+                    {visibleTableIds.map((tableId) => {
+                      const table = tableDataCache.current.get(tableId);
+                      const isPending = pendingTableIdsRef.current.has(tableId);
+
+                      return (
+                        <motion.div
+                          key={tableId}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {table ? (
+                            <TableCard
+                              table={table}
+                              query={searchQuery}
+                              permutationId={appliedPermutationId}
+                              permutationParams={appliedPermutationParams}
+                              isLoading={isPending}
+                              onSendToLastPage={handleSendToLastPage}
+                            />
+                          ) : (
+                            <TableCardSkeleton />
+                          )}
+                        </motion.div>
+                      );
+                    })}
                   </AnimatePresence>
                 )}
               </>
