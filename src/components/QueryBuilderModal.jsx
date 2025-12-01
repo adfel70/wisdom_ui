@@ -388,13 +388,16 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               sx={{
                 fontSize: '0.8125rem',
                 fontWeight: 600,
-                backgroundColor: 'rgba(37, 99, 235, 0.06)',
-                borderRadius: '6px',
+                borderRadius: '20px',
+                backgroundColor: 'white',
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.light',
+                  borderColor: 'grey.300',
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: 'grey.400',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.light',
                 },
               }}
             >
@@ -460,22 +463,21 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       >
         {/* Group container with visual styling */}
         <Paper
-          elevation={isRoot ? 0 : 2}
+          elevation={isRoot ? 0 : 3}
           sx={{
             p: 2.5,
-            pt: isRoot ? 0 : 3.5,
+            pt: isRoot ? 0 : 4.5,
             pl: isRoot ? 0 : 3,
             border: isRoot ? 'none' : 'none',
             borderLeft: isRoot ? 'none' : '3px solid',
             borderLeftColor: isRoot ? 'transparent' : 'primary.main',
             borderColor: isRoot ? 'transparent' : 'transparent',
-            backgroundColor: isRoot ? 'transparent' : '#f0f7ff',
+            backgroundColor: isRoot ? 'transparent' : '#ffffff',
             position: 'relative',
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': !isRoot ? {
-              elevation: 3,
+              backgroundColor: '#f0f7ff',
               boxShadow: '0 10px 25px -5px rgb(37, 99, 235, 0.15), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-              backgroundColor: '#ffffff',
               '& .delete-group-btn': {
                 color: 'error.main',
               }
