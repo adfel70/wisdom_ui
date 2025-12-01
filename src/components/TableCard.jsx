@@ -391,8 +391,6 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
             sx={{
               borderRadius: 0,
               '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid',
-                borderBottomColor: 'divider',
                 borderRight: '0.5px solid',
                 borderRightColor: 'divider',
               },
@@ -400,9 +398,12 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 backgroundColor: 'grey.50',
                 minHeight: '56px !important',
               },
+              "&.MuiDataGrid-root": {
+                "--DataGrid-containerBackground": "#EAF3FF",
+              },
               '& .MuiDataGrid-columnHeader': {
                 padding: 0.5,
-                borderRight: '0.5px solid',
+                borderRight: '1px solid',
                 borderRightColor: 'divider',
                 '&:last-child': {
                   borderRight: 'none',
