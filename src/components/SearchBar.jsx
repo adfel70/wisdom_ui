@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Box, TextField, Button, InputAdornment, Select, MenuItem, IconButton, Tooltip, Chip } from '@mui/material';
 import { Search as SearchIcon, FilterList, ArrowForward, Undo, AutoAwesome, Close } from '@mui/icons-material';
 import { TRANSFORMATIONS, applyTransformation } from '../utils/transformUtils';
@@ -25,69 +25,94 @@ const SearchBar = ({
   const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const [transformValue, setTransformValue] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize tokens from external value prop on mount
-  useEffect(() => {
-    if (!isInitialized && value && typeof value === 'string') {
-      // Parse the value string into tokens
-      const parseValueToTokens = (str) => {
-        const quotedRegex = /"([^"]*)"/g;
-        const quotedParts = [];
-        let match;
+  // Ref to track if we're updating from external value (to avoid infinite loops)
+  const isUpdatingFromValueRef = useRef(false);
+  const onChangeTimeoutRef = useRef(null);
 
-        while ((match = quotedRegex.exec(str)) !== null) {
-          quotedParts.push({
-            start: match.index,
-            end: match.index + match[0].length,
-            value: match[1]
-          });
-        }
+  // Build query string from tokens - defined early so it can be used in effects
+  const buildQueryFromTokens = useCallback(() => {
+    const tokenString = tokens.map(token => {
+      // Wrap quoted terms in quotes to preserve them
+      if (token.quoted) {
+        return `"${token.value}"`;
+      }
+      return token.value;
+    }).join(' ');
+    return tokenString + (currentInput ? ' ' + currentInput : '');
+  }, [tokens, currentInput]);
 
-        const tokens = [];
-        let currentPos = 0;
+  // Parse value string into tokens (helper function)
+  const parseValueToTokens = useCallback((str) => {
+    const quotedRegex = /"([^"]*)"/g;
+    const quotedParts = [];
+    let match;
 
-        quotedParts.forEach(quoted => {
-          if (quoted.start > currentPos) {
-            const nonQuoted = str.substring(currentPos, quoted.start);
-            const words = nonQuoted.trim().split(/\s+/).filter(w => w);
-            words.forEach(word => {
-              const lower = word.toLowerCase();
-              if (lower === 'and' || lower === 'or') {
-                tokens.push({ type: 'keyword', value: lower });
-              } else {
-                tokens.push({ type: 'term', value: word });
-              }
-            });
-          }
-          if (quoted.value) {
-            tokens.push({ type: 'term', value: quoted.value });
-          }
-          currentPos = quoted.end;
-        });
-
-        if (currentPos < str.length) {
-          const remaining = str.substring(currentPos);
-          const words = remaining.trim().split(/\s+/).filter(w => w);
-          words.forEach(word => {
-            const lower = word.toLowerCase();
-            if (lower === 'and' || lower === 'or') {
-              tokens.push({ type: 'keyword', value: lower });
-            } else {
-              tokens.push({ type: 'term', value: word });
-            }
-          });
-        }
-
-        return tokens;
-      };
-
-      const parsedTokens = parseValueToTokens(value);
-      setTokens(cleanupTokens(parsedTokens));
-      setCurrentInput('');
-      setIsInitialized(true);
+    while ((match = quotedRegex.exec(str)) !== null) {
+      quotedParts.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        value: match[1]
+      });
     }
-  }, [value, isInitialized]);
+
+    const tokens = [];
+    let currentPos = 0;
+
+    quotedParts.forEach(quoted => {
+      if (quoted.start > currentPos) {
+        const nonQuoted = str.substring(currentPos, quoted.start);
+        const words = nonQuoted.trim().split(/\s+/).filter(w => w);
+        words.forEach(word => {
+          const lower = word.toLowerCase();
+          if (lower === 'and' || lower === 'or') {
+            tokens.push({ type: 'keyword', value: lower });
+          } else {
+            tokens.push({ type: 'term', value: word });
+          }
+        });
+      }
+      if (quoted.value) {
+        tokens.push({ type: 'term', value: quoted.value, quoted: true });
+      }
+      currentPos = quoted.end;
+    });
+
+    if (currentPos < str.length) {
+      const remaining = str.substring(currentPos);
+      const words = remaining.trim().split(/\s+/).filter(w => w);
+      words.forEach(word => {
+        const lower = word.toLowerCase();
+        if (lower === 'and' || lower === 'or') {
+          tokens.push({ type: 'keyword', value: lower });
+        } else {
+          tokens.push({ type: 'term', value: word });
+        }
+      });
+    }
+
+    return tokens;
+  }, []);
+
+  // Initialize tokens from external value prop on mount or when value changes
+  useEffect(() => {
+    // Only parse if value is provided and different from current state
+    if (value && typeof value === 'string') {
+      const currentQuery = buildQueryFromTokens().trim();
+
+      // Only re-parse if the value is different from current query
+      if (value !== currentQuery) {
+        isUpdatingFromValueRef.current = true;
+        const parsedTokens = parseValueToTokens(value);
+        setTokens(cleanupTokens(parsedTokens));
+        setCurrentInput('');
+        // Reset flag after a short delay
+        setTimeout(() => {
+          isUpdatingFromValueRef.current = false;
+        }, 100);
+      }
+    }
+  }, [value, buildQueryFromTokens, parseValueToTokens]);
 
   // Reset transform state when search bar becomes completely empty
   useEffect(() => {
@@ -98,13 +123,33 @@ const SearchBar = ({
     }
   }, [tokens, currentInput, hasTransformed]);
 
-  // Notify parent component of changes to keep state synchronized
+  // Notify parent component of changes with debouncing to prevent choppy typing
   useEffect(() => {
-    if (onChange) {
-      const query = buildQueryFromTokens().trim();
-      onChange(query);
+    // Don't notify if we're updating from external value (avoid infinite loop)
+    if (isUpdatingFromValueRef.current) {
+      return;
     }
-  }, [tokens, currentInput]);
+
+    if (onChange) {
+      // Clear existing timeout
+      if (onChangeTimeoutRef.current) {
+        clearTimeout(onChangeTimeoutRef.current);
+      }
+
+      // Debounce the onChange call to prevent excessive re-renders
+      onChangeTimeoutRef.current = setTimeout(() => {
+        const query = buildQueryFromTokens().trim();
+        onChange(query);
+      }, 150); // 150ms debounce
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (onChangeTimeoutRef.current) {
+        clearTimeout(onChangeTimeoutRef.current);
+      }
+    };
+  }, [tokens, currentInput, onChange, buildQueryFromTokens]);
 
   // Check if a word is a keyword (case-insensitive)
   const isKeyword = (word) => {
@@ -227,18 +272,6 @@ const SearchBar = ({
       return true;
     }
     return false;
-  };
-
-  // Build query string from tokens for submission
-  const buildQueryFromTokens = () => {
-    const tokenString = tokens.map(token => {
-      // Wrap quoted terms in quotes to preserve them
-      if (token.quoted) {
-        return `"${token.value}"`;
-      }
-      return token.value;
-    }).join(' ');
-    return tokenString + (currentInput ? ' ' + currentInput : '');
   };
 
   // Execute search with current tokens
