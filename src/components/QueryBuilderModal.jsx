@@ -235,21 +235,50 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             value: childNode.value,
             operator: connectingOperator
           };
+        } else if (childNode.explicitlyParenthesized && (childNode.type === 'and' || childNode.type === 'or')) {
+          // Handle parenthesized operator nodes directly to avoid infinite recursion
+          // Flatten internal children while respecting the parenthesis boundary
+          const op = childNode.type;
+          const flattenInternal = (node) => {
+            if (!node) return [];
+            if (node.type === op) {
+              return [...flattenInternal(node.left), ...flattenInternal(node.right)];
+            }
+            return [node];
+          };
+
+          const innerChildren = flattenInternal(childNode).map((n, i) => {
+            if (n.type === 'term') {
+              return {
+                id: generateId(),
+                type: 'condition',
+                value: n.value,
+                operator: op
+              };
+            } else {
+              // Recursively process nested operators
+              const nested = astToBuilderTree(n);
+              return {
+                ...nested,
+                operator: op
+              };
+            }
+          });
+
+          return {
+            id: generateId(),
+            type: 'group',
+            operator: connectingOperator,
+            children: innerChildren
+          };
         } else {
           // Recursively convert operator nodes
           const nested = astToBuilderTree(childNode);
 
-          if (nested.type === 'group') {
-            return {
-              ...nested,
-              operator: connectingOperator
-            };
-          } else {
-            return {
-              ...nested,
-              operator: connectingOperator
-            };
-          }
+          return {
+            ...nested,
+            operator: connectingOperator
+          };
         }
       });
 
