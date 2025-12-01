@@ -85,8 +85,7 @@ const CustomColumnMenu = (props) => {
     <GridColumnMenuContainer 
       {...props}
       sx={{
-        border: '0.5px solid gray',
-        borderRadius: 2,              
+        borderRadius: 1,              
         boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
     }}>
       <GridColumnMenuSortItem colDef={colDef} onClick={hideMenu} />
@@ -462,7 +461,7 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 minHeight: '56px !important',
               },
               '& .MuiDataGrid-columnHeader': {
-                backgroundColor: '#F5F5F5',
+                backgroundColor: '#F1F1F1',
                 padding: 0.5,
                 borderRight: '1px solid',
                 borderRightColor: 'divider',
