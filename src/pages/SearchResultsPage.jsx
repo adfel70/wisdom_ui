@@ -418,6 +418,7 @@ const SearchResultsPage = () => {
   };
 
   const handlePermutationChange = (newPermutationId) => {
+    // Update permutation state
     setPermutationId(newPermutationId);
 
     // Reset all database pages to 1 when permutation changes
@@ -428,7 +429,8 @@ const SearchResultsPage = () => {
       db4: 1
     });
 
-    // Update URL with new permutation (preserve query and filters)
+    // Trigger a new search with current input value (like clicking search button)
+    // This ensures we use the latest search bar state
     const params = new URLSearchParams({ q: inputValue, page: '1' });
 
     // Add permutation if selected
