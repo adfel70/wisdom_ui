@@ -30,10 +30,10 @@ import { highlightText } from '../utils/searchUtils';
  * HighlightedText Component
  * Highlights matching text in search results
  */
-const HighlightedText = ({ text, query }) => {
+const HighlightedText = ({ text, query, permutationId = 'none', permutationParams = {} }) => {
   if (!query || !text) return <span>{text}</span>;
 
-  const parts = highlightText(text, query);
+  const parts = highlightText(text, query, permutationId, permutationParams);
 
   return (
     <span>
@@ -43,10 +43,9 @@ const HighlightedText = ({ text, query }) => {
             key={index}
             component="span"
             sx={{
-              backgroundColor: 'primary.light',
-              color: 'primary.contrastText',
-              fontWeight: 600,
-              px: 0.5,
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              color: 'primary.main',
+              fontWeight: 500,
               borderRadius: 0.5,
             }}
           >
@@ -117,7 +116,7 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query }) => {
+const TableCard = ({ table, query, permutationId = 'none', permutationParams = {} }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -407,7 +406,7 @@ const TableCard = ({ table, query }) => {
                 backgroundColor: 'action.selected',
               },
             }}
-          />
+         />
         </CardContent>
       </Collapse>
 

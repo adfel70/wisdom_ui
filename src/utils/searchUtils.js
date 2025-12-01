@@ -2,6 +2,38 @@
  * Search and filter utilities for database operations
  */
 
+import { applyPermutation } from './permutationUtils';
+
+/**
+ * Expand all terms in groups with permutations
+ * @param {Array} groups - Array of AND groups (each group is an array of terms)
+ * @param {string} permutationId - The permutation to apply (e.g., 'reverse', 'double', 'none')
+ * @param {Object} permutationParams - Parameters for the permutation function
+ * @returns {Object} Object containing expanded groups and all variants for display
+ */
+const expandGroupsWithPermutations = (groups, permutationId, permutationParams = {}) => {
+  if (!permutationId || permutationId === 'none') {
+    return {
+      expandedGroups: groups,
+      allVariants: {}
+    };
+  }
+
+  const allVariants = {}; // Track all variants for each original term
+  const expandedGroups = groups.map(group => {
+    return group.map(term => {
+      const variants = applyPermutation(term, permutationId, permutationParams);
+      allVariants[term] = variants;
+      return variants;
+    });
+  });
+
+  return {
+    expandedGroups,
+    allVariants
+  };
+};
+
 /**
  * Parse tokens into OR groups, where each group contains AND-connected terms
  * Example: [jake, and, sarah, or, mike, and, john] => [[jake, sarah], [mike, john]]
@@ -37,11 +69,22 @@ const parseTokensToGroups = (tokens) => {
 /**
  * Check if a row matches a group of AND-connected terms
  * @param {Object} row - Table row object
- * @param {Array} terms - Array of search terms (all must match)
+ * @param {Array} terms - Array of search terms or arrays of term variants (all must match)
  * @returns {boolean} True if row matches all terms
  */
 const rowMatchesAndGroup = (row, terms) => {
   return terms.every(term => {
+    // If term is an array (permutation variants), check if ANY variant matches (OR)
+    if (Array.isArray(term)) {
+      return term.some(variant => {
+        const lowerVariant = variant.toLowerCase();
+        return Object.values(row).some(value =>
+          String(value).toLowerCase().includes(lowerVariant)
+        );
+      });
+    }
+
+    // Single term (no permutation)
     const lowerTerm = term.toLowerCase();
     return Object.values(row).some(value =>
       String(value).toLowerCase().includes(lowerTerm)
@@ -129,9 +172,11 @@ const parseQueryString = (queryString) => {
  * Search through table data for matching values
  * @param {Array} tables - Array of table objects
  * @param {string|Object} query - Search query string OR object with {tokens, currentInput}
+ * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Filtered tables with matching data
  */
-export const searchTables = (tables, query) => {
+export const searchTables = (tables, query, permutationId = 'none', permutationParams = {}) => {
   // Handle empty query
   if (!query) return tables;
 
@@ -163,11 +208,14 @@ export const searchTables = (tables, query) => {
     groups.push(...inputGroups);
   }
 
+  // Apply permutations to expand terms
+  const { expandedGroups } = expandGroupsWithPermutations(groups, permutationId, permutationParams);
+
   // Filter tables
   return tables
     .map(table => {
       const filteredData = table.data.filter(row =>
-        rowMatchesQuery(row, groups)
+        rowMatchesQuery(row, expandedGroups)
       );
 
       return {
@@ -238,9 +286,11 @@ export const filterTables = (tables, filters) => {
  * @param {Array} tables - Array of table objects
  * @param {string} query - Search query
  * @param {Object} filters - Filter criteria
+ * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Filtered and searched tables
  */
-export const applySearchAndFilters = (tables, query, filters) => {
+export const applySearchAndFilters = (tables, query, filters, permutationId = 'none', permutationParams = {}) => {
   let result = tables;
 
   // Apply filters first
@@ -248,22 +298,44 @@ export const applySearchAndFilters = (tables, query, filters) => {
     result = filterTables(result, filters);
   }
 
-  // Then apply search
+  // Then apply search with permutations
   if (query && query.trim()) {
-    result = searchTables(result, query);
+    result = searchTables(result, query, permutationId, permutationParams);
   }
 
   return result;
 };
 
 /**
+ * Get expanded query information for display purposes
+ * Returns the original terms and their permuted variants
+ * @param {string} query - Search query string
+ * @param {string} permutationId - The permutation ID to apply
+ * @param {Object} permutationParams - Optional parameters for the permutation function
+ * @returns {Object} Object with original terms and their variants
+ */
+export const getExpandedQueryInfo = (query, permutationId, permutationParams = {}) => {
+  if (!query || !permutationId || permutationId === 'none') {
+    return null;
+  }
+
+  const tokens = parseQueryString(query);
+  const groups = parseTokensToGroups(tokens);
+  const { allVariants } = expandGroupsWithPermutations(groups, permutationId, permutationParams);
+
+  return allVariants;
+};
+
+/**
  * Highlight matching text in search results
- * Supports both simple queries and complex AND/OR queries
+ * Supports both simple queries and complex AND/OR queries with permutations
  * @param {string} text - Text to highlight
  * @param {string|Object} query - Search query (string or {tokens, currentInput})
+ * @param {string} permutationId - Optional permutation to apply to search terms
+ * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Array of text parts with highlighting info
  */
-export const highlightText = (text, query) => {
+export const highlightText = (text, query, permutationId = 'none', permutationParams = {}) => {
   if (!query || !text) return [{ text, highlight: false }];
 
   // Extract search terms from query (excluding keywords)
@@ -292,8 +364,18 @@ export const highlightText = (text, query) => {
     return [{ text, highlight: false }];
   }
 
-  // Build regex pattern to match any of the search terms
-  const escapedTerms = searchTerms.map(term =>
+  // Expand search terms with permutations if applicable
+  let allTermsToHighlight = searchTerms;
+  if (permutationId && permutationId !== 'none') {
+    allTermsToHighlight = [];
+    searchTerms.forEach(term => {
+      const variants = applyPermutation(term, permutationId, permutationParams);
+      allTermsToHighlight.push(...variants);
+    });
+  }
+
+  // Build regex pattern to match any of the search terms (including permutations)
+  const escapedTerms = allTermsToHighlight.map(term =>
     term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   );
   const pattern = `(${escapedTerms.join('|')})`;
@@ -301,7 +383,7 @@ export const highlightText = (text, query) => {
 
   const parts = String(text).split(regex);
   return parts.map(part => {
-    const shouldHighlight = searchTerms.some(term =>
+    const shouldHighlight = allTermsToHighlight.some(term =>
       part.toLowerCase() === term.toLowerCase()
     );
     return {
@@ -315,5 +397,6 @@ export default {
   searchTables,
   filterTables,
   applySearchAndFilters,
-  highlightText
+  highlightText,
+  getExpandedQueryInfo
 };
