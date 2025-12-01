@@ -39,6 +39,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   }
 
   // Parse query string into builder tree structure
+  // Simple direct parser: respects parentheses as group boundaries, no flattening
   const parseQueryToTree = (queryString) => {
     if (!queryString || !queryString.trim()) {
       return {
@@ -51,13 +52,14 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       };
     }
 
-    // Parse using the same logic as search (with proper AST)
-    const parseTokens = (str) => {
+    // Tokenize: split by whitespace/parens, handle quoted strings
+    const tokenize = (str) => {
       const tokens = [];
       const quotedRegex = /"([^"]*)"/g;
       const quotedParts = [];
       let match;
 
+      // Find all quoted strings
       while ((match = quotedRegex.exec(str)) !== null) {
         quotedParts.push({
           start: match.index,
@@ -67,7 +69,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       }
 
       let currentPos = 0;
-      const parseNonQuoted = (text) => {
+
+      // Parse non-quoted portions
+      const parseSegment = (text) => {
         const result = [];
         let i = 0;
         let word = '';
@@ -77,23 +81,21 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           if (char === '(' || char === ')') {
             if (word.trim()) {
               const lower = word.trim().toLowerCase();
-              if (lower === 'and' || lower === 'or') {
-                result.push({ type: 'keyword', value: lower });
-              } else {
-                result.push({ type: 'term', value: word.trim() });
-              }
+              result.push({
+                type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
+                value: lower === 'and' || lower === 'or' ? lower : word.trim()
+              });
               word = '';
             }
             result.push({ type: 'parenthesis', value: char });
             i++;
-          } else if (char === ' ' || char === '\t' || char === '\n') {
+          } else if (/\s/.test(char)) {
             if (word.trim()) {
               const lower = word.trim().toLowerCase();
-              if (lower === 'and' || lower === 'or') {
-                result.push({ type: 'keyword', value: lower });
-              } else {
-                result.push({ type: 'term', value: word.trim() });
-              }
+              result.push({
+                type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
+                value: lower === 'and' || lower === 'or' ? lower : word.trim()
+              });
               word = '';
             }
             i++;
@@ -102,199 +104,96 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             i++;
           }
         }
+
         if (word.trim()) {
           const lower = word.trim().toLowerCase();
-          if (lower === 'and' || lower === 'or') {
-            result.push({ type: 'keyword', value: lower });
-          } else {
-            result.push({ type: 'term', value: word.trim() });
-          }
+          result.push({
+            type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
+            value: lower === 'and' || lower === 'or' ? lower : word.trim()
+          });
         }
+
         return result;
       };
 
+      // Process segments between quoted strings
       quotedParts.forEach(quoted => {
         if (quoted.start > currentPos) {
-          const nonQuoted = str.substring(currentPos, quoted.start);
-          tokens.push(...parseNonQuoted(nonQuoted));
+          tokens.push(...parseSegment(str.substring(currentPos, quoted.start)));
         }
-        if (quoted.value) {
-          tokens.push({ type: 'term', value: quoted.value });
-        }
+        tokens.push({ type: 'term', value: quoted.value });
         currentPos = quoted.end;
       });
 
       if (currentPos < str.length) {
-        const remaining = str.substring(currentPos);
-        tokens.push(...parseNonQuoted(remaining));
+        tokens.push(...parseSegment(str.substring(currentPos)));
       }
 
       return tokens;
     };
 
-    // Build AST (same as search logic)
-    const buildAST = (tokens) => {
-      if (tokens.length === 0) return null;
+    // Simple recursive parser that respects parentheses literally
+    const parseTokens = (tokens) => {
       let index = 0;
 
-      const parseOr = () => {
-        let left = parseAnd();
-        while (index < tokens.length && tokens[index].type === 'keyword' && tokens[index].value === 'or') {
-          index++;
-          const right = parseAnd();
-          left = { type: 'or', left, right };
-        }
-        return left;
-      };
-
-      const parseAnd = () => {
-        let left = parsePrimary();
-        while (index < tokens.length && tokens[index].type === 'keyword' && tokens[index].value === 'and') {
-          index++;
-          const right = parsePrimary();
-          left = { type: 'and', left, right };
-        }
-        return left;
-      };
-
-      const parsePrimary = () => {
-        if (index < tokens.length && tokens[index].type === 'parenthesis' && tokens[index].value === '(') {
-          index++;
-          const expr = parseOr();
-          if (index < tokens.length && tokens[index].type === 'parenthesis' && tokens[index].value === ')') {
-            index++;
-          }
-          // Mark this expression as explicitly parenthesized so we preserve the grouping
-          return { ...expr, explicitlyParenthesized: true };
-        }
-        if (index < tokens.length && tokens[index].type === 'term') {
-          const term = tokens[index];
-          index++;
-          return { type: 'term', value: term.value };
-        }
-        if (index < tokens.length) {
-          index++;
-          return parsePrimary();
-        }
-        return null;
-      };
-
-      return parseOr();
-    };
-
-    // Convert AST to builder tree format
-    // Preserves explicit parentheses - never flattens parenthesized expressions
-    const astToBuilderTree = (astNode) => {
-      if (!astNode) return null;
-
-      // Base case: term becomes a condition
-      if (astNode.type === 'term') {
-        return {
-          id: generateId(),
-          type: 'condition',
-          value: astNode.value,
-          operator: 'and' // will be set by parent
-        };
-      }
-
-      // If this node is explicitly parenthesized, ALWAYS create a group for it, even if it's logically equivalent
-      const isExplicitlyParenthesized = astNode.explicitlyParenthesized === true;
-      const currentOperator = astNode.type; // 'and' or 'or'
-
-      // Flatten helper: respects explicit parentheses
-      const flattenSameOperator = (node) => {
-        if (!node) return [];
-
-        // NEVER flatten explicitly parenthesized nodes - preserve their boundaries
-        if (node.explicitlyParenthesized) {
-          return [node];
-        }
-
-        // Flatten nodes with same operator only if not explicitly parenthesized
-        if (node.type === currentOperator) {
-          return [
-            ...flattenSameOperator(node.left),
-            ...flattenSameOperator(node.right)
-          ];
-        } else {
-          // Different operator - this is ONE child, don't flatten further
-          return [node];
-        }
-      };
-
-      const flattenedChildren = flattenSameOperator(astNode);
-
-      // Convert each child node
-      const children = flattenedChildren.map((childNode, index) => {
-        const connectingOperator = currentOperator;
-
-        if (childNode.type === 'term') {
-          return {
-            id: generateId(),
-            type: 'condition',
-            value: childNode.value,
-            operator: connectingOperator
-          };
-        } else if (childNode.explicitlyParenthesized && (childNode.type === 'and' || childNode.type === 'or')) {
-          // Handle parenthesized operator nodes directly to avoid infinite recursion
-          // Flatten internal children while respecting the parenthesis boundary
-          const op = childNode.type;
-          const flattenInternal = (node) => {
-            if (!node) return [];
-            if (node.type === op) {
-              return [...flattenInternal(node.left), ...flattenInternal(node.right)];
-            }
-            return [node];
-          };
-
-          const innerChildren = flattenInternal(childNode).map((n, i) => {
-            if (n.type === 'term') {
-              return {
-                id: generateId(),
-                type: 'condition',
-                value: n.value,
-                operator: op
-              };
-            } else {
-              // Recursively process nested operators
-              const nested = astToBuilderTree(n);
-              return {
-                ...nested,
-                operator: op
-              };
-            }
-          });
-
-          return {
-            id: generateId(),
-            type: 'group',
-            operator: connectingOperator,
-            children: innerChildren
-          };
-        } else {
-          // Recursively convert operator nodes
-          const nested = astToBuilderTree(childNode);
-
-          return {
-            ...nested,
-            operator: connectingOperator
-          };
-        }
-      });
-
-      return {
+      const createGroup = (operator = 'and') => ({
         id: generateId(),
         type: 'group',
-        operator: 'and', // will be overridden by parent
-        children
+        operator,
+        children: []
+      });
+
+      const parseGroup = (operator = 'and') => {
+        const group = createGroup(operator);
+        let nextOp = 'and';
+
+        while (index < tokens.length) {
+          const token = tokens[index];
+
+          if (token.type === 'term') {
+            group.children.push({
+              id: generateId(),
+              type: 'condition',
+              value: token.value,
+              operator: nextOp
+            });
+            nextOp = 'and'; // Reset to default
+            index++;
+          } else if (token.type === 'keyword') {
+            nextOp = token.value; // 'and' or 'or'
+            index++;
+          } else if (token.type === 'parenthesis' && token.value === '(') {
+            index++; // Skip '('
+            const subGroup = parseGroup(nextOp); // Recurse with operator that applies to this group
+            group.children.push({
+              ...subGroup,
+              operator: nextOp
+            });
+            nextOp = 'and'; // Reset after using
+            // Skip the matching ')'
+            if (index < tokens.length && tokens[index].type === 'parenthesis' && tokens[index].value === ')') {
+              index++;
+            }
+          } else if (token.type === 'parenthesis' && token.value === ')') {
+            // End of this group
+            break;
+          } else {
+            index++;
+          }
+        }
+
+        return group;
       };
+
+      const tokens_array = tokens;
+      return parseGroup('and');
     };
 
-    const tokens = parseTokens(queryString);
-    const ast = buildAST(tokens);
-    const builderTree = astToBuilderTree(ast);
+    const tokens = tokenize(queryString);
+    const tree = parseTokens(tokens);
 
-    if (!builderTree) {
+    // Ensure we have a valid root
+    if (!tree || !tree.children || tree.children.length === 0) {
       return {
         id: 'root',
         type: 'group',
@@ -305,19 +204,8 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       };
     }
 
-    // Wrap in root if not already a group
-    if (builderTree.type === 'condition') {
-      return {
-        id: 'root',
-        type: 'group',
-        operator: 'and',
-        children: [builderTree]
-      };
-    }
-
-    // Make it the root
     return {
-      ...builderTree,
+      ...tree,
       id: 'root'
     };
   };
