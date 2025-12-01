@@ -633,36 +633,37 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ backgroundColor: '#fafbfc' }}>
+      <DialogContent dividers sx={{ backgroundColor: '#fafbfc', overflowY: 'auto' }}>
         <Box sx={{ minHeight: 200 }}>
           {renderGroup(queryTree, true)}
         </Box>
-
-        {/* Preview */}
-        <Box sx={{
-          mt: 3,
-          p: 2,
-          backgroundColor: 'grey.100',
-          borderRadius: 2,
-          border: '1px solid',
-          borderColor: 'grey.200',
-          transition: 'all 0.2s ease',
-        }}>
-          <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
-            Query Preview
-          </Typography>
-          <Typography variant="body2" sx={{
-            fontFamily: 'monospace',
-            wordBreak: 'break-word',
-            color: 'text.primary',
-            mt: 1,
-            fontSize: '0.875rem',
-            lineHeight: 1.6,
-          }}>
-            {buildQueryString(queryTree) || <span style={{ color: '#cbd5e1' }}>(empty)</span>}
-          </Typography>
-        </Box>
       </DialogContent>
+
+      {/* Preview - pinned to bottom */}
+      <Box sx={{
+        p: 2,
+        backgroundColor: 'grey.100',
+        borderRadius: 0,
+        border: '1px solid',
+        borderColor: 'grey.200',
+        transition: 'all 0.2s ease',
+        borderTop: '1px solid',
+        borderTopColor: 'grey.200',
+      }}>
+        <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
+          Query Preview
+        </Typography>
+        <Typography variant="body2" sx={{
+          fontFamily: 'monospace',
+          wordBreak: 'break-word',
+          color: 'text.primary',
+          mt: 1,
+          fontSize: '0.875rem',
+          lineHeight: 1.6,
+        }}>
+          {buildQueryString(queryTree) || <span style={{ color: '#cbd5e1' }}>(empty)</span>}
+        </Typography>
+      </Box>
 
       <DialogActions sx={{ pt: 2, pb: 2, px: 3, backgroundColor: 'grey.50' }}>
         <Button onClick={handleCancel} sx={{ color: 'text.secondary' }}>Cancel</Button>
