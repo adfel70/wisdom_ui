@@ -40,6 +40,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Parse query string into builder tree structure
   const parseQueryToTree = (queryString) => {
+    console.log('=== parseQueryToTree START ===');
+    console.log('Input queryString:', queryString);
+
     if (!queryString || !queryString.trim()) {
       return {
         id: 'root',
@@ -263,8 +266,13 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     };
 
     const tokens = parseTokens(queryString);
+    console.log('Parsed tokens:', JSON.stringify(tokens));
+
     const ast = buildAST(tokens);
+    console.log('Built AST:', JSON.stringify(ast, null, 2));
+
     const builderTree = astToBuilderTree(ast);
+    console.log('Built tree from AST:', JSON.stringify(builderTree, null, 2));
 
     if (!builderTree) {
       return {
@@ -288,17 +296,22 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     }
 
     // Make it the root
-    return {
+    const finalTree = {
       ...builderTree,
       id: 'root',
       combiningOperator: builderTree.combiningOperator || 'and'
     };
+    console.log('Final tree returned:', JSON.stringify(finalTree, null, 2));
+    console.log('=== parseQueryToTree END ===');
+    return finalTree;
   };
 
   // Initialize tree from initialQuery when modal opens
   useEffect(() => {
+    console.log('useEffect triggered: open=', open, 'initialQuery=', initialQuery);
     if (open) {
       const parsedTree = parseQueryToTree(initialQuery);
+      console.log('Setting queryTree to:', JSON.stringify(parsedTree, null, 2));
       setQueryTree(parsedTree);
     }
   }, [open, initialQuery]);
@@ -402,7 +415,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
       for (let i = 1; i < node.children.length; i++) {
         const child = node.children[i];
+        console.log(`buildQueryString: Processing child ${i}:`, JSON.stringify(child, null, 2));
         const childStr = buildQueryString(child);
+        console.log(`buildQueryString: child ${i} produced string: "${childStr}"`);
         if (!childStr) continue;
 
         const op = child.operator.toLowerCase();
@@ -411,14 +426,17 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         // This ensures "(a OR b) AND c" instead of "a OR (b AND c)"
         if (prevOp && prevOp !== op) {
           result = `(${result})`;
+          console.log(`buildQueryString: Operator changed from ${prevOp} to ${op}, wrapped result to: "${result}"`);
         }
 
         result = `${result} ${op.toUpperCase()} ${childStr}`;
         prevOp = op;
       }
 
+      const finalResult = node.id === 'root' ? result : `(${result})`;
+      console.log(`buildQueryString: Group ${node.id} returning: "${finalResult}"`);
       // Add parentheses for non-root groups
-      return node.id === 'root' ? result : `(${result})`;
+      return finalResult;
     }
 
     return '';
