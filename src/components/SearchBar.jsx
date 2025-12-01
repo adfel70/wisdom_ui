@@ -104,6 +104,12 @@ const SearchBar = ({
     return lower === 'and' || lower === 'or';
   };
 
+  // Check if there's an unclosed quote in the input
+  const hasUnclosedQuote = (str) => {
+    const quoteCount = (str.match(/"/g) || []).length;
+    return quoteCount % 2 !== 0;
+  };
+
   // Parse quoted strings and regular tokens
   const parseInput = (input) => {
     // Replace commas with spaces (treat commas as separators)
@@ -209,6 +215,12 @@ const SearchBar = ({
 
     // Check if user just typed a space after a keyword
     if (newValue.endsWith(' ')) {
+      // Don't auto-parse if we're inside an open quote
+      if (hasUnclosedQuote(newValue)) {
+        setCurrentInput(newValue);
+        return;
+      }
+
       // Replace commas with spaces for parsing
       const normalized = newValue.replace(/,/g, ' ');
       const words = normalized.trim().split(/\s+/).filter(w => w);
