@@ -458,7 +458,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         key={group.id}
         sx={{
           position: 'relative',
-          mb: isRoot ? 0 : 2,
+          mb: isRoot ? 0 : 3.5,
         }}
       >
         {/* Group container with visual styling */}
@@ -476,7 +476,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             position: 'relative',
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': !isRoot ? {
-              backgroundColor: '#f0f7ff',
               boxShadow: '0 10px 25px -5px rgb(37, 99, 235, 0.15), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
               '& .delete-group-btn': {
                 color: 'error.main',
@@ -501,25 +500,22 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                 onChange={(e) => updateNodeOperator(group.id, e.target.value)}
                 sx={{
                   fontSize: '0.8125rem',
-                  fontWeight: 700,
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  borderRadius: '6px',
-                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
-                  transition: 'all 0.2s ease',
+                  fontWeight: 600,
+                  borderRadius: '20px',
+                  backgroundColor: 'white',
                   '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'transparent',
+                    borderColor: 'grey.300',
                   },
-                  '&:hover': {
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'grey.400',
                   },
-                  '& .MuiSvgIcon-root': {
-                    color: 'white',
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.light',
                   },
                 }}
               >
-                <MenuItem value="and" sx={{ fontSize: '0.875rem' }}>AND</MenuItem>
-                <MenuItem value="or" sx={{ fontSize: '0.875rem' }}>OR</MenuItem>
+                <MenuItem value="and">AND</MenuItem>
+                <MenuItem value="or">OR</MenuItem>
               </Select>
             </FormControl>
           )}
