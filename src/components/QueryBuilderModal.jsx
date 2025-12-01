@@ -14,7 +14,7 @@ import {
   Typography,
   Paper,
 } from '@mui/material';
-import { Close as CloseIcon, Add, Delete } from '@mui/icons-material';
+import { Close as CloseIcon, Add, Close as DeleteIcon } from '@mui/icons-material';
 
 /**
  * QueryBuilderModal Component
@@ -364,14 +364,34 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Render a condition (input field)
   const renderCondition = (condition, isFirst, parentId) => {
+    const [hoverCondition, setHoverCondition] = useState(false);
+
     return (
-      <Box key={condition.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+      <Box
+        key={condition.id}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 1.5,
+          '&:hover': {
+            '& .delete-condition-btn': {
+              opacity: 1,
+            }
+          }
+        }}
+        onMouseEnter={() => setHoverCondition(true)}
+        onMouseLeave={() => setHoverCondition(false)}
+      >
         {/* Operator dropdown - only show if not the first condition */}
         {!isFirst && (
           <FormControl size="small" sx={{ minWidth: 80 }}>
             <Select
               value={condition.operator}
               onChange={(e) => updateNodeOperator(condition.id, e.target.value)}
+              sx={{
+                fontSize: '0.875rem',
+              }}
             >
               <MenuItem value="and">AND</MenuItem>
               <MenuItem value="or">OR</MenuItem>
@@ -382,20 +402,40 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         {/* Input field */}
         <TextField
           size="small"
-          fullWidth
           value={condition.value}
           onChange={(e) => updateNodeValue(condition.id, e.target.value)}
           placeholder="Enter search term..."
-          sx={{ flex: 1 }}
+          sx={{
+            width: '50%',
+            '& .MuiOutlinedInput-root': {
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                borderColor: 'primary.light',
+              },
+              '&.Mui-focused': {
+                borderColor: 'primary.main',
+              }
+            }
+          }}
         />
 
-        {/* Delete button */}
+        {/* Delete button - shows on hover */}
         <IconButton
+          className="delete-condition-btn"
           size="small"
           onClick={() => deleteNode(condition.id)}
-          color="error"
+          sx={{
+            color: 'text.secondary',
+            opacity: 0,
+            transition: 'opacity 0.2s ease, color 0.2s ease',
+            '&:hover': {
+              color: 'error.main',
+              backgroundColor: 'error.light',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            }
+          }}
         >
-          <Delete fontSize="small" />
+          <DeleteIcon fontSize="small" />
         </IconButton>
       </Box>
     );
@@ -404,24 +444,33 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   // Render a group (nested container with conditions and/or groups)
   const renderGroup = (group, isRoot = false) => {
     const children = group.children || [];
+    const [hoverGroup, setHoverGroup] = useState(false);
 
     return (
       <Box
         key={group.id}
         sx={{
           position: 'relative',
-          mb: 2,
+          mb: isRoot ? 0 : 2,
         }}
       >
         {/* Group container with visual styling */}
         <Paper
-          elevation={isRoot ? 0 : 3}
+          elevation={isRoot ? 0 : 1}
+          onMouseEnter={() => setHoverGroup(true)}
+          onMouseLeave={() => setHoverGroup(false)}
           sx={{
-            p: 2,
+            p: 2.5,
+            pt: isRoot ? 0 : 3.5,
             border: isRoot ? 'none' : '1px solid',
-            borderColor: isRoot ? 'transparent' : 'grey.300',
-            backgroundColor: isRoot ? 'transparent' : 'grey.50',
+            borderColor: isRoot ? 'transparent' : 'grey.200',
+            backgroundColor: isRoot ? 'transparent' : '#ffffff',
             position: 'relative',
+            transition: 'all 0.2s ease',
+            '&:hover': !isRoot ? {
+              borderColor: 'grey.300',
+              boxShadow: '0 2px 4px -1px rgb(0 0 0 / 0.08)',
+            } : {},
           }}
         >
           {/* Operator badge for non-root groups - positioned half in/half out */}
@@ -430,7 +479,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               size="small"
               sx={{
                 position: 'absolute',
-                top: -14,
+                top: -12,
                 left: 16,
                 minWidth: 80,
                 backgroundColor: 'white',
@@ -441,9 +490,10 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
                 value={group.operator}
                 onChange={(e) => updateNodeOperator(group.id, e.target.value)}
                 sx={{
+                  fontSize: '0.875rem',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'primary.main',
-                    borderWidth: 2,
+                    borderWidth: 1.5,
                   },
                 }}
               >
@@ -453,24 +503,30 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             </FormControl>
           )}
 
-          {/* Delete button for groups (top-right corner) */}
+          {/* Delete button for groups - distinctly styled */}
           {!isRoot && (
             <IconButton
               size="small"
               onClick={() => deleteNode(group.id)}
-              color="error"
               sx={{
                 position: 'absolute',
                 top: 8,
                 right: 8,
+                color: hoverGroup ? 'error.main' : 'text.secondary',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'error.light',
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  color: 'error.main',
+                }
               }}
             >
-              <Delete fontSize="small" />
+              <DeleteIcon fontSize="small" />
             </IconButton>
           )}
 
           {/* Render all children */}
-          <Box sx={{ mt: isRoot ? 0 : 2 }}>
+          <Box sx={{ mt: isRoot ? 0 : 0 }}>
             {children.map((child, index) => {
               if (child.type === 'condition') {
                 return renderCondition(child, index === 0, group.id);
@@ -488,6 +544,10 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               size="small"
               startIcon={<Add />}
               onClick={() => addCondition(group.id)}
+              sx={{
+                fontSize: '0.8125rem',
+                padding: '6px 12px',
+              }}
             >
               Add Condition
             </Button>
@@ -496,6 +556,10 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
               size="small"
               startIcon={<Add />}
               onClick={() => addGroup(group.id)}
+              sx={{
+                fontSize: '0.8125rem',
+                padding: '6px 12px',
+              }}
             >
               Add Group
             </Button>
@@ -511,36 +575,56 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       onClose={handleCancel}
       maxWidth="md"
       fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: '12px',
+        }
+      }}
     >
-      <DialogTitle>
+      <DialogTitle sx={{ pb: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6">Query Builder</Typography>
-          <IconButton onClick={handleCancel} size="small">
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Query Builder</Typography>
+          <IconButton onClick={handleCancel} size="small" sx={{ color: 'text.secondary' }}>
             <CloseIcon />
           </IconButton>
         </Box>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent dividers sx={{ backgroundColor: '#fafbfc' }}>
         <Box sx={{ minHeight: 200 }}>
           {renderGroup(queryTree, true)}
         </Box>
 
         {/* Preview */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
-          <Typography variant="caption" color="text.secondary" gutterBottom>
-            Query Preview:
+        <Box sx={{
+          mt: 3,
+          p: 2,
+          backgroundColor: 'grey.100',
+          borderRadius: 2,
+          border: '1px solid',
+          borderColor: 'grey.200',
+          transition: 'all 0.2s ease',
+        }}>
+          <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
+            Query Preview
           </Typography>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-word' }}>
-            {buildQueryString(queryTree) || '(empty)'}
+          <Typography variant="body2" sx={{
+            fontFamily: 'monospace',
+            wordBreak: 'break-word',
+            color: 'text.primary',
+            mt: 1,
+            fontSize: '0.875rem',
+            lineHeight: 1.6,
+          }}>
+            {buildQueryString(queryTree) || <span style={{ color: '#cbd5e1' }}>(empty)</span>}
           </Typography>
         </Box>
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={handleCancel}>Cancel</Button>
+      <DialogActions sx={{ pt: 2, pb: 2, px: 3, backgroundColor: 'grey.50' }}>
+        <Button onClick={handleCancel} sx={{ color: 'text.secondary' }}>Cancel</Button>
         <Button onClick={handleApply} variant="contained">
-          Apply
+          Apply Query
         </Button>
       </DialogActions>
     </Dialog>
