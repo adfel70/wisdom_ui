@@ -111,7 +111,7 @@ const SearchBar = ({
   };
 
   // Clean up tokens: remove leading/trailing keywords and consecutive keywords
-  const cleanupTokens = (tokens) => {
+  const cleanupTokens = (tokens, removeTrailing = true) => {
     if (tokens.length === 0) return tokens;
 
     let cleaned = [...tokens];
@@ -121,9 +121,11 @@ const SearchBar = ({
       cleaned.shift();
     }
 
-    // Remove trailing keywords
-    while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === 'keyword') {
-      cleaned.pop();
+    // Remove trailing keywords (optional - skip during auto-parsing)
+    if (removeTrailing) {
+      while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === 'keyword') {
+        cleaned.pop();
+      }
     }
 
     // Remove consecutive keywords (keep first, remove rest)
@@ -290,13 +292,13 @@ const SearchBar = ({
           } else {
             combined = [...prev, ...newTokens];
           }
-          return cleanupTokens(combined);
+          return cleanupTokens(combined, false); // Don't remove trailing during auto-parse
         });
         setCurrentInput('');
         return;
       } else if (isKeyword(lastWord) && words.length === 1 && tokens.length > 0) {
         // Single keyword after existing tokens (e.g., typing "or " after pressing Enter)
-        setTokens(prev => cleanupTokens([...prev, { type: 'keyword', value: lastWord.toLowerCase() }]));
+        setTokens(prev => cleanupTokens([...prev, { type: 'keyword', value: lastWord.toLowerCase() }], false)); // Don't remove trailing during auto-parse
         setCurrentInput('');
         return;
       }
