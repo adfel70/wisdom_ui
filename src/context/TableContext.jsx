@@ -24,11 +24,34 @@ export const TableProvider = ({ children }) => {
   // This helps avoid overwriting our custom order with a fresh search if the criteria haven't changed
   const [lastSearchSignature, setLastSearchSignature] = useState('');
 
-  const updateTableOrder = useCallback((dbId, newOrder) => {
-    setMatchingTableIds(prev => ({
-      ...prev,
-      [dbId]: newOrder
-    }));
+  const arraysAreEqual = (a = [], b = []) => {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const updateTableOrder = useCallback((dbId, newOrderOrUpdater) => {
+    setMatchingTableIds(prev => {
+      const currentOrder = prev[dbId] || [];
+      const nextOrder =
+        typeof newOrderOrUpdater === 'function'
+          ? newOrderOrUpdater(currentOrder)
+          : newOrderOrUpdater;
+
+      if (!nextOrder || arraysAreEqual(currentOrder, nextOrder)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [dbId]: nextOrder
+      };
+    });
   }, []);
 
   const setTablesForDatabase = useCallback((dbId, tableIds) => {

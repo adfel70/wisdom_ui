@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -42,6 +42,7 @@ const SearchResultsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resultsContainerRef = useRef(null);
+  const isMountedRef = useRef(true);
   
   // Cache for loaded table data to avoid refetching
   const tableDataCache = useRef(new Map());
@@ -79,6 +80,8 @@ const SearchResultsPage = () => {
   // Loading states
   const [isSearching, setIsSearching] = useState(true); // Step 1: searching for table IDs
   const [isLoadingTableData, setIsLoadingTableData] = useState(false); // Step 2: loading table data
+  const [, forcePendingRender] = useState(0);
+  const pendingTableIdsRef = useRef(new Set());
 
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
@@ -146,10 +149,49 @@ const SearchResultsPage = () => {
     }));
   }, [searchParams, activeDatabase]);
 
+  // Helpers to track per-table loading states so unaffected cards never remount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const addPendingTableIds = useCallback((ids) => {
+    if (!ids || ids.length === 0) return;
+    const pendingSet = pendingTableIdsRef.current;
+    let changed = false;
+    ids.forEach(id => {
+      if (!pendingSet.has(id)) {
+        pendingSet.add(id);
+        changed = true;
+      }
+    });
+    if (changed && isMountedRef.current) {
+      forcePendingRender(tick => tick + 1);
+    }
+  }, [forcePendingRender]);
+
+  const removePendingTableIds = useCallback((ids) => {
+    if (!ids || ids.length === 0) return;
+    const pendingSet = pendingTableIdsRef.current;
+    let changed = false;
+    ids.forEach(id => {
+      if (pendingSet.has(id)) {
+        pendingSet.delete(id);
+        changed = true;
+      }
+    });
+    if (changed && isMountedRef.current) {
+      forcePendingRender(tick => tick + 1);
+    }
+  }, [forcePendingRender]);
+
   // Get applied permutation from URL params (not state) to ensure it matches current results
   const appliedPermutationId = searchParams.get('permutation') || 'none';
   const appliedPermutationParamsStr = searchParams.get('permutationParams') || '';
-  const appliedPermutationParams = appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
+  const appliedPermutationParams = useMemo(() => {
+    return appliedPermutationParamsStr ? JSON.parse(appliedPermutationParamsStr) : {};
+  }, [appliedPermutationParamsStr]);
 
   // Step 1: Search all databases for matching table IDs
   useEffect(() => {
@@ -229,7 +271,9 @@ const SearchResultsPage = () => {
         return;
       }
 
-      setIsLoadingTableData(true);
+      let needsFetch = false;
+      let idsToFetch = [];
+
       try {
         // Calculate which tables to load for current page
         const startIndex = (currentPage - 1) * TABLES_PER_PAGE;
@@ -237,10 +281,16 @@ const SearchResultsPage = () => {
         const pageTableIds = tableIds.slice(startIndex, endIndex);
 
         // Identify which tables are not in cache
-        const idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
+        idsToFetch = pageTableIds.filter(id => !tableDataCache.current.has(id));
+        needsFetch = idsToFetch.length > 0;
+
+        if (needsFetch) {
+          addPendingTableIds(idsToFetch);
+          setIsLoadingTableData(true);
+        }
 
         // Fetch missing tables
-        if (idsToFetch.length > 0) {
+        if (needsFetch) {
           const newTables = await getMultipleTablesData(idsToFetch);
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
         }
@@ -262,8 +312,11 @@ const SearchResultsPage = () => {
            // setLoadedTables([]); 
         }
       } finally {
-        if (!isCancelled) {
-          setIsLoadingTableData(false);
+        if (needsFetch) {
+          removePendingTableIds(idsToFetch);
+          if (!isCancelled) {
+            setIsLoadingTableData(false);
+          }
         }
       }
     };
@@ -501,14 +554,19 @@ const SearchResultsPage = () => {
     navigate(`/search?${params.toString()}`, { replace: true });
   };
 
-  const handleSendToLastPage = (tableId) => {
-    const currentIds = matchingTableIds[activeDatabase];
-    const newIds = currentIds.filter(id => id !== tableId);
-    newIds.push(tableId);
+  const handleSendToLastPage = useCallback((tableId) => {
+    updateTableOrder(activeDatabase, (currentIds = []) => {
+      const index = currentIds.indexOf(tableId);
+      if (index === -1) {
+        return currentIds;
+      }
 
-    // Update global context directly
-    updateTableOrder(activeDatabase, newIds);
-  };
+      const nextOrder = [...currentIds];
+      nextOrder.splice(index, 1);
+      nextOrder.push(tableId);
+      return nextOrder;
+    });
+  }, [activeDatabase, updateTableOrder]);
 
   // Determine empty state type
   const getEmptyStateType = () => {
@@ -905,7 +963,7 @@ const SearchResultsPage = () => {
                           query={searchQuery}
                           permutationId={appliedPermutationId}
                           permutationParams={appliedPermutationParams}
-                          isLoading={isLoadingTableData}
+                          isLoading={pendingTableIdsRef.current.has(table.id)}
                           onSendToLastPage={handleSendToLastPage}
                         />
                       </motion.div>

@@ -624,4 +624,29 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
   );
 };
 
-export default TableCard;
+const shallowEqualObject = (a = {}, b = {}) => {
+  if (a === b) return true;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i += 1) {
+    const key = aKeys[i];
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const areEqual = (prev, next) => {
+  return (
+    prev.table === next.table &&
+    prev.query === next.query &&
+    prev.permutationId === next.permutationId &&
+    shallowEqualObject(prev.permutationParams, next.permutationParams) &&
+    prev.isLoading === next.isLoading &&
+    prev.onSendToLastPage === next.onSendToLastPage
+  );
+};
+
+export default React.memo(TableCard, areEqual);
