@@ -16,10 +16,11 @@ import {
   MenuItem,
   Pagination,
 } from '@mui/material';
-import { Home as HomeIcon, FilterList, Shuffle, ChevronRight } from '@mui/icons-material';
+import { Home as HomeIcon, FilterList, Shuffle, ChevronRight, AccountTree } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
+import QueryBuilderModal from '../components/QueryBuilderModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableCard from '../components/TableCard';
 import TableCardSkeleton from '../components/TableCardSkeleton';
@@ -61,6 +62,7 @@ const SearchResultsPage = () => {
   const [inputValue, setInputValue] = useState('');
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [filters, setFilters] = useState({});
   const [permutationId, setPermutationId] = useState('none');
   const [permutationParams, setPermutationParams] = useState({});
@@ -337,7 +339,14 @@ const SearchResultsPage = () => {
       }
 
       try {
-        const newTables = await getMultipleTablesData(idsToFetch);
+        // Fetch table data with search filtering
+        const newTables = await getMultipleTablesData(
+          idsToFetch,
+          searchQuery,
+          filters,
+          permutationId,
+          permutationParams
+        );
         if (!isCancelled) {
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
           forcePendingRender(tick => tick + 1);
@@ -583,6 +592,13 @@ const SearchResultsPage = () => {
     }
   };
 
+  // Handle query builder apply
+  const handleQueryBuilderApply = (queryString) => {
+    setInputValue(queryString);
+    handleSearch(queryString);
+    setIsQueryBuilderOpen(false);
+  };
+
   // Handle database tab change (preserve page number per database)
   const handleDatabaseChange = (newDbId) => {
     setActiveDatabase(newDbId);
@@ -799,6 +815,23 @@ const SearchResultsPage = () => {
                     </Menu>
                   )}
 
+                  <Button
+                    variant="outlined"
+                    startIcon={<AccountTree />}
+                    onClick={() => setIsQueryBuilderOpen(true)}
+                    sx={{
+                      py: 0.35,
+                      px: 1.25,
+                      fontSize: '0.75rem',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                      },
+                    }}
+                  >
+                    Query Builder
+                  </Button>
                   <Button
                     variant="outlined"
                     startIcon={<FilterList />}
@@ -1072,6 +1105,14 @@ const SearchResultsPage = () => {
           onClose={() => setIsFilterOpen(false)}
           onApply={handleApplyFilters}
           initialFilters={filters}
+        />
+
+        {/* Query Builder Modal */}
+        <QueryBuilderModal
+          open={isQueryBuilderOpen}
+          onClose={() => setIsQueryBuilderOpen(false)}
+          onApply={handleQueryBuilderApply}
+          initialQuery={inputValue}
         />
       </Box>
     </motion.div>
