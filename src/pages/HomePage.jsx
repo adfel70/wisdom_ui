@@ -497,6 +497,7 @@ const HomePage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
+          initialQuery={searchQuery}
         />
       </Box>
     </motion.div>

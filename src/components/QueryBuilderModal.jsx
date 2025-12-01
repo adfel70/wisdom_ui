@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -20,7 +20,7 @@ import { Close as CloseIcon, Add, Delete } from '@mui/icons-material';
  * QueryBuilderModal Component
  * Visual query builder for creating complex AND/OR queries with nested groups
  */
-const QueryBuilderModal = ({ open, onClose, onApply }) => {
+const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   // Root state: holds the entire query tree
   // Each node can be a condition {id, type: 'condition', value, operator}
   // or a group {id, type: 'group', operator, children: [...nodes]}
@@ -37,6 +37,107 @@ const QueryBuilderModal = ({ open, onClose, onApply }) => {
   function generateId() {
     return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
+
+  // Parse query string into builder tree structure
+  const parseQueryToTree = (queryString) => {
+    if (!queryString || !queryString.trim()) {
+      return {
+        id: 'root',
+        type: 'group',
+        operator: 'and',
+        children: [
+          { id: generateId(), type: 'condition', value: '', operator: 'and' }
+        ]
+      };
+    }
+
+    // Simple tokenizer: extract terms and operators
+    const tokens = [];
+    let currentToken = '';
+    let inQuotes = false;
+    let depth = 0;
+
+    for (let i = 0; i < queryString.length; i++) {
+      const char = queryString[i];
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        currentToken += char;
+      } else if (!inQuotes && char === '(') {
+        depth++;
+        // Skip parentheses for now, just track depth
+      } else if (!inQuotes && char === ')') {
+        depth--;
+      } else if (!inQuotes && (char === ' ' || char === '\t' || char === '\n')) {
+        if (currentToken) {
+          const lower = currentToken.toLowerCase();
+          if (lower === 'and' || lower === 'or') {
+            tokens.push({ type: 'operator', value: lower });
+          } else {
+            // Remove quotes if present
+            const value = currentToken.replace(/^"(.*)"$/, '$1');
+            tokens.push({ type: 'term', value });
+          }
+          currentToken = '';
+        }
+      } else {
+        currentToken += char;
+      }
+    }
+
+    // Add last token
+    if (currentToken) {
+      const lower = currentToken.toLowerCase();
+      if (lower === 'and' || lower === 'or') {
+        tokens.push({ type: 'operator', value: lower });
+      } else {
+        const value = currentToken.replace(/^"(.*)"$/, '$1');
+        tokens.push({ type: 'term', value });
+      }
+    }
+
+    // Build children from tokens
+    const children = [];
+    let currentOperator = 'and';
+
+    tokens.forEach(token => {
+      if (token.type === 'operator') {
+        currentOperator = token.value;
+      } else if (token.type === 'term') {
+        children.push({
+          id: generateId(),
+          type: 'condition',
+          value: token.value,
+          operator: currentOperator
+        });
+      }
+    });
+
+    // If no children, add empty one
+    if (children.length === 0) {
+      children.push({
+        id: generateId(),
+        type: 'condition',
+        value: '',
+        operator: 'and'
+      });
+    }
+
+    return {
+      id: 'root',
+      type: 'group',
+      operator: 'and',
+      children
+    };
+  };
+
+  // Initialize tree from initialQuery when modal opens
+  useEffect(() => {
+    if (open) {
+      const parsedTree = parseQueryToTree(initialQuery);
+      setQueryTree(parsedTree);
+    }
+  }, [open, initialQuery]);
 
   // Add a condition to a parent group
   const addCondition = (parentId) => {
@@ -120,6 +221,7 @@ const QueryBuilderModal = ({ open, onClose, onApply }) => {
   };
 
   // Convert query tree to string with parentheses
+  // Adds parentheses when operators change to preserve left-to-right evaluation
   const buildQueryString = (node) => {
     if (node.type === 'condition') {
       return node.value.trim();
@@ -128,29 +230,31 @@ const QueryBuilderModal = ({ open, onClose, onApply }) => {
     if (node.type === 'group') {
       if (node.children.length === 0) return '';
 
-      // Build parts array with operators between children
-      const parts = [];
+      // Build expression left-to-right, wrapping when operators change
+      let result = buildQueryString(node.children[0]);
+      if (!result) return '';
 
-      for (let i = 0; i < node.children.length; i++) {
+      let prevOp = null;
+
+      for (let i = 1; i < node.children.length; i++) {
         const child = node.children[i];
         const childStr = buildQueryString(child);
+        if (!childStr) continue;
 
-        if (!childStr) continue; // Skip empty
+        const op = child.operator.toLowerCase();
 
-        if (parts.length > 0) {
-          // Add operator before this child (use the child's operator)
-          parts.push(child.operator.toUpperCase());
+        // If operator changed from previous, wrap result to force left-to-right evaluation
+        // This ensures "(a OR b) AND c" instead of "a OR (b AND c)"
+        if (prevOp && prevOp !== op) {
+          result = `(${result})`;
         }
 
-        parts.push(childStr);
+        result = `${result} ${op.toUpperCase()} ${childStr}`;
+        prevOp = op;
       }
 
-      if (parts.length === 0) return '';
-
-      const joined = parts.join(' ');
-
       // Add parentheses for non-root groups
-      return node.id === 'root' ? joined : `(${joined})`;
+      return node.id === 'root' ? result : `(${result})`;
     }
 
     return '';

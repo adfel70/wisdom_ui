@@ -940,6 +940,7 @@ const SearchResultsPage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
+          initialQuery={inputValue}
         />
       </Box>
     </motion.div>
