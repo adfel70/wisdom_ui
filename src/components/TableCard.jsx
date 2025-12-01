@@ -459,13 +459,10 @@ const TableCard = ({ table, query, permutationId = 'none', permutationParams = {
                 borderRightColor: 'divider',
               },
               '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: 'grey.50',
                 minHeight: '56px !important',
               },
-              "& .MuiDataGrid-root": {
-                "--DataGrid-containerBackground": "#F5F5F5",
-              },
               '& .MuiDataGrid-columnHeader': {
+                backgroundColor: '#F5F5F5',
                 padding: 0.5,
                 borderRight: '1px solid',
                 borderRightColor: 'divider',
