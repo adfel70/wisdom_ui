@@ -219,8 +219,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
       // Convert each child node
       const children = flattenedChildren.map((childNode, index) => {
-        // Operator connects this child to previous sibling
-        const connectingOperator = (index === 0) ? 'and' : currentOperator;
+        // For children within a group: all should use the group's combining operator
+        // (first child's operator is not used by buildQueryString, but should be consistent for clarity)
+        const connectingOperator = currentOperator;
 
         if (childNode.type === 'term') {
           // Term becomes condition
@@ -236,9 +237,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
           // Set the operator that connects this group to its previous sibling
           if (nested.type === 'group') {
+            // Preserve the combiningOperator (what combines children) while setting operator (how it connects to siblings)
             return {
               ...nested,
-              operator: connectingOperator
+              operator: connectingOperator,
+              combiningOperator: nested.combiningOperator || currentOperator
             };
           } else {
             // Single condition (shouldn't happen but handle it)
@@ -254,6 +257,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         id: generateId(),
         type: 'group',
         operator: 'and', // will be overridden by parent
+        combiningOperator: currentOperator, // Track the operator that combines this group's children
         children
       };
     };
@@ -286,7 +290,8 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     // Make it the root
     return {
       ...builderTree,
-      id: 'root'
+      id: 'root',
+      combiningOperator: builderTree.combiningOperator || 'and'
     };
   };
 
