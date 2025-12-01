@@ -40,9 +40,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Parse query string into builder tree structure
   const parseQueryToTree = (queryString) => {
-    console.log('=== parseQueryToTree START ===');
-    console.log('Input queryString:', queryString);
-
     if (!queryString || !queryString.trim()) {
       return {
         id: 'root',
@@ -167,7 +164,8 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           if (index < tokens.length && tokens[index].type === 'parenthesis' && tokens[index].value === ')') {
             index++;
           }
-          return expr;
+          // Mark this expression as explicitly parenthesized so we preserve the grouping
+          return { ...expr, explicitlyParenthesized: true };
         }
         if (index < tokens.length && tokens[index].type === 'term') {
           const term = tokens[index];
@@ -185,7 +183,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     };
 
     // Convert AST to builder tree format
-    // MUST preserve nested groups from parentheses
+    // Preserves explicit parentheses - never flattens parenthesized expressions
     const astToBuilderTree = (astNode) => {
       if (!astNode) return null;
 
@@ -199,21 +197,27 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         };
       }
 
-      // Recursive case: AND/OR node becomes a group
+      // If this node is explicitly parenthesized, ALWAYS create a group for it, even if it's logically equivalent
+      const isExplicitlyParenthesized = astNode.explicitlyParenthesized === true;
       const currentOperator = astNode.type; // 'and' or 'or'
 
-      // Flatten only nodes with the SAME operator at THIS level
+      // Flatten helper: respects explicit parentheses
       const flattenSameOperator = (node) => {
         if (!node) return [];
 
+        // NEVER flatten explicitly parenthesized nodes - preserve their boundaries
+        if (node.explicitlyParenthesized) {
+          return [node];
+        }
+
+        // Flatten nodes with same operator only if not explicitly parenthesized
         if (node.type === currentOperator) {
-          // Same operator - flatten recursively
           return [
             ...flattenSameOperator(node.left),
             ...flattenSameOperator(node.right)
           ];
         } else {
-          // Different operator or term - this is ONE child, don't flatten further
+          // Different operator - this is ONE child, don't flatten further
           return [node];
         }
       };
@@ -222,12 +226,9 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
       // Convert each child node
       const children = flattenedChildren.map((childNode, index) => {
-        // For children within a group: all should use the group's combining operator
-        // (first child's operator is not used by buildQueryString, but should be consistent for clarity)
         const connectingOperator = currentOperator;
 
         if (childNode.type === 'term') {
-          // Term becomes condition
           return {
             id: generateId(),
             type: 'condition',
@@ -235,19 +236,15 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             operator: connectingOperator
           };
         } else {
-          // Different operator - recurse to create nested group
+          // Recursively convert operator nodes
           const nested = astToBuilderTree(childNode);
 
-          // Set the operator that connects this group to its previous sibling
           if (nested.type === 'group') {
-            // Preserve the combiningOperator (what combines children) while setting operator (how it connects to siblings)
             return {
               ...nested,
-              operator: connectingOperator,
-              combiningOperator: nested.combiningOperator || currentOperator
+              operator: connectingOperator
             };
           } else {
-            // Single condition (shouldn't happen but handle it)
             return {
               ...nested,
               operator: connectingOperator
@@ -260,19 +257,13 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         id: generateId(),
         type: 'group',
         operator: 'and', // will be overridden by parent
-        combiningOperator: currentOperator, // Track the operator that combines this group's children
         children
       };
     };
 
     const tokens = parseTokens(queryString);
-    console.log('Parsed tokens:', JSON.stringify(tokens));
-
     const ast = buildAST(tokens);
-    console.log('Built AST:', JSON.stringify(ast, null, 2));
-
     const builderTree = astToBuilderTree(ast);
-    console.log('Built tree from AST:', JSON.stringify(builderTree, null, 2));
 
     if (!builderTree) {
       return {
@@ -296,22 +287,16 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     }
 
     // Make it the root
-    const finalTree = {
+    return {
       ...builderTree,
-      id: 'root',
-      combiningOperator: builderTree.combiningOperator || 'and'
+      id: 'root'
     };
-    console.log('Final tree returned:', JSON.stringify(finalTree, null, 2));
-    console.log('=== parseQueryToTree END ===');
-    return finalTree;
   };
 
   // Initialize tree from initialQuery when modal opens
   useEffect(() => {
-    console.log('useEffect triggered: open=', open, 'initialQuery=', initialQuery);
     if (open) {
       const parsedTree = parseQueryToTree(initialQuery);
-      console.log('Setting queryTree to:', JSON.stringify(parsedTree, null, 2));
       setQueryTree(parsedTree);
     }
   }, [open, initialQuery]);
@@ -415,9 +400,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
       for (let i = 1; i < node.children.length; i++) {
         const child = node.children[i];
-        console.log(`buildQueryString: Processing child ${i}:`, JSON.stringify(child, null, 2));
         const childStr = buildQueryString(child);
-        console.log(`buildQueryString: child ${i} produced string: "${childStr}"`);
         if (!childStr) continue;
 
         const op = child.operator.toLowerCase();
@@ -426,17 +409,14 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         // This ensures "(a OR b) AND c" instead of "a OR (b AND c)"
         if (prevOp && prevOp !== op) {
           result = `(${result})`;
-          console.log(`buildQueryString: Operator changed from ${prevOp} to ${op}, wrapped result to: "${result}"`);
         }
 
         result = `${result} ${op.toUpperCase()} ${childStr}`;
         prevOp = op;
       }
 
-      const finalResult = node.id === 'root' ? result : `(${result})`;
-      console.log(`buildQueryString: Group ${node.id} returning: "${finalResult}"`);
       // Add parentheses for non-root groups
-      return finalResult;
+      return node.id === 'root' ? result : `(${result})`;
     }
 
     return '';
