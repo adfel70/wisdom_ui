@@ -126,15 +126,28 @@ const QueryBuilderModal = ({ open, onClose, onApply }) => {
     }
 
     if (node.type === 'group') {
-      const childStrings = node.children
-        .map(child => buildQueryString(child))
-        .filter(str => str); // Remove empty strings
+      if (node.children.length === 0) return '';
 
-      if (childStrings.length === 0) return '';
-      if (childStrings.length === 1) return childStrings[0];
+      // Build parts array with operators between children
+      const parts = [];
 
-      // Join children with the group's operator
-      const joined = childStrings.join(` ${node.operator.toUpperCase()} `);
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        const childStr = buildQueryString(child);
+
+        if (!childStr) continue; // Skip empty
+
+        if (parts.length > 0) {
+          // Add operator before this child (use the child's operator)
+          parts.push(child.operator.toUpperCase());
+        }
+
+        parts.push(childStr);
+      }
+
+      if (parts.length === 0) return '';
+
+      const joined = parts.join(' ');
 
       // Add parentheses for non-root groups
       return node.id === 'root' ? joined : `(${joined})`;
