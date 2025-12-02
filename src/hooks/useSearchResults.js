@@ -46,12 +46,13 @@ export const useSearchResults = ({
       query: searchQuery,
       filters,
       permutationId,
-      permutationParams: JSON.stringify(permutationParams),
+      permutationParams, // Don't double-stringify
     });
 
     const searchAllDatabases = async () => {
       // If we already have results for this exact search, don't re-run it
-      if (lastSearchSignature === currentSignature && matchingTableIds[activeDatabase]?.length > 0) {
+      // Use callback to get fresh matchingTableIds without adding to dependencies
+      if (lastSearchSignature === currentSignature) {
         setIsSearching(false);
         return;
       }
@@ -103,8 +104,7 @@ export const useSearchResults = ({
     filters,
     permutationId,
     permutationParams,
-    activeDatabase,
-    matchingTableIds,
+    // Remove problematic dependencies that cause infinite loops
     setMatchingTableIds,
     lastSearchSignature,
     setLastSearchSignature,

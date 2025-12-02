@@ -98,6 +98,9 @@ const SearchResultsPage = () => {
   });
 
   // Initialize state from URL params
+  // Convert searchParams to string to ensure effect re-runs on URL changes
+  const searchParamsString = urlSync.searchParams.toString();
+
   useEffect(() => {
     const params = urlSync.readParamsFromURL();
     searchState.initializeSearchState({
@@ -108,7 +111,8 @@ const SearchResultsPage = () => {
       permutationParams: params.permutationParams,
     });
     pagination.setPage(activeDatabase, params.page);
-  }, [urlSync.searchParams]); // Only re-run when URL changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParamsString, activeDatabase]); // Re-run when URL or database changes
 
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
