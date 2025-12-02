@@ -563,7 +563,8 @@ const SearchBar = ({
       {/* Custom search input with tokens */}
       <Box
         sx={{
-          width: '100%',
+          flex: 1,
+          minWidth: 0,
           display: 'flex',
           alignItems: 'center',
           backgroundColor: 'background.paper',
