@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Box, Button, Select, MenuItem, IconButton, Tooltip } from '@mui/material';
-import { Search as SearchIcon, ArrowForward, Undo, AutoAwesome, Close } from '@mui/icons-material';
-import { TRANSFORMATIONS } from '../utils/transformUtils';
+import { Box, Button } from '@mui/material';
+import { Search as SearchIcon, ArrowForward } from '@mui/icons-material';
 import { useTokenState } from '../hooks/useTokenState';
+import TokenList from './search/TokenList';
+import SearchActions from './search/SearchActions';
 
 /**
  * SearchBar Component
@@ -93,213 +94,33 @@ const SearchBar = ({
           }}
         />
 
-        {/* Scrollable middle section with tokens and input */}
-        <Box
-          onDoubleClick={() => {
-            inputRef.current?.focus();
-            onQueryBuilderClick?.();
-          }}
-          sx={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            overflowX: 'auto',
-            minWidth: 0,
-            '&::-webkit-scrollbar': {
-              height: '6px',
-            },
-            '&::-webkit-scrollbar-track': {
-              backgroundColor: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              backgroundColor: 'rgba(0, 0, 0, 0.2)',
-              borderRadius: '3px',
-              '&:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              },
-            },
-          }}
-        >
-          {/* Render tokens */}
-          {tokens.map((token, index) => (
-            <Box
-              key={index}
-              onMouseEnter={() => token.type === 'term' && setHoveredTokenIndex(index)}
-              onMouseLeave={() => setHoveredTokenIndex(null)}
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                px: token.type === 'term' ? 1 : 0.5,
-                py: 0.5,
-                backgroundColor: token.type === 'term' ? '#f0f7ff' : 'transparent',
-                border: token.type === 'term' ? '1px solid' : 'none',
-                borderColor: token.type === 'term' ? '#d0e4f7' : 'transparent',
-                borderRadius: token.type === 'term' ? 1 : 0,
-                fontSize: isHome ? '0.875rem' : '0.8125rem',
-                color: (token.type === 'keyword' || token.type === 'parenthesis') ? 'text.disabled' : 'text.primary',
-                fontWeight: token.type === 'term' ? 500 : 400,
-                cursor: token.type === 'term' ? 'pointer' : 'default',
-                transition: 'all 0.2s',
-                flexShrink: 0,
-                '&:hover': token.type === 'term' ? {
-                  backgroundColor: '#e3f2fd',
-                  borderColor: '#90caf9',
-                } : {},
-              }}
-            >
-              {token.value}
-              {token.type === 'term' && hoveredTokenIndex === index && (
-                <Close
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeToken(index);
-                  }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                  sx={{
-                    fontSize: '1rem',
-                    cursor: 'pointer',
-                    color: 'inherit',
-                  }}
-                />
-              )}
-            </Box>
-          ))}
+        {/* Token list with input field */}
+        <TokenList
+          tokens={tokens}
+          currentInput={currentInput}
+          hoveredTokenIndex={hoveredTokenIndex}
+          onHoverChange={setHoveredTokenIndex}
+          onRemoveToken={removeToken}
+          onInputChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onQueryBuilderClick={onQueryBuilderClick}
+          inputRef={inputRef}
+          placeholder={placeholder}
+          isHome={isHome}
+        />
 
-          {/* Current input field */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={currentInput}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder={tokens.length === 0 ? placeholder : ''}
-            style={{
-              flex: 1,
-              minWidth: '100px',
-              border: 'none',
-              outline: 'none',
-              backgroundColor: 'transparent',
-              fontSize: isHome ? '0.875rem' : '0.8125rem',
-              fontFamily: 'inherit',
-              color: 'inherit',
-            }}
-          />
-        </Box>
-
-        {/* Pinned right section - Clear button and Transform */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            flexShrink: 0,
-          }}
-        >
-          {/* Clear All button */}
-          {(tokens.length > 0 || currentInput.trim()) && (
-            <Tooltip title="Clear all">
-              <IconButton
-                onClick={clearAll}
-                size="small"
-                sx={{
-                  color: 'text.secondary',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    backgroundColor: 'rgba(244, 67, 54, 0.08)',
-                    color: 'error.main',
-                    transform: 'scale(1.05)',
-                  },
-                }}
-              >
-                <Close fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {/* Transform dropdown and revert button */}
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            borderLeft: '1px solid',
-            borderColor: 'divider',
-            pl: 1.5,
-          }}>
-            {hasTransformed && (
-              <Tooltip title="Revert to original">
-                <IconButton
-                  onClick={handleRevert}
-                  size="small"
-                  sx={{
-                    color: 'primary.main',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      backgroundColor: 'primary.light',
-                      color: 'primary.dark',
-                      transform: 'scale(1.05)',
-                    },
-                  }}
-                >
-                  <Undo fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
-            <Select
-              value={transformValue}
-              onChange={handleTransformChange}
-              displayEmpty
-              size="small"
-              renderValue={() => (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <AutoAwesome sx={{ fontSize: '1rem' }} />
-                  <span>Transform</span>
-                </Box>
-              )}
-              sx={{
-                minWidth: 'fit-content',
-                borderRadius: '12px',
-                transition: 'all 0.2s',
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'divider',
-                },
-                '& .MuiSelect-select': {
-                  py: 0.75,
-                  px: 1.5,
-                  fontSize: '0.875rem',
-                  color: 'text.primary',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                },
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                  transform: 'translateY(-1px)',
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
-                  },
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
-                },
-              }}
-            >
-              <MenuItem value="" disabled>
-                Transform...
-              </MenuItem>
-              {TRANSFORMATIONS.map((transform) => (
-                <MenuItem key={transform.id} value={transform.id}>
-                  {transform.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
-        </Box>
+        {/* Search actions: clear, transform, revert */}
+        <SearchActions
+          showClear={tokens.length > 0 || currentInput.trim()}
+          onClear={clearAll}
+          hasTransformed={hasTransformed}
+          onRevert={handleRevert}
+          transformValue={transformValue}
+          onTransformChange={handleTransformChange}
+        />
       </Box>
 
+      {/* Submit button */}
       <Button
         type="submit"
         variant="contained"
