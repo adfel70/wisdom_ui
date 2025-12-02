@@ -927,6 +927,7 @@ const SearchResultsPage = () => {
                     onChange={setInputValue}
                     onSubmit={handleSearch}
                     onFilterClick={() => setIsFilterOpen(true)}
+                    onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
                     variant="compact"
                   />
                 </Paper>

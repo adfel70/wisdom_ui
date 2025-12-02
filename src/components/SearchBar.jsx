@@ -598,6 +598,10 @@ const SearchBar = ({
 
         {/* Scrollable middle section with tokens and input */}
         <Box
+          onDoubleClick={() => {
+            inputRef.current?.focus();
+            onQueryBuilderClick?.();
+          }}
           sx={{
             flex: 1,
             display: 'flex',
@@ -654,6 +658,9 @@ const SearchBar = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     removeToken(index);
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
                   }}
                   sx={{
                     fontSize: '1rem',
