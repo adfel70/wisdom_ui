@@ -28,7 +28,8 @@ import EmptyState from '../components/EmptyState';
 import { getDatabaseMetadata, searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
 import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
-import { useTableContext } from '../context/TableContext';
+import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
+import TableSidePanel from '../components/TableSidePanel';
 
 const TABLES_PER_PAGE = 6;
 
@@ -55,8 +56,14 @@ const SearchResultsPage = () => {
     setMatchingTableIds, 
     updateTableOrder, 
     lastSearchSignature,
-    setLastSearchSignature
+    setLastSearchSignature,
+    isSidePanelCollapsed,
+    toggleSidePanel
   } = useTableContext();
+
+  // Calculate sidebar offset for main content
+  const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
+  const sidebarOffset = sidebarWidth + 48; // sidebar width + left margin (24px) + gap (24px)
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
@@ -79,6 +86,7 @@ const SearchResultsPage = () => {
 
   // Track which table IDs should be visible for the current page
   const [visibleTableIds, setVisibleTableIds] = useState([]);
+  const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
 
   // Loading states
   const [isSearching, setIsSearching] = useState(true); // Step 1: searching for table IDs
@@ -159,6 +167,7 @@ const SearchResultsPage = () => {
     };
   }, []);
 
+
   const pruneCacheToVisibleTables = useCallback((visibleIds) => {
     if (!visibleIds || visibleIds.length === 0) {
       tableDataCache.current.clear();
@@ -221,6 +230,34 @@ const SearchResultsPage = () => {
       forcePendingRender(tick => tick + 1);
     }
   }, [forcePendingRender]);
+
+  const focusTableCard = useCallback((tableId) => {
+    if (!tableId) return;
+    
+    if (typeof document !== 'undefined') {
+      const element = document.getElementById(`table-card-${tableId}`);
+      if (element) {
+        // Calculate scroll position with generous top padding
+        const elementRect = element.getBoundingClientRect();
+        const absoluteElementTop = elementRect.top + window.pageYOffset;
+        const headerHeight = 280; // Account for sticky header + extra breathing room
+        const scrollPosition = absoluteElementTop - headerHeight;
+        
+        window.scrollTo({
+          top: Math.max(0, scrollPosition),
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingScrollTableId) return;
+    if (visibleTableIds.includes(pendingScrollTableId)) {
+      focusTableCard(pendingScrollTableId);
+      setPendingScrollTableId(null);
+    }
+  }, [pendingScrollTableId, visibleTableIds, focusTableCard]);
 
   // Get applied permutation from URL params (not state) to ensure it matches current results
   const appliedPermutationId = searchParams.get('permutation') || 'none';
@@ -572,7 +609,7 @@ const SearchResultsPage = () => {
   };
 
   // Handle page change
-  const handlePageChange = (event, newPage) => {
+  const handlePageChange = useCallback((event, newPage) => {
     // Update page for current database
     setDatabasePages(prev => ({
       ...prev,
@@ -590,7 +627,7 @@ const SearchResultsPage = () => {
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
+  }, [activeDatabase, navigate, resultsContainerRef, searchParams]);
 
   // Handle query builder apply
   const handleQueryBuilderApply = (queryString) => {
@@ -624,6 +661,21 @@ const SearchResultsPage = () => {
     });
   }, [activeDatabase, updateTableOrder]);
 
+  const handleSidePanelSelect = useCallback((tableId) => {
+    const allIds = matchingTableIds[activeDatabase] || [];
+    const targetIndex = allIds.indexOf(tableId);
+    if (targetIndex === -1) {
+      return;
+    }
+    const targetPage = Math.floor(targetIndex / TABLES_PER_PAGE) + 1;
+    if (targetPage !== currentPage) {
+      setPendingScrollTableId(tableId);
+      handlePageChange(null, targetPage);
+      return;
+    }
+    focusTableCard(tableId);
+  }, [matchingTableIds, activeDatabase, currentPage, handlePageChange, focusTableCard]);
+
   // Determine empty state type
   const getEmptyStateType = () => {
     const hasFilters = Object.values(filters).some(v => {
@@ -646,6 +698,8 @@ const SearchResultsPage = () => {
   const currentDatabaseInfo = useMemo(() => {
     return databaseMetadata.find(db => db.id === activeDatabase);
   }, [activeDatabase, databaseMetadata]);
+
+  const pendingTableIds = Array.from(pendingTableIdsRef.current);
 
   return (
     <motion.div
@@ -889,173 +943,206 @@ const SearchResultsPage = () => {
         </Container>
       </Paper>
 
-        {/* Results Content */}
-        <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-          >
-            {/* Permutation Indicator */}
-            {expandedQueryInfo && appliedPermutationId && appliedPermutationId !== 'none' && (
-              <Alert
-                severity="success"
-                sx={{ mb: 2 }}
-              >
-                <Box>
-                  <Typography variant="body2" fontWeight={600} gutterBottom>
-                    Permutation Applied: {getPermutationMetadata(appliedPermutationId)?.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Searching with expanded terms: {Object.entries(expandedQueryInfo).map(([term, variants]) =>
-                      `${term} → [${variants.join(', ')}]`
-                    ).join(' | ')}
-                  </Typography>
-                </Box>
-              </Alert>
-            )}
+        {/* Fixed Side Panel */}
+        <TableSidePanel
+          databaseId={activeDatabase}
+          databaseName={currentDatabaseInfo?.name}
+          tableIds={matchingTableIds[activeDatabase] || []}
+          visibleTableIds={visibleTableIds}
+          pendingTableIds={pendingTableIds}
+          isSearching={isSearching}
+          onSelectTable={handleSidePanelSelect}
+          isCollapsed={isSidePanelCollapsed}
+          onToggleCollapse={toggleSidePanel}
+        />
 
-            {/* Active Filters Alert */}
-            {hasActiveFilters && (
-              <Alert
-                severity="info"
-                sx={{ mb: 3 }}
+        {/* Results Content - with offset for fixed sidebar */}
+        <Box
+          sx={{
+            ml: { xs: 0, lg: `${sidebarOffset}px` },
+            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` }
+          }}
+        >
+          <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                alignItems: 'stretch'
+              }}
+            >
+              <Box sx={{ flex: 1, width: '100%' }}>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.3 }}
               >
-                <Box>
-                  <Typography variant="body2" fontWeight={600} gutterBottom>
-                    Filters Active
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                    {filters.year && filters.year !== 'all' && (
+                {/* Permutation Indicator */}
+                {expandedQueryInfo && appliedPermutationId && appliedPermutationId !== 'none' && (
+                  <Alert
+                    severity="success"
+                    sx={{ mb: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>
+                        Permutation Applied: {getPermutationMetadata(appliedPermutationId)?.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Searching with expanded terms: {Object.entries(expandedQueryInfo).map(([term, variants]) =>
+                          `${term} → [${variants.join(', ')}]`
+                        ).join(' | ')}
+                      </Typography>
+                    </Box>
+                  </Alert>
+                )}
+
+                {/* Active Filters Alert */}
+                {hasActiveFilters && (
+                  <Alert
+                    severity="info"
+                    sx={{ mb: 3 }}
+                  >
+                    <Box>
+                      <Typography variant="body2" fontWeight={600} gutterBottom>
+                        Filters Active
+                      </Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                        {filters.year && filters.year !== 'all' && (
+                          <Chip
+                            label={`Year: ${filters.year}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, year: 'all' })}
+                          />
+                        )}
+                        {filters.category && filters.category !== 'all' && (
+                          <Chip
+                            label={`Category: ${filters.category}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, category: 'all' })}
+                          />
+                        )}
+                        {filters.country && filters.country !== 'all' && (
+                          <Chip
+                            label={`Country: ${filters.country}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, country: 'all' })}
+                          />
+                        )}
+                        {filters.tableName && (
+                          <Chip
+                            label={`Table: ${filters.tableName}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, tableName: '' })}
+                          />
+                        )}
+                        {filters.minDate && (
+                          <Chip
+                            label={`From: ${filters.minDate}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, minDate: '' })}
+                          />
+                        )}
+                        {filters.maxDate && (
+                          <Chip
+                            label={`To: ${filters.maxDate}`}
+                            size="small"
+                            onDelete={() => handleApplyFilters({ ...filters, maxDate: '' })}
+                          />
+                        )}
+                        {filters.selectedTables && filters.selectedTables.length > 0 && (
+                          <Chip
+                            label={`${filters.selectedTables.length} table${filters.selectedTables.length !== 1 ? 's' : ''} selected`}
+                            size="small"
+                            color="primary"
+                            onDelete={() => handleApplyFilters({ ...filters, selectedTables: [] })}
+                          />
+                        )}
+                      </Stack>
+                    </Box>
+                  </Alert>
+                )}
+
+                {/* Results Summary */}
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="h5" fontWeight={600}>
+                      {currentDatabaseInfo?.name || 'Loading...'}
+                    </Typography>
+                    {searchQuery && totalTablesWithResults > 0 && (
                       <Chip
-                        label={`Year: ${filters.year}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, year: 'all' })}
-                      />
-                    )}
-                    {filters.category && filters.category !== 'all' && (
-                      <Chip
-                        label={`Category: ${filters.category}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, category: 'all' })}
-                      />
-                    )}
-                    {filters.country && filters.country !== 'all' && (
-                      <Chip
-                        label={`Country: ${filters.country}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, country: 'all' })}
-                      />
-                    )}
-                    {filters.tableName && (
-                      <Chip
-                        label={`Table: ${filters.tableName}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, tableName: '' })}
-                      />
-                    )}
-                    {filters.minDate && (
-                      <Chip
-                        label={`From: ${filters.minDate}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, minDate: '' })}
-                      />
-                    )}
-                    {filters.maxDate && (
-                      <Chip
-                        label={`To: ${filters.maxDate}`}
-                        size="small"
-                        onDelete={() => handleApplyFilters({ ...filters, maxDate: '' })}
-                      />
-                    )}
-                    {filters.selectedTables && filters.selectedTables.length > 0 && (
-                      <Chip
-                        label={`${filters.selectedTables.length} table${filters.selectedTables.length !== 1 ? 's' : ''} selected`}
-                        size="small"
+                        icon={<FilterList />}
+                        label={`Results in ${totalTablesWithResults} table${totalTablesWithResults !== 1 ? 's' : ''} across all databases`}
+                        variant="outlined"
                         color="primary"
-                        onDelete={() => handleApplyFilters({ ...filters, selectedTables: [] })}
                       />
                     )}
-                  </Stack>
+                  </Box>
+                  {currentDatabaseInfo?.description && (
+                    <Typography variant="body2" color="text.secondary">
+                      {currentDatabaseInfo.description}
+                    </Typography>
+                  )}
+                  {!isSearching && tableCounts[activeDatabase] > 0 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Found <strong>{tableCounts[activeDatabase]}</strong> table{tableCounts[activeDatabase] !== 1 ? 's' : ''} in this database
+                      {searchQuery && ` matching "${searchQuery}"`}
+                      {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                    </Typography>
+                  )}
                 </Box>
-              </Alert>
-            )}
 
-            {/* Results Summary */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="h5" fontWeight={600}>
-                  {currentDatabaseInfo?.name || 'Loading...'}
-                </Typography>
-                {searchQuery && totalTablesWithResults > 0 && (
-                  <Chip
-                    icon={<FilterList />}
-                    label={`Results in ${totalTablesWithResults} table${totalTablesWithResults !== 1 ? 's' : ''} across all databases`}
-                    variant="outlined"
-                    color="primary"
-                  />
-                )}
-              </Box>
-              {currentDatabaseInfo?.description && (
-                <Typography variant="body2" color="text.secondary">
-                  {currentDatabaseInfo.description}
-                </Typography>
-              )}
-              {!isSearching && tableCounts[activeDatabase] > 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Found <strong>{tableCounts[activeDatabase]}</strong> table{tableCounts[activeDatabase] !== 1 ? 's' : ''} in this database
-                  {searchQuery && ` matching "${searchQuery}"`}
-                  {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
-                </Typography>
-              )}
-            </Box>
-
-            {/* Loading State - Initial Search */}
-            {isSearching ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              <>
-                {/* Table Cards or Empty State */}
-                {tableCounts[activeDatabase] === 0 ? (
-                  <EmptyState type={getEmptyStateType()} />
+                {/* Loading State - Initial Search */}
+                {isSearching ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                    <CircularProgress />
+                  </Box>
                 ) : (
-                  <AnimatePresence mode='popLayout'>
-                    {visibleTableIds.map((tableId) => {
-                      const table = tableDataCache.current.get(tableId);
-                      const isPending = pendingTableIdsRef.current.has(tableId);
+                  <>
+                    {/* Table Cards or Empty State */}
+                    {tableCounts[activeDatabase] === 0 ? (
+                      <EmptyState type={getEmptyStateType()} />
+                    ) : (
+                      <AnimatePresence mode='popLayout'>
+                        {visibleTableIds.map((tableId) => {
+                          const table = tableDataCache.current.get(tableId);
+                          const isPending = pendingTableIdsRef.current.has(tableId);
 
-                      return (
-                        <motion.div
-                          key={tableId}
-                          layout
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {table ? (
-                            <TableCard
-                              table={table}
-                              query={searchQuery}
-                              permutationId={appliedPermutationId}
-                              permutationParams={appliedPermutationParams}
-                              isLoading={isPending}
-                              onSendToLastPage={handleSendToLastPage}
-                            />
-                          ) : (
-                            <TableCardSkeleton />
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
+                          return (
+                            <motion.div
+                              key={tableId}
+                              id={`table-card-${tableId}`}
+                              layout
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              {table ? (
+                                <TableCard
+                                  table={table}
+                                  query={searchQuery}
+                                  permutationId={appliedPermutationId}
+                                  permutationParams={appliedPermutationParams}
+                                  isLoading={isPending}
+                                  onSendToLastPage={handleSendToLastPage}
+                                />
+                              ) : (
+                                <TableCardSkeleton />
+                              )}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </motion.div>
-        </Container>
+              </motion.div>
+              </Box>
+            </Box>
+          </Container>
+        </Box>
 
         {/* Pinned Pagination at Bottom */}
         {!isSearching && totalPages > 1 && (
@@ -1063,14 +1150,15 @@ const SearchResultsPage = () => {
             sx={{
               position: 'fixed',
               bottom: 0,
-              left: 0,
+              left: { xs: 0, lg: `${sidebarOffset}px` },
               right: 0,
-              zIndex: 50,
+              zIndex: 40,
               background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 15%, rgba(255, 255, 255, 0.98) 100%)',
               backdropFilter: 'blur(8px)',
               borderTop: '1px solid',
               borderColor: 'rgba(0, 0, 0, 0.06)',
               py: 1.5,
+              transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
             <Container maxWidth="xl">
