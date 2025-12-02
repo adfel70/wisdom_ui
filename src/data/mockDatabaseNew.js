@@ -297,9 +297,37 @@ export async function getTableDataById(tableId) {
 /**
  * Get multiple tables data for pagination
  * @param {Array} tableIds - Array of table IDs to fetch
- * @returns {Promise<Array>} Array of table objects with data
+ * @param {string} query - Optional search query to filter results
+ * @param {Object} filters - Optional filters to apply
+ * @param {string} permutationId - Optional permutation ID
+ * @param {Object} permutationParams - Optional permutation parameters
+ * @returns {Promise<Array>} Array of table objects with filtered data
  */
-export async function getMultipleTablesData(tableIds) {
+export async function getMultipleTablesData(tableIds, query = '', filters = {}, permutationId = 'none', permutationParams = {}) {
   const promises = tableIds.map(id => getTableData(id));
-  return await Promise.all(promises);
+  const tables = await Promise.all(promises);
+
+  // If no search query, return tables as-is
+  if (!query || !query.trim()) {
+    return tables;
+  }
+
+  // Apply search filtering to each table's data
+  return tables.map(table => {
+    const filteredData = applySearchAndFilters(
+      [table],
+      query,
+      {},  // Don't apply filters again, they were applied in searchTablesByQuery
+      permutationId,
+      permutationParams
+    );
+
+    // If table matches, return it with filtered data
+    if (filteredData.length > 0 && filteredData[0].data.length > 0) {
+      return filteredData[0];
+    }
+
+    // Return table with empty data if no matches (shouldn't happen)
+    return { ...table, data: [], matchCount: 0 };
+  }).filter(table => table.data.length > 0);
 }
