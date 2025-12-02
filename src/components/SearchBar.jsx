@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Box, TextField, Button, InputAdornment, Select, MenuItem, IconButton, Tooltip, Chip } from '@mui/material';
 import { Search as SearchIcon, FilterList, ArrowForward, Undo, AutoAwesome, Close } from '@mui/icons-material';
 import { TRANSFORMATIONS, applyTransformation } from '../utils/transformUtils';
+import { parseValueToTokens, parseInput, hasUnclosedQuote, isKeyword } from '../utils/tokenParser';
+import { cleanupTokens, removeEmptyParenthesisGroups } from '../utils/tokenValidator';
 
 /**
  * SearchBar Component
@@ -27,98 +29,6 @@ const SearchBar = ({
   const [hasTransformed, setHasTransformed] = useState(false);
   const [transformValue, setTransformValue] = useState('');
 
-  // Helper function to parse value string into tokens (moved outside useEffect to reuse)
-  const parseValueToTokens = (str) => {
-    const quotedRegex = /"([^"]*)"/g;
-    const quotedParts = [];
-    let match;
-
-    while ((match = quotedRegex.exec(str)) !== null) {
-      quotedParts.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        value: match[1],
-        quoted: true
-      });
-    }
-
-    const tokens = [];
-    let currentPos = 0;
-
-    // Helper to parse non-quoted text
-    const parseNonQuoted = (text) => {
-      const result = [];
-      let i = 0;
-      let word = '';
-
-      while (i < text.length) {
-        const char = text[i];
-
-        // Check for parentheses
-        if (char === '(' || char === ')') {
-          // Add accumulated word if any
-          if (word.trim()) {
-            const lower = word.trim().toLowerCase();
-            if (lower === 'and' || lower === 'or') {
-              result.push({ type: 'keyword', value: lower });
-            } else {
-              result.push({ type: 'term', value: word.trim() });
-            }
-            word = '';
-          }
-          // Add parenthesis token
-          result.push({ type: 'parenthesis', value: char });
-          i++;
-        } else if (char === ' ' || char === '\t' || char === '\n') {
-          // Whitespace - complete current word
-          if (word.trim()) {
-            const lower = word.trim().toLowerCase();
-            if (lower === 'and' || lower === 'or') {
-              result.push({ type: 'keyword', value: lower });
-            } else {
-              result.push({ type: 'term', value: word.trim() });
-            }
-            word = '';
-          }
-          i++;
-        } else {
-          word += char;
-          i++;
-        }
-      }
-
-      // Add final word if any
-      if (word.trim()) {
-        const lower = word.trim().toLowerCase();
-        if (lower === 'and' || lower === 'or') {
-          result.push({ type: 'keyword', value: lower });
-        } else {
-          result.push({ type: 'term', value: word.trim() });
-        }
-      }
-
-      return result;
-    };
-
-    quotedParts.forEach(quoted => {
-      if (quoted.start > currentPos) {
-        const nonQuoted = str.substring(currentPos, quoted.start);
-        tokens.push(...parseNonQuoted(nonQuoted));
-      }
-      if (quoted.value) {
-        tokens.push({ type: 'term', value: quoted.value, quoted: true });
-      }
-      currentPos = quoted.end;
-    });
-
-    if (currentPos < str.length) {
-      const remaining = str.substring(currentPos);
-      tokens.push(...parseNonQuoted(remaining));
-    }
-
-    return tokens;
-  };
-
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
 
@@ -133,37 +43,6 @@ const SearchBar = ({
       return token.value;
     }).join(' ');
     return tokenString + (currentInput ? ' ' + currentInput : '');
-  };
-
-  // Clean up tokens: remove leading/trailing keywords and consecutive keywords
-  const cleanupTokens = (tokens, removeTrailing = true) => {
-    if (tokens.length === 0) return tokens;
-
-    let cleaned = [...tokens];
-
-    // Remove leading keywords
-    while (cleaned.length > 0 && cleaned[0].type === 'keyword') {
-      cleaned.shift();
-    }
-
-    // Remove trailing keywords (optional - skip during auto-parsing)
-    if (removeTrailing) {
-      while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === 'keyword') {
-        cleaned.pop();
-      }
-    }
-
-    // Remove consecutive keywords (keep first, remove rest)
-    const result = [];
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i].type === 'keyword' && i > 0 && result[result.length - 1].type === 'keyword') {
-        // Skip this keyword (it's consecutive to the previous one)
-        continue;
-      }
-      result.push(cleaned[i]);
-    }
-
-    return result;
   };
 
   // Update tokens when external value changes (e.g., from Query Builder)
@@ -208,47 +87,6 @@ const SearchBar = ({
       return () => clearTimeout(timeoutId);
     }
   }, [tokens, currentInput]);
-
-  // Check if a word is a keyword (case-insensitive)
-  const isKeyword = (word) => {
-    const lower = word.toLowerCase();
-    return lower === 'and' || lower === 'or';
-  };
-
-  // Check if there's an unclosed quote in the input
-  const hasUnclosedQuote = (str) => {
-    const quoteCount = (str.match(/"/g) || []).length;
-    return quoteCount % 2 !== 0;
-  };
-
-  // Parse quoted strings and regular tokens
-  const parseInput = (input) => {
-    // Replace commas with spaces (treat commas as separators)
-    const normalized = input.replace(/,/g, ' ');
-
-    // Handle quoted strings
-    const quotedRegex = /"([^"]*)"/g;
-    const parts = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = quotedRegex.exec(normalized)) !== null) {
-      // Add non-quoted part before this quote
-      if (match.index > lastIndex) {
-        parts.push({ type: 'normal', value: normalized.substring(lastIndex, match.index) });
-      }
-      // Add quoted part
-      parts.push({ type: 'quoted', value: match[1] });
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add remaining non-quoted part
-    if (lastIndex < normalized.length) {
-      parts.push({ type: 'normal', value: normalized.substring(lastIndex) });
-    }
-
-    return parts;
-  };
 
   // Anchor current input as a term
   const anchorCurrentInput = () => {
@@ -435,65 +273,6 @@ const SearchBar = ({
       const cleaned = cleanupTokens(filtered);
       return removeEmptyParenthesisGroups(cleaned);
     });
-  };
-
-  // Remove empty parenthesis groups: () or groups with only keywords
-  const removeEmptyParenthesisGroups = (tokens) => {
-    let result = [...tokens];
-    let changed = true;
-
-    // Keep iterating until no more empty groups are found
-    while (changed) {
-      changed = false;
-      const newResult = [];
-
-      for (let i = 0; i < result.length; i++) {
-        const token = result[i];
-
-        // Check if this is an opening parenthesis
-        if (token.type === 'parenthesis' && token.value === '(') {
-          // Find the matching closing parenthesis
-          let depth = 1;
-          let closingIndex = -1;
-
-          for (let j = i + 1; j < result.length; j++) {
-            if (result[j].type === 'parenthesis') {
-              if (result[j].value === '(') {
-                depth++;
-              } else if (result[j].value === ')') {
-                depth--;
-                if (depth === 0) {
-                  closingIndex = j;
-                  break;
-                }
-              }
-            }
-          }
-
-          // If we found a matching closing parenthesis
-          if (closingIndex !== -1) {
-            // Extract tokens between parentheses
-            const innerTokens = result.slice(i + 1, closingIndex);
-
-            // Check if group is empty or contains only keywords
-            const hasTerms = innerTokens.some(t => t.type === 'term');
-
-            if (!hasTerms) {
-              // Skip the opening paren, inner tokens, and closing paren
-              changed = true;
-              i = closingIndex; // Skip to closing paren (loop will increment)
-              continue;
-            }
-          }
-        }
-
-        newResult.push(token);
-      }
-
-      result = newResult;
-    }
-
-    return result;
   };
 
   // Clear all tokens and input
