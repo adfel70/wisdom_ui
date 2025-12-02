@@ -1,0 +1,9 @@
+// Export all search-related components from one place
+export { default as SearchHeader } from './SearchHeader';
+export { default as SearchControls } from './SearchControls';
+export { default as PermutationMenu } from './PermutationMenu';
+export { default as PermutationIndicator } from './PermutationIndicator';
+export { default as ActiveFiltersAlert } from './ActiveFiltersAlert';
+export { default as ResultsSummary } from './ResultsSummary';
+export { default as ResultsGrid } from './ResultsGrid';
+export { default as PaginationFooter } from './PaginationFooter';
