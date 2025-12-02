@@ -99,15 +99,12 @@ export const useSearchResults = ({
     return () => {
       isCancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     searchQuery,
-    filters,
+    JSON.stringify(filters), // Stringify to avoid object reference changes
     permutationId,
-    permutationParams,
-    // Remove problematic dependencies that cause infinite loops
-    setMatchingTableIds,
-    lastSearchSignature,
-    setLastSearchSignature,
+    JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);
 
   // Step 2: Load table data for visible table IDs
@@ -167,14 +164,13 @@ export const useSearchResults = ({
     return () => {
       isCancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    visibleTableIds,
+    JSON.stringify(visibleTableIds), // Array changes trigger re-fetch
     searchQuery,
-    filters,
+    JSON.stringify(filters), // Stringify to avoid object reference changes
     permutationId,
-    permutationParams,
-    tableLoadingHook,
-    pruneCacheToVisibleTables,
+    JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);
 
   return {

@@ -72,15 +72,15 @@ const SearchResultsPage = () => {
 
   // Calculate current page and visible table IDs
   const currentPage = pagination.getCurrentPage(activeDatabase);
-  const currentPageTableIds = useMemo(() => {
-    const tableIds = matchingTableIds[activeDatabase] || [];
-    return pagination.getVisibleTableIds(tableIds, currentPage);
-  }, [matchingTableIds, activeDatabase, currentPage, pagination]);
 
-  // Update visible table IDs when they change
+  // Update visible table IDs when dependencies change
   useEffect(() => {
-    setVisibleTableIds(currentPageTableIds);
-  }, [currentPageTableIds]);
+    const tableIds = matchingTableIds[activeDatabase] || [];
+    const startIndex = (currentPage - 1) * 6; // TABLES_PER_PAGE
+    const endIndex = startIndex + 6;
+    const pageTableIds = tableIds.slice(startIndex, endIndex);
+    setVisibleTableIds(pageTableIds);
+  }, [matchingTableIds, activeDatabase, currentPage]);
 
   // Search results hook
   const { isSearching, isLoadingTableData, tableDataCache } = useSearchResults({
