@@ -28,7 +28,7 @@ import EmptyState from '../components/EmptyState';
 import { getDatabaseMetadata, searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
 import { PERMUTATION_FUNCTIONS, getPermutationMetadata } from '../utils/permutationUtils';
-import { useTableContext } from '../context/TableContext';
+import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import TableSidePanel from '../components/TableSidePanel';
 
 const TABLES_PER_PAGE = 6;
@@ -56,8 +56,14 @@ const SearchResultsPage = () => {
     setMatchingTableIds, 
     updateTableOrder, 
     lastSearchSignature,
-    setLastSearchSignature
+    setLastSearchSignature,
+    isSidePanelCollapsed,
+    toggleSidePanel
   } = useTableContext();
+
+  // Calculate sidebar offset for main content
+  const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
+  const sidebarOffset = sidebarWidth + 48; // sidebar width + left margin (24px) + gap (24px)
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
@@ -236,19 +242,43 @@ const SearchResultsPage = () => {
 
   const focusTableCard = useCallback((tableId) => {
     if (!tableId) return;
-    if (typeof document !== 'undefined') {
-      const element = document.getElementById(`table-card-${tableId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
+    
+    // Clear any existing timeout
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
     }
-    setFocusedTableId(tableId);
-    highlightTimeoutRef.current = setTimeout(() => {
-      setFocusedTableId(prev => (prev === tableId ? null : prev));
-    }, 1800);
+    
+    // Clear focus first to allow re-triggering animation on same element
+    setFocusedTableId(null);
+    
+    // Use setTimeout to ensure state reset happens before setting new focus
+    setTimeout(() => {
+      if (typeof document !== 'undefined') {
+        const element = document.getElementById(`table-card-${tableId}`);
+        if (element) {
+          // Calculate scroll position with generous top padding
+          const elementRect = element.getBoundingClientRect();
+          const absoluteElementTop = elementRect.top + window.pageYOffset;
+          const headerHeight = 280; // Account for sticky header + extra breathing room
+          const scrollPosition = absoluteElementTop - headerHeight;
+          
+          window.scrollTo({
+            top: Math.max(0, scrollPosition),
+            behavior: 'smooth'
+          });
+        }
+      }
+      
+      // Set focus after a brief delay to ensure scroll has started
+      setTimeout(() => {
+        setFocusedTableId(tableId);
+        
+        // Clear focus after animation completes
+        highlightTimeoutRef.current = setTimeout(() => {
+          setFocusedTableId(null);
+        }, 1500);
+      }, 50);
+    }, 20);
   }, []);
 
   useEffect(() => {
@@ -943,27 +973,37 @@ const SearchResultsPage = () => {
         </Container>
       </Paper>
 
-        {/* Results Content */}
-        <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', lg: 'row' },
-              gap: { xs: 2, lg: 3 },
-              alignItems: 'flex-start'
-            }}
-          >
-            <TableSidePanel
-              databaseId={activeDatabase}
-              databaseName={currentDatabaseInfo?.name}
-              tableIds={matchingTableIds[activeDatabase] || []}
-              visibleTableIds={visibleTableIds}
-              pendingTableIds={pendingTableIds}
-              isSearching={isSearching}
-              onSelectTable={handleSidePanelSelect}
-            />
+        {/* Fixed Side Panel */}
+        <TableSidePanel
+          databaseId={activeDatabase}
+          databaseName={currentDatabaseInfo?.name}
+          tableIds={matchingTableIds[activeDatabase] || []}
+          visibleTableIds={visibleTableIds}
+          pendingTableIds={pendingTableIds}
+          isSearching={isSearching}
+          onSelectTable={handleSidePanelSelect}
+          isCollapsed={isSidePanelCollapsed}
+          onToggleCollapse={toggleSidePanel}
+        />
 
-            <Box sx={{ flex: 1, width: '100%' }}>
+        {/* Results Content - with offset for fixed sidebar */}
+        <Box
+          sx={{
+            ml: { xs: 0, lg: `${sidebarOffset}px` },
+            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` }
+          }}
+        >
+          <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                alignItems: 'stretch'
+              }}
+            >
+              <Box sx={{ flex: 1, width: '100%' }}>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1130,9 +1170,10 @@ const SearchResultsPage = () => {
                   </>
                 )}
               </motion.div>
+              </Box>
             </Box>
-          </Box>
-        </Container>
+          </Container>
+        </Box>
 
         {/* Pinned Pagination at Bottom */}
         {!isSearching && totalPages > 1 && (
@@ -1140,14 +1181,15 @@ const SearchResultsPage = () => {
             sx={{
               position: 'fixed',
               bottom: 0,
-              left: 0,
+              left: { xs: 0, lg: `${sidebarOffset}px` },
               right: 0,
-              zIndex: 50,
+              zIndex: 40,
               background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 15%, rgba(255, 255, 255, 0.98) 100%)',
               backdropFilter: 'blur(8px)',
               borderTop: '1px solid',
               borderColor: 'rgba(0, 0, 0, 0.06)',
               py: 1.5,
+              transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
             <Container maxWidth="xl">
