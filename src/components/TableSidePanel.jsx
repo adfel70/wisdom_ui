@@ -1,4 +1,4 @@
-import React, { useMemo, memo } from 'react';
+import React, { useMemo, memo, useState } from 'react';
 import {
   Paper,
   Box,
@@ -9,7 +9,9 @@ import {
   ListItemText,
   Chip,
   Stack,
-  Skeleton
+  Skeleton,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { TableChart } from '@mui/icons-material';
 import { getTablesMetadataForDatabase } from '../api/backend';
@@ -77,6 +79,10 @@ const PanelRow = memo(({ item, onSelect }) => {
 PanelRow.displayName = 'PanelRow';
 
 const PANEL_MAX_HEIGHT = 'calc(100vh - 140px)';
+const PANEL_TABS = [
+  { value: 'liveOrder', label: 'Live Order' },
+  { value: 'workbench', label: 'Workbench' }
+];
 
 const TableSidePanel = ({
   databaseId,
@@ -87,6 +93,7 @@ const TableSidePanel = ({
   isSearching = false,
   onSelectTable
 }) => {
+  const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const metadataMap = useMemo(() => {
     if (!databaseId) return new Map();
     const metadata = getTablesMetadataForDatabase(databaseId) || [];
@@ -136,30 +143,78 @@ const TableSidePanel = ({
         <Typography variant="overline" color="text.secondary">
           Tables in {databaseName || databaseId?.toUpperCase()}
         </Typography>
-        <Typography variant="h6" fontWeight={600}>
-          Live Order
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {tableIds.length} table{tableIds.length === 1 ? '' : 's'} tracked
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          aria-label="Table side panel tabs"
+          sx={{
+            mt: 1,
+            minHeight: 36,
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 600,
+              minHeight: 36,
+              alignItems: 'flex-start'
+            },
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderRadius: 3
+            }
+          }}
+        >
+          {PANEL_TABS.map(tab => (
+            <Tab key={tab.value} label={tab.label} value={tab.value} />
+          ))}
+        </Tabs>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+          {activeTab === 'liveOrder'
+            ? `${tableIds.length} table${tableIds.length === 1 ? '' : 's'} tracked`
+            : 'Placeholder tools coming soon.'}
         </Typography>
       </Box>
 
       <Divider />
 
       <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5 }}>
-        {isSearching ? (
-          <Stack spacing={1}>
-            {Array.from({ length: 6 }).map((_, idx) => (
-              <Skeleton
-                key={idx}
-                variant="rounded"
-                height={48}
-                animation="wave"
-                sx={{ borderRadius: 1.5 }}
-              />
-            ))}
-          </Stack>
-        ) : panelItems.length === 0 ? (
+        {activeTab === 'liveOrder' ? (
+          isSearching ? (
+            <Stack spacing={1}>
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <Skeleton
+                  key={idx}
+                  variant="rounded"
+                  height={48}
+                  animation="wave"
+                  sx={{ borderRadius: 1.5 }}
+                />
+              ))}
+            </Stack>
+          ) : panelItems.length === 0 ? (
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: 4,
+                px: 2,
+                color: 'text.secondary'
+              }}
+            >
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                No tables yet
+              </Typography>
+              <Typography variant="caption">
+                Run a search or adjust filters to see tables listed here.
+              </Typography>
+            </Box>
+          ) : (
+            <List disablePadding dense>
+              {panelItems.map(item => (
+                <PanelRow key={item.id} item={item} onSelect={onSelectTable} />
+              ))}
+            </List>
+          )
+        ) : (
           <Box
             sx={{
               textAlign: 'center',
@@ -169,18 +224,12 @@ const TableSidePanel = ({
             }}
           >
             <Typography variant="body2" fontWeight={600} gutterBottom>
-              No tables yet
+              Workbench coming soon
             </Typography>
             <Typography variant="caption">
-              Run a search or adjust filters to see tables listed here.
+              Use this tab to surface modeling tools or saved table groups.
             </Typography>
           </Box>
-        ) : (
-          <List disablePadding dense>
-            {panelItems.map(item => (
-              <PanelRow key={item.id} item={item} onSelect={onSelectTable} />
-            ))}
-          </List>
         )}
       </Box>
     </Paper>
