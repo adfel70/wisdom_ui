@@ -773,10 +773,7 @@ const SearchResultsPage = () => {
                       py: 0.35,
                       px: 1.25,
                       fontSize: '0.75rem',
-                      fontWeight: 500,
-                      borderRadius: '8px',
                       transition: 'all 0.2s',
-                      textTransform: 'none',
                       '&:hover': {
                         transform: 'translateY(-1px)',
                         boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
