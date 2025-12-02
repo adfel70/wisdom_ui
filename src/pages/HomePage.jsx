@@ -191,7 +191,7 @@ const HomePage = () => {
           </motion.div>
 
           {/* Search Section - Centered */}
-          <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+          <Box sx={{ maxWidth: 960, mx: 'auto' }}>
             {/* Action Buttons - Completely Outside */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
