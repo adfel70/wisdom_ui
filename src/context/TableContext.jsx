@@ -10,6 +10,10 @@ export const useTableContext = () => {
   return context;
 };
 
+// Panel width constants (shared with TableSidePanel)
+export const PANEL_EXPANDED_WIDTH = 320;
+export const PANEL_COLLAPSED_WIDTH = 60;
+
 export const TableProvider = ({ children }) => {
   // Store matching table IDs per database
   // This state needs to persist across page navigations
@@ -23,6 +27,13 @@ export const TableProvider = ({ children }) => {
   // Track if we have performed an initial search/load for a specific query/filter combo
   // This helps avoid overwriting our custom order with a fresh search if the criteria haven't changed
   const [lastSearchSignature, setLastSearchSignature] = useState('');
+
+  // Side panel collapse state - persists across navigations
+  const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState(false);
+
+  const toggleSidePanel = useCallback(() => {
+    setIsSidePanelCollapsed(prev => !prev);
+  }, []);
 
   const arraysAreEqual = (a = [], b = []) => {
     if (a === b) return true;
@@ -67,7 +78,10 @@ export const TableProvider = ({ children }) => {
     updateTableOrder,
     setTablesForDatabase,
     lastSearchSignature,
-    setLastSearchSignature
+    setLastSearchSignature,
+    isSidePanelCollapsed,
+    setIsSidePanelCollapsed,
+    toggleSidePanel
   };
 
   return (

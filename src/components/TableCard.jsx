@@ -163,7 +163,14 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const TableCard = ({ table, query, permutationId = 'none', permutationParams = {}, isLoading = false, onSendToLastPage }) => {
+const TableCard = ({
+  table,
+  query,
+  permutationId = 'none',
+  permutationParams = {},
+  isLoading = false,
+  onSendToLastPage
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
