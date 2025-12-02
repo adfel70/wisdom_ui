@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -19,7 +19,6 @@ import {
   ListItemText,
   Skeleton
 } from '@mui/material';
-import { keyframes } from '@mui/system';
 import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
 import {
   ExpandMore,
@@ -164,38 +163,13 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-// Flash animation keyframes - bright, unmissable pulse effect
-const flashPulse = keyframes`
-  0% {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), inset 0 0 0 0 rgba(37, 99, 235, 0);
-    outline: 0px solid transparent;
-  }
-  15% {
-    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.5), 0 0 40px 10px rgba(37, 99, 235, 0.3), inset 0 0 30px 5px rgba(37, 99, 235, 0.15);
-    outline: 3px solid rgba(37, 99, 235, 0.8);
-  }
-  35% {
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.35), 0 0 25px 6px rgba(37, 99, 235, 0.2), inset 0 0 20px 3px rgba(37, 99, 235, 0.1);
-    outline: 2px solid rgba(37, 99, 235, 0.6);
-  }
-  60% {
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2), 0 0 15px 3px rgba(37, 99, 235, 0.1), inset 0 0 10px 1px rgba(37, 99, 235, 0.05);
-    outline: 1px solid rgba(37, 99, 235, 0.3);
-  }
-  100% {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), inset 0 0 0 0 rgba(37, 99, 235, 0);
-    outline: 0px solid transparent;
-  }
-`;
-
 const TableCard = ({
   table,
   query,
   permutationId = 'none',
   permutationParams = {},
   isLoading = false,
-  onSendToLastPage,
-  isFocused = false
+  onSendToLastPage
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -203,25 +177,6 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
-  
-  // Track focus state for animation triggering
-  const [isFlashing, setIsFlashing] = useState(false);
-  const flashCountRef = useRef(0);
-  
-  // Trigger flash animation every time isFocused becomes true
-  useEffect(() => {
-    if (isFocused) {
-      // Increment counter to force re-render and restart animation
-      flashCountRef.current += 1;
-      setIsFlashing(true);
-      
-      // Reset flashing state after animation completes
-      const timer = setTimeout(() => {
-        setIsFlashing(false);
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [isFocused]);
 
   // Update column order when table changes
   useEffect(() => {
@@ -398,19 +353,14 @@ const TableCard = ({
     return columns;
   }, [columnOrder, query, draggedColumn]);
 
-  // Use key to force animation restart on each flash
-  const animationKey = isFlashing ? `flash-${flashCountRef.current}` : 'idle';
-
   return (
     <Card
-      key={animationKey}
       sx={{
         mb: 3,
         overflow: 'visible',
-        transition: isFlashing ? 'none' : 'box-shadow 0.3s ease',
-        animation: isFlashing ? `${flashPulse} 1000ms ease-out` : 'none',
+        transition: 'box-shadow 0.3s ease',
         '&:hover': {
-          boxShadow: isFlashing ? undefined : 4,
+          boxShadow: 4,
         },
       }}
     >

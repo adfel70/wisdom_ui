@@ -87,14 +87,12 @@ const SearchResultsPage = () => {
   // Track which table IDs should be visible for the current page
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
-  const [focusedTableId, setFocusedTableId] = useState(null);
 
   // Loading states
   const [isSearching, setIsSearching] = useState(true); // Step 1: searching for table IDs
   const [isLoadingTableData, setIsLoadingTableData] = useState(false); // Step 2: loading table data
   const [, forcePendingRender] = useState(0);
   const pendingTableIdsRef = useRef(new Set());
-  const highlightTimeoutRef = useRef(null);
 
   // Get database metadata (lightweight, no records)
   const databaseMetadata = getDatabaseMetadata();
@@ -169,13 +167,6 @@ const SearchResultsPage = () => {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const pruneCacheToVisibleTables = useCallback((visibleIds) => {
     if (!visibleIds || visibleIds.length === 0) {
@@ -243,42 +234,21 @@ const SearchResultsPage = () => {
   const focusTableCard = useCallback((tableId) => {
     if (!tableId) return;
     
-    // Clear any existing timeout
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-    }
-    
-    // Clear focus first to allow re-triggering animation on same element
-    setFocusedTableId(null);
-    
-    // Use setTimeout to ensure state reset happens before setting new focus
-    setTimeout(() => {
-      if (typeof document !== 'undefined') {
-        const element = document.getElementById(`table-card-${tableId}`);
-        if (element) {
-          // Calculate scroll position with generous top padding
-          const elementRect = element.getBoundingClientRect();
-          const absoluteElementTop = elementRect.top + window.pageYOffset;
-          const headerHeight = 280; // Account for sticky header + extra breathing room
-          const scrollPosition = absoluteElementTop - headerHeight;
-          
-          window.scrollTo({
-            top: Math.max(0, scrollPosition),
-            behavior: 'smooth'
-          });
-        }
-      }
-      
-      // Set focus after a brief delay to ensure scroll has started
-      setTimeout(() => {
-        setFocusedTableId(tableId);
+    if (typeof document !== 'undefined') {
+      const element = document.getElementById(`table-card-${tableId}`);
+      if (element) {
+        // Calculate scroll position with generous top padding
+        const elementRect = element.getBoundingClientRect();
+        const absoluteElementTop = elementRect.top + window.pageYOffset;
+        const headerHeight = 280; // Account for sticky header + extra breathing room
+        const scrollPosition = absoluteElementTop - headerHeight;
         
-        // Clear focus after animation completes
-        highlightTimeoutRef.current = setTimeout(() => {
-          setFocusedTableId(null);
-        }, 1500);
-      }, 50);
-    }, 20);
+        window.scrollTo({
+          top: Math.max(0, scrollPosition),
+          behavior: 'smooth'
+        });
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -1157,7 +1127,6 @@ const SearchResultsPage = () => {
                                   permutationParams={appliedPermutationParams}
                                   isLoading={isPending}
                                   onSendToLastPage={handleSendToLastPage}
-                                  isFocused={focusedTableId === tableId}
                                 />
                               ) : (
                                 <TableCardSkeleton />
