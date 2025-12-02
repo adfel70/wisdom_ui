@@ -7,3 +7,8 @@ export { default as ActiveFiltersAlert } from './ActiveFiltersAlert';
 export { default as ResultsSummary } from './ResultsSummary';
 export { default as ResultsGrid } from './ResultsGrid';
 export { default as PaginationFooter } from './PaginationFooter';
+
+// SearchBar sub-components
+export { default as TokenChip } from './TokenChip';
+export { default as TokenList } from './TokenList';
+export { default as SearchActions } from './SearchActions';
