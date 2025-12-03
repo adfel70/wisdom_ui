@@ -13,6 +13,8 @@ import {
   Tab,
   IconButton,
   Tooltip,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
 import {
   TableChart,
@@ -20,6 +22,8 @@ import {
   ChevronRight,
   PlaylistPlay,
   Build,
+  Search,
+  Clear,
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { getTablesMetadataForDatabase } from '../api/backend';
@@ -108,6 +112,7 @@ const TableSidePanel = ({
   onToggleCollapse
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const metadataMap = useMemo(() => {
     if (!databaseId) return new Map();
@@ -141,7 +146,17 @@ const TableSidePanel = ({
 
   const handleTabChange = useCallback((_, value) => {
     setActiveTab(value);
+    setSearchQuery(''); // Clear search when switching tabs
   }, []);
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return panelItems;
+    const query = searchQuery.toLowerCase();
+    return panelItems.filter(item => 
+      (item.name || '').toLowerCase().includes(query) || 
+      (item.subtitle || '').toLowerCase().includes(query)
+    );
+  }, [panelItems, searchQuery]);
 
   return (
     <Paper
@@ -246,6 +261,44 @@ const TableSidePanel = ({
                 />
               ))}
             </Tabs>
+
+            {/* Search Bar */}
+            {activeTab === 'liveOrder' && (
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search tables..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" color="action" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchQuery ? (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setSearchQuery('')}
+                          edge="end"
+                        >
+                          <Clear fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                    sx: {
+                      borderRadius: 1.5,
+                      backgroundColor: 'action.hover',
+                      '& fieldset': { border: 'none' },
+                      '&:hover': { backgroundColor: 'action.selected' },
+                      fontSize: '0.875rem'
+                    }
+                  }}
+                />
+              </Box>
+            )}
           </motion.div>
         )}
       </Box>
@@ -289,7 +342,7 @@ const TableSidePanel = ({
                 />
               ))}
             </Stack>
-          ) : panelItems.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             // Empty state
             <Box
               sx={{
@@ -302,15 +355,17 @@ const TableSidePanel = ({
               {!isCollapsed && (
                 <>
                   <Typography variant="body2" fontWeight={600} gutterBottom>
-                    No tables yet
+                    {searchQuery ? 'No matching tables' : 'No tables yet'}
                   </Typography>
                   <Typography variant="caption">
-                    Run a search or adjust filters to see tables listed here.
+                    {searchQuery 
+                      ? 'Try adjusting your search terms.' 
+                      : 'Run a search or adjust filters to see tables listed here.'}
                   </Typography>
                 </>
               )}
               {isCollapsed && (
-                <Tooltip title="No tables yet" placement="right">
+                <Tooltip title="No tables" placement="right">
                   <TableChart color="disabled" />
                 </Tooltip>
               )}
@@ -320,7 +375,7 @@ const TableSidePanel = ({
             <LayoutGroup>
               <List disablePadding dense>
                 <AnimatePresence>
-                  {panelItems.map(item => (
+                  {filteredItems.map(item => (
                     <AnimatedPanelRow
                       key={item.id}
                       item={item}
