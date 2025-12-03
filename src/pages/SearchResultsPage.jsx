@@ -116,7 +116,7 @@ const SearchResultsPage = () => {
 
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
-  const sidebarOffset = sidebarWidth + 48;
+  const sidebarOffset = sidebarWidth;
 
   // Get expanded query info
   const appliedPermutationId = urlSync.searchParams.get('permutation') || 'none';
