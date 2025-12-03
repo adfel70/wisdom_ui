@@ -30,7 +30,7 @@ import { getTablesMetadataForDatabase } from '../api/backend';
 
 // Panel width constants
 const PANEL_EXPANDED_WIDTH = 320;
-const PANEL_COLLAPSED_WIDTH = 60;
+const PANEL_COLLAPSED_WIDTH = 0;
 
 const PANEL_TABS = [
   { value: 'liveOrder', label: 'Live Order', icon: <PlaylistPlay /> },
@@ -162,7 +162,7 @@ const TableSidePanel = ({
     <Paper
       component={motion.div}
       layout
-      elevation={2}
+      elevation={isCollapsed ? 0 : 2}
       sx={{
         width: isCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH,
         flexShrink: 0,
@@ -174,50 +174,55 @@ const TableSidePanel = ({
         bottom: 0,
         zIndex: 50,
         borderRadius: 0,
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
+        overflow: 'visible',
+        boxShadow: isCollapsed ? 'none' : '0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
         transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         backgroundColor: 'background.paper',
       }}
     >
+      {/* Drawer Tab Toggle */}
+      <Box
+        onClick={onToggleCollapse}
+        sx={{
+          position: 'absolute',
+          left: '100%',
+          top: 32,
+          width: 24,
+          height: 48,
+          backgroundColor: 'background.paper',
+          borderRadius: '0 8px 8px 0',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderLeft: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          boxShadow: '4px 0 8px rgba(0,0,0,0.05)',
+          '&:hover': {
+            backgroundColor: 'action.hover',
+            width: 28, // slight hover effect
+          },
+          transition: 'width 0.2s',
+        }}
+      >
+        {isCollapsed ? <ChevronRight fontSize="small" color="action" /> : <ChevronLeft fontSize="small" color="action" />}
+      </Box>
+
       {/* Header */}
       <Box
         sx={{
-          p: isCollapsed ? 1 : 2,
-          pb: isCollapsed ? 1 : 1.5,
-          display: 'flex',
+          p: 2,
+          pb: 1.5,
+          display: isCollapsed ? 'none' : 'flex',
           flexDirection: 'column',
-          alignItems: isCollapsed ? 'center' : 'stretch'
+          alignItems: 'stretch',
+          opacity: isCollapsed ? 0 : 1,
+          transition: 'opacity 0.2s',
         }}
       >
-        {/* Collapse Toggle Button */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: isCollapsed ? 'center' : 'flex-end',
-            mb: isCollapsed ? 1 : 0.5
-          }}
-        >
-          <Tooltip title={isCollapsed ? 'Expand panel' : 'Collapse panel'} placement="right">
-            <IconButton
-              size="small"
-              onClick={onToggleCollapse}
-              sx={{
-                backgroundColor: 'action.hover',
-                '&:hover': {
-                  backgroundColor: 'primary.light',
-                  color: 'primary.contrastText'
-                }
-              }}
-            >
-              {isCollapsed ? <ChevronRight fontSize="small" /> : <ChevronLeft fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
-
         {/* Database Label */}
-        {!isCollapsed && (
-          <motion.div
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -300,18 +305,18 @@ const TableSidePanel = ({
               </Box>
             )}
           </motion.div>
-        )}
       </Box>
 
-      <Divider />
+      {!isCollapsed && <Divider />}
 
       {/* Content Area */}
+      {!isCollapsed && (
       <Box
         sx={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
-          p: isCollapsed ? 0.75 : 1.5,
+          p: 1.5,
           '&::-webkit-scrollbar': {
             width: 6
           },
@@ -330,15 +335,15 @@ const TableSidePanel = ({
         {activeTab === 'liveOrder' ? (
           isSearching ? (
             // Loading skeleton
-            <Stack spacing={isCollapsed ? 0.5 : 1}>
-              {Array.from({ length: isCollapsed ? 10 : 6 }).map((_, idx) => (
+            <Stack spacing={1}>
+              {Array.from({ length: 6 }).map((_, idx) => (
                 <Skeleton
                   key={idx}
                   variant="rounded"
-                  height={isCollapsed ? 32 : 48}
-                  width={isCollapsed ? 40 : '100%'}
+                  height={48}
+                  width={'100%'}
                   animation="wave"
-                  sx={{ borderRadius: 1.5, mx: isCollapsed ? 'auto' : 0 }}
+                  sx={{ borderRadius: 1.5 }}
                 />
               ))}
             </Stack>
@@ -347,28 +352,19 @@ const TableSidePanel = ({
             <Box
               sx={{
                 textAlign: 'center',
-                py: isCollapsed ? 2 : 4,
-                px: isCollapsed ? 0.5 : 2,
+                py: 4,
+                px: 2,
                 color: 'text.secondary'
               }}
             >
-              {!isCollapsed && (
-                <>
-                  <Typography variant="body2" fontWeight={600} gutterBottom>
-                    {searchQuery ? 'No matching tables' : 'No tables yet'}
-                  </Typography>
-                  <Typography variant="caption">
-                    {searchQuery 
-                      ? 'Try adjusting your search terms.' 
-                      : 'Run a search or adjust filters to see tables listed here.'}
-                  </Typography>
-                </>
-              )}
-              {isCollapsed && (
-                <Tooltip title="No tables" placement="right">
-                  <TableChart color="disabled" />
-                </Tooltip>
-              )}
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                {searchQuery ? 'No matching tables' : 'No tables yet'}
+              </Typography>
+              <Typography variant="caption">
+                {searchQuery 
+                  ? 'Try adjusting your search terms.' 
+                  : 'Run a search or adjust filters to see tables listed here.'}
+              </Typography>
             </Box>
           ) : (
             // Table list with animations
@@ -392,30 +388,22 @@ const TableSidePanel = ({
           <Box
             sx={{
               textAlign: 'center',
-              py: isCollapsed ? 2 : 4,
-              px: isCollapsed ? 0.5 : 2,
+              py: 4,
+              px: 2,
               color: 'text.secondary'
             }}
           >
-            {!isCollapsed && (
-              <>
-                <Build sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
-                <Typography variant="body2" fontWeight={600} gutterBottom>
-                  Workbench coming soon
-                </Typography>
-                <Typography variant="caption">
-                  Use this tab to surface modeling tools or saved table groups.
-                </Typography>
-              </>
-            )}
-            {isCollapsed && (
-              <Tooltip title="Workbench coming soon" placement="right">
-                <Build color="disabled" />
-              </Tooltip>
-            )}
+            <Build sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
+            <Typography variant="body2" fontWeight={600} gutterBottom>
+              Workbench coming soon
+            </Typography>
+            <Typography variant="caption">
+              Use this tab to surface modeling tools or saved table groups.
+            </Typography>
           </Box>
         )}
       </Box>
+      )}
     </Paper>
   );
 };
