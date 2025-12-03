@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Container, Typography, IconButton, Avatar } from '@mui/material';
+import { Box, Container, Typography, IconButton, Divider } from '@mui/material';
 import { Home as HomeIcon, AccountCircle } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
@@ -11,12 +11,12 @@ const BrandHeader = ({ onBackToHome }) => {
   return (
     <Box
       sx={{
-        backgroundColor: '#1e40af', // Deep blue
+        backgroundColor: '#0E2659', // Dark blue
         color: 'white',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
       }}
     >
-      <Container maxWidth="xl">
+      <Container maxWidth="xl" sx={{ px: { xs: 2, sm: 3 } }}>
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -31,7 +31,7 @@ const BrandHeader = ({ onBackToHome }) => {
             }}
           >
             {/* Left: Home button and Title */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <IconButton
                 onClick={onBackToHome}
                 sx={{
@@ -43,6 +43,8 @@ const BrandHeader = ({ onBackToHome }) => {
               >
                 <HomeIcon />
               </IconButton>
+
+              <Divider orientation="vertical" flexItem sx={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', height: 24, alignSelf: 'center' }} />
 
               <Typography variant="h6" fontWeight={700} color="white">
                 Wisdom UI
