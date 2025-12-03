@@ -24,6 +24,7 @@ import {
   Build,
   Search,
   Clear,
+  FilterList,
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { getTablesMetadataForDatabase } from '../api/backend';
@@ -33,8 +34,8 @@ const PANEL_EXPANDED_WIDTH = 320;
 const PANEL_COLLAPSED_WIDTH = 0;
 
 const PANEL_TABS = [
-  { value: 'liveOrder', label: 'Live Order', icon: <PlaylistPlay /> },
-  { value: 'workbench', label: 'Workbench', icon: <Build /> }
+  { value: 'tableList', label: 'Table List', icon: <PlaylistPlay /> },
+  { value: 'filters', label: 'Filters', icon: <FilterList /> }
 ];
 
 // Animated panel row with motion support for reordering
@@ -109,7 +110,8 @@ const TableSidePanel = ({
   isSearching = false,
   onSelectTable,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  topOffset = 280
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,7 +172,7 @@ const TableSidePanel = ({
         flexDirection: 'column',
         position: 'fixed',
         left: 0,
-        top: 280,
+        top: topOffset,
         bottom: 0,
         zIndex: 50,
         borderRadius: 0,
@@ -268,7 +270,7 @@ const TableSidePanel = ({
             </Tabs>
 
             {/* Search Bar */}
-            {activeTab === 'liveOrder' && (
+            {activeTab === 'tableList' && (
               <Box sx={{ mt: 2 }}>
                 <TextField
                   fullWidth
@@ -316,7 +318,7 @@ const TableSidePanel = ({
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
-          p: 1.5,
+          p: 1,
           '&::-webkit-scrollbar': {
             width: 6
           },
@@ -332,7 +334,7 @@ const TableSidePanel = ({
           }
         }}
       >
-        {activeTab === 'liveOrder' ? (
+        {activeTab === 'tableList' ? (
           isSearching ? (
             // Loading skeleton
             <Stack spacing={1}>
@@ -384,7 +386,7 @@ const TableSidePanel = ({
             </LayoutGroup>
           )
         ) : (
-          // Workbench tab placeholder
+          // Filters tab placeholder
           <Box
             sx={{
               textAlign: 'center',
@@ -393,12 +395,12 @@ const TableSidePanel = ({
               color: 'text.secondary'
             }}
           >
-            <Build sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
+            <FilterList sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
             <Typography variant="body2" fontWeight={600} gutterBottom>
-              Workbench coming soon
+              Filters
             </Typography>
             <Typography variant="caption">
-              Use this tab to surface modeling tools or saved table groups.
+              Advanced filtering options will appear here.
             </Typography>
           </Box>
         )}

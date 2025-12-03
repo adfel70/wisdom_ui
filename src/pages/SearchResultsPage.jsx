@@ -4,14 +4,13 @@ import { Box, Container, Paper } from '@mui/material';
 import { motion } from 'framer-motion';
 
 // Components
-import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import QueryBuilderModal from '../components/QueryBuilderModal';
 import DatabaseTabs from '../components/DatabaseTabs';
 import TableSidePanel from '../components/TableSidePanel';
 import {
-  SearchHeader,
-  SearchControls,
+  BrandHeader,
+  SearchSection,
   PermutationIndicator,
   ActiveFiltersAlert,
   ResultsGrid,
@@ -41,6 +40,25 @@ import { getExpandedQueryInfo } from '../utils/searchUtils';
 const SearchResultsPage = () => {
   const navigate = useNavigate();
   const resultsContainerRef = useRef(null);
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+
+  // Update header height on mount and resize
+  useEffect(() => {
+    const updateHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight);
+      }
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    if (headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   // Modal states
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -318,66 +336,50 @@ const SearchResultsPage = () => {
     >
       <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: totalPages > 1 ? 10 : 6 }}>
         {/* Sticky Header */}
-        <Paper
-          elevation={1}
+        <Box
+          ref={headerRef}
           sx={{
             position: 'sticky',
             top: 0,
             zIndex: 100,
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 0,
           }}
         >
-          <Container maxWidth="xl">
-            <Box sx={{ py: 2 }}>
-              <SearchHeader onBackToHome={handleBackToHome} />
+          {/* Brand Header - Dark Blue */}
+          <BrandHeader onBackToHome={handleBackToHome} />
 
-              <SearchControls
-                permutationId={searchState.permutationId}
-                permutationParams={searchState.permutationParams}
-                onPermutationChange={handlePermutationChange}
-                onPermutationParamsChange={handlePermutationParamsChange}
-                onFilterClick={() => setIsFilterOpen(true)}
-                onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
-              />
+          {/* White Section - Search and Tabs */}
+          <Paper
+            elevation={1}
+            sx={{
+              backgroundColor: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: 0,
+            }}
+          >
+            <Container maxWidth="xl">
+              <Box sx={{ py: 1.5 }}>
+                <SearchSection
+                  searchValue={searchState.inputValue}
+                  onSearchChange={searchState.setInputValue}
+                  onSearchSubmit={handleSearch}
+                  onFilterClick={() => setIsFilterOpen(true)}
+                  onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
+                  permutationId={searchState.permutationId}
+                  permutationParams={searchState.permutationParams}
+                  onPermutationChange={handlePermutationChange}
+                  onPermutationParamsChange={handlePermutationParamsChange}
+                />
 
-              {/* Search Bar */}
-              <motion.div
-                initial={{ opacity: 1, y: 200 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 1, y: 200 }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-              >
-                <Paper
-                  elevation={3}
-                  sx={{
-                    backgroundColor: 'background.paper',
-                    borderRadius: 2,
-                    p: 1.75,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <SearchBar
-                    value={searchState.inputValue}
-                    onChange={searchState.setInputValue}
-                    onSubmit={handleSearch}
-                    onFilterClick={() => setIsFilterOpen(true)}
-                    onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
-                    variant="compact"
-                  />
-                </Paper>
-              </motion.div>
-
-              <DatabaseTabs
-                databases={databaseMetadata}
-                activeDatabase={activeDatabase}
-                onChange={handleDatabaseChange}
-                tableCounts={tableCounts}
-              />
-            </Box>
-          </Container>
-        </Paper>
+                <DatabaseTabs
+                  databases={databaseMetadata}
+                  activeDatabase={activeDatabase}
+                  onChange={handleDatabaseChange}
+                  tableCounts={tableCounts}
+                />
+              </Box>
+            </Container>
+          </Paper>
+        </Box>
 
         {/* Fixed Side Panel */}
         <TableSidePanel
@@ -390,6 +392,7 @@ const SearchResultsPage = () => {
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
+          topOffset={headerHeight}
         />
 
         {/* Results Content */}
@@ -400,7 +403,7 @@ const SearchResultsPage = () => {
             width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` },
           }}
         >
-          <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
+          <Container maxWidth={false} sx={{ mt: 4, px: { xs: 3, md: 8 } }} ref={resultsContainerRef}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <motion.div
