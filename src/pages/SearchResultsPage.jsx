@@ -382,7 +382,7 @@ const SearchResultsPage = () => {
             width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` },
           }}
         >
-          <Container maxWidth="xl" sx={{ mt: 4 }} ref={resultsContainerRef}>
+          <Container maxWidth={false} sx={{ mt: 4, px: { xs: 3, md: 8 } }} ref={resultsContainerRef}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <motion.div

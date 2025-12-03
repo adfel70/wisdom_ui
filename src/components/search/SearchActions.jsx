@@ -96,7 +96,7 @@ const SearchActions = ({
             borderRadius: '12px',
             transition: 'all 0.2s',
             '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'divider',
+              borderColor: 'rgba(37, 99, 235, 0.5)', // Light blue border
             },
             '& .MuiSelect-select': {
               py: 0.75,
