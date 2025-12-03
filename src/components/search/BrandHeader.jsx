@@ -13,13 +13,13 @@ const BrandHeader = ({ onBackToHome }) => {
       sx={{
         backgroundColor: '#0E2659', // Dark blue
         color: 'white',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         position: 'relative',
         zIndex: 101,
       }}
     >
       <Container
-        maxWidth="xl"
+        maxWidth={false}
         sx={{
           px: { xs: 1, sm: 1.5, md: 2 },
         }}
