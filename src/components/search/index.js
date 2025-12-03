@@ -1,6 +1,8 @@
 // Export all search-related components from one place
+export { default as BrandHeader } from './BrandHeader';
 export { default as SearchHeader } from './SearchHeader';
 export { default as SearchControls } from './SearchControls';
+export { default as SearchSection } from './SearchSection';
 export { default as PermutationMenu } from './PermutationMenu';
 export { default as PermutationIndicator } from './PermutationIndicator';
 export { default as ActiveFiltersAlert } from './ActiveFiltersAlert';

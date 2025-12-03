@@ -16,7 +16,7 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} })
       sx={{
         borderBottom: 1,
         borderColor: 'divider',
-        mt: 3,
+        mt: 2,
       }}
     >
       <Tabs
@@ -64,8 +64,8 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} })
                 textTransform: 'none',
                 fontWeight: 600,
                 fontSize: '0.875rem',
-                minHeight: 48,
-                px: 3,
+                minHeight: 44,
+                px: 2.5,
               }}
             />
           );

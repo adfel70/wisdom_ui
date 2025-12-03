@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Typography } from '@mui/material';
+import { Alert, Typography } from '@mui/material';
 import { getPermutationMetadata } from '../../utils/permutationUtils';
 
 /**
@@ -14,18 +14,16 @@ const PermutationIndicator = ({ permutationId, expandedQueryInfo }) => {
   const metadata = getPermutationMetadata(permutationId);
 
   return (
-    <Alert severity="success" sx={{ mb: 2 }}>
-      <Box>
-        <Typography variant="body2" fontWeight={600} gutterBottom>
-          Permutation Applied: {metadata?.label}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Searching with expanded terms:{' '}
-          {Object.entries(expandedQueryInfo)
+    <Alert severity="success" sx={{ mb: 2, py: 0.75 }}>
+      <Typography variant="body2" component="span">
+        <strong>✓ Permutation: {metadata?.label}</strong>
+        {' '}
+        <Typography variant="caption" component="span" color="text.secondary">
+          ({Object.entries(expandedQueryInfo)
             .map(([term, variants]) => `${term} → [${variants.join(', ')}]`)
-            .join(' | ')}
+            .join(' | ')})
         </Typography>
-      </Box>
+      </Typography>
     </Alert>
   );
 };
