@@ -14,7 +14,6 @@ import {
   SearchControls,
   PermutationIndicator,
   ActiveFiltersAlert,
-  ResultsSummary,
   ResultsGrid,
   PaginationFooter,
 } from '../components/search';
@@ -417,16 +416,6 @@ const SearchResultsPage = () => {
                   <ActiveFiltersAlert
                     filters={searchState.filters}
                     onRemoveFilter={handleRemoveFilter}
-                  />
-
-                  <ResultsSummary
-                    currentDatabaseInfo={currentDatabaseInfo}
-                    searchQuery={searchState.searchQuery}
-                    totalTablesWithResults={totalTablesWithResults}
-                    currentDatabaseTableCount={tableCounts[activeDatabase]}
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    isSearching={isSearching}
                   />
 
                   <ResultsGrid
