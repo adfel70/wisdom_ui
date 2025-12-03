@@ -19,15 +19,16 @@ const PaginationFooter = ({
       sx={{
         position: 'fixed',
         bottom: 0,
-        left: { xs: 0, lg: `${sidebarOffset}px` },
+        left: 0,
         right: 0,
         zIndex: 40,
-        background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 15%, rgba(255, 255, 255, 0.98) 100%)',
+        backgroundColor: 'rgba(255, 255, 255, 0.98)',
         backdropFilter: 'blur(8px)',
         borderTop: '1px solid',
         borderColor: 'rgba(0, 0, 0, 0.06)',
         py: 1.5,
-        transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        pl: { xs: 0, lg: `${sidebarOffset}px` },
+        transition: 'padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       <Container maxWidth="xl">

@@ -109,7 +109,8 @@ const TableSidePanel = ({
   isSearching = false,
   onSelectTable,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  topOffset = 280
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,7 +171,7 @@ const TableSidePanel = ({
         flexDirection: 'column',
         position: 'fixed',
         left: 0,
-        top: 280,
+        top: topOffset,
         bottom: 0,
         zIndex: 50,
         borderRadius: 0,

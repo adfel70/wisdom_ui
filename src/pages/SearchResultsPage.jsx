@@ -40,6 +40,25 @@ import { getExpandedQueryInfo } from '../utils/searchUtils';
 const SearchResultsPage = () => {
   const navigate = useNavigate();
   const resultsContainerRef = useRef(null);
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+
+  // Update header height on mount and resize
+  useEffect(() => {
+    const updateHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight);
+      }
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    if (headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   // Modal states
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -318,6 +337,7 @@ const SearchResultsPage = () => {
       <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: totalPages > 1 ? 10 : 6 }}>
         {/* Sticky Header */}
         <Box
+          ref={headerRef}
           sx={{
             position: 'sticky',
             top: 0,
@@ -372,6 +392,7 @@ const SearchResultsPage = () => {
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
+          topOffset={headerHeight}
         />
 
         {/* Results Content */}
