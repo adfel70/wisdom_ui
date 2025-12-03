@@ -13,10 +13,17 @@ const BrandHeader = ({ onBackToHome }) => {
       sx={{
         backgroundColor: '#0E2659', // Dark blue
         color: 'white',
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+        position: 'relative',
+        zIndex: 101,
       }}
     >
-      <Container maxWidth="xl" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Container
+        maxWidth="xl"
+        sx={{
+          px: { xs: 1, sm: 1.5, md: 2 },
+        }}
+      >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
