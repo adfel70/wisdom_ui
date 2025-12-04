@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -163,28 +163,11 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
-const COLUMN_WIDTH_CONFIG = {
-  min: 140,
-  max: 360,
-  padding: 32,
-  charPixelSize: 8,
-};
-
-const ACTIONS_COLUMN_WIDTH = 100;
-
-const sampleColumnWidth = (column, rows = []) => {
-  const headerLength = column?.length ?? 0;
-  const longestValueLength = rows.reduce((maxLength, row) => {
-    const value = row?.[column];
-    if (value === undefined || value === null) {
-      return maxLength;
-    }
-    return Math.max(maxLength, String(value).length);
-  }, 0);
-  const estimatedCharacters = Math.max(headerLength, longestValueLength);
-  const pixelEstimate = estimatedCharacters * COLUMN_WIDTH_CONFIG.charPixelSize + COLUMN_WIDTH_CONFIG.padding;
-  return Math.min(COLUMN_WIDTH_CONFIG.max, Math.max(COLUMN_WIDTH_CONFIG.min, pixelEstimate));
-};
+const COLUMN_MIN_WIDTH = 160;
+const ROW_HEIGHT = 40;
+const GRID_HEADER_HEIGHT = 56;
+const ROW_DETAIL_COLUMN_WIDTH = 80;
+const ROW_DETAIL_COLUMN_FIELD = '__row_details';
 
 const TableCard = ({
   table,
@@ -192,7 +175,8 @@ const TableCard = ({
   permutationId = 'none',
   permutationParams = {},
   isLoading = false,
-  onSendToLastPage
+  onSendToLastPage,
+  maxGridWidth = 0,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -200,6 +184,15 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+  const gridWrapperRef = useRef(null);
+  const proxyScrollRef = useRef(null);
+  const virtualScrollerRef = useRef(null);
+  const scrollSyncStateRef = useRef({ fromGrid: false, fromProxy: false });
+  const [verticalScrollMetrics, setVerticalScrollMetrics] = useState({
+    scrollHeight: 0,
+    clientHeight: 0,
+    scrollTop: 0,
+  });
 
   // Update column order when table changes
   useEffect(() => {
@@ -223,10 +216,10 @@ const TableCard = ({
     setIsExpanded(!isExpanded);
   };
 
-  const handleRowInfoClick = (row) => {
+  const handleRowInfoClick = useCallback((row) => {
     setSelectedRow(row);
     setIsPopupOpen(true);
-  };
+  }, []);
 
   const handleClosePopup = () => {
     setIsPopupOpen(false);
@@ -298,31 +291,29 @@ const TableCard = ({
     }));
   }, [table?.data]);
 
-  const sampledRows = React.useMemo(() => {
-    if (!table?.data) return [];
-    return table.data.slice(0, 50);
-  }, [table?.data]);
-
-  const columnSizeMap = React.useMemo(() => {
-    return columnOrder.reduce((acc, column) => {
-      acc[column] = sampleColumnWidth(column, sampledRows);
-      return acc;
-    }, {});
-  }, [columnOrder, sampledRows]);
-
-  const gridMinWidth = React.useMemo(() => {
-    return columnOrder.reduce((total, column) => {
-      return total + (columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min);
-    }, ACTIONS_COLUMN_WIDTH);
-  }, [columnOrder, columnSizeMap]);
-
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
+    const rowDetailsColumn = {
+      field: ROW_DETAIL_COLUMN_FIELD,
+      headerName: '#',
+      width: ROW_DETAIL_COLUMN_WIDTH,
+      minWidth: ROW_DETAIL_COLUMN_WIDTH,
+      maxWidth: ROW_DETAIL_COLUMN_WIDTH,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      resizable: false,
+      hideable: false,
+      disableReorder: true,
+      renderHeader: () => null,
+      renderCell: () => null,
+    };
+
     const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
-      width: columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min,
-      minWidth: columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min,
+      flex: 1,
+      minWidth: COLUMN_MIN_WIDTH,
       renderHeader: () => (
         <DraggableColumnHeader
           column={column}
@@ -352,47 +343,114 @@ const TableCard = ({
               textAlign: 'left',
               flex: 1,
             }}
-            title={params.value || 'N/A'}
+            title={
+              params.value !== undefined && params.value !== null
+                ? String(params.value)
+                : 'N/A'
+            }
           >
             <HighlightedText text={params.value || 'N/A'} query={query} />
           </Typography>
         </Box>
       ),
     }));
+    return [rowDetailsColumn, ...columns];
 
-    // Add actions column
-    columns.push({
-      field: 'actions',
-      headerName: 'Actions',
-      width: 80,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => (
-        <Tooltip title="View full details">
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRowInfoClick(params.row);
-            }}
-            sx={{
-              color: 'text.secondary',
-              '&:hover': {
-                color: 'primary.main',
-                backgroundColor: 'primary.light',
-                transform: 'scale(1.1)',
-              },
-              transition: 'all 0.2s ease-in-out',
-            }}
-          >
-            <Info fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      ),
+  }, [columnOrder, query, draggedColumn]);
+
+  const resolvedGridWidth = maxGridWidth > 0 ? `${maxGridWidth}px` : '100%';
+  const hasVerticalOverflow = verticalScrollMetrics.scrollHeight > (verticalScrollMetrics.clientHeight + 1);
+
+  const overlayRows = React.useMemo(() => {
+    const { clientHeight, scrollTop } = verticalScrollMetrics;
+    if (!clientHeight || dataGridRows.length === 0) {
+      return [];
+    }
+    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT));
+    const visibleCount = Math.ceil(clientHeight / ROW_HEIGHT) + 2;
+    const endIndex = Math.min(dataGridRows.length, startIndex + visibleCount);
+    const rows = [];
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const row = dataGridRows[index];
+      if (!row) continue;
+      rows.push({
+        row,
+        displayIndex: index + 1,
+        key: row.id ?? index,
+        offsetTop: index * ROW_HEIGHT - scrollTop,
+      });
+    }
+    return rows;
+  }, [dataGridRows, verticalScrollMetrics]);
+
+  useLayoutEffect(() => {
+    if (isLoading) return undefined;
+    const wrapper = gridWrapperRef.current;
+    if (!wrapper) return undefined;
+
+    const virtualScroller = wrapper.querySelector('.MuiDataGrid-virtualScroller');
+    if (!virtualScroller) return undefined;
+
+    virtualScrollerRef.current = virtualScroller;
+
+    const syncProxyPosition = () => {
+      if (!proxyScrollRef.current) return;
+      if (scrollSyncStateRef.current.fromProxy) {
+        scrollSyncStateRef.current.fromProxy = false;
+        return;
+      }
+      scrollSyncStateRef.current.fromGrid = true;
+      proxyScrollRef.current.scrollTop = virtualScroller.scrollTop;
+      scrollSyncStateRef.current.fromGrid = false;
+    };
+
+    const updateMetrics = () => {
+      setVerticalScrollMetrics({
+        scrollHeight: virtualScroller.scrollHeight,
+        clientHeight: virtualScroller.clientHeight,
+        scrollTop: virtualScroller.scrollTop,
+      });
+    };
+
+    updateMetrics();
+    syncProxyPosition();
+
+    const handleGridScroll = () => {
+      syncProxyPosition();
+      setVerticalScrollMetrics((prev) => ({
+        ...prev,
+        scrollTop: virtualScroller.scrollTop,
+      }));
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateMetrics();
+      syncProxyPosition();
     });
+    resizeObserver.observe(virtualScroller);
 
-    return columns;
-  }, [columnOrder, query, draggedColumn, columnSizeMap]);
+    virtualScroller.addEventListener('scroll', handleGridScroll);
+
+    return () => {
+      virtualScroller.removeEventListener('scroll', handleGridScroll);
+      resizeObserver.disconnect();
+      virtualScrollerRef.current = null;
+    };
+  }, [dataGridRows.length, isLoading]);
+
+  const handleProxyScroll = (event) => {
+    if (!virtualScrollerRef.current) return;
+    if (scrollSyncStateRef.current.fromGrid) {
+      scrollSyncStateRef.current.fromGrid = false;
+      return;
+    }
+    scrollSyncStateRef.current.fromProxy = true;
+    virtualScrollerRef.current.scrollTop = event.currentTarget.scrollTop;
+    setVerticalScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: event.currentTarget.scrollTop,
+    }));
+  };
 
   return (
     <Card
@@ -460,9 +518,9 @@ const TableCard = ({
                 <Typography variant="body2" color="text.secondary">
                   Categories:
                 </Typography>
-                {table.categories.map((category) => (
+                {table.categories.map((category, index) => (
                   <Chip
-                    key={category}
+                    key={`${category}-${index}`}
                     label={category}
                     size="small"
                     variant="outlined"
@@ -519,6 +577,7 @@ const TableCard = ({
             p: 0,
             height: 400,
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
           {isLoading ? (
@@ -548,58 +607,215 @@ const TableCard = ({
                 },
               }}
             >
-              <DataGrid
-                rows={dataGridRows}
-                columns={dataGridColumns}
-                hideFooter
-                rowHeight={40}
-                disableColumnResize
-                initialState={{
-                  pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
-                }}
-                slots={{
-                  columnMenu: CustomColumnMenu,
-                }}
+              <Box
+                ref={gridWrapperRef}
                 sx={{
-                  borderRadius: 0,
-                  minWidth: gridMinWidth,
-                  '& .MuiDataGrid-cell': {
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                  },
-                  '& .MuiDataGrid-columnHeaders': {
-                    backgroundColor: 'grey.50',
-                    minHeight: '56px !important',
-                  },
-                  '& .MuiDataGrid-columnHeader': {
-                    backgroundColor: '#F1F1F1',
-                    padding: 0.5,
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                    '&:last-child': {
-                      borderRight: 'none',
-                    },
-                    '&:focus': {
-                      outline: 'none',
-                    },
-                    '&:focus-within': {
-                      outline: 'none',
-                    },
-                  },
-                  '& .MuiDataGrid-columnHeaderTitle': {
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    color: 'text.primary',
-                    display: 'none', // Hide default title since we use custom header
-                  },
-                  '& .MuiDataGrid-row:hover': {
-                    backgroundColor: 'action.selected',
-                  },
-                  '& .MuiDataGrid-menuIcon': {
-                    marginRight: 0,
-                  },
+                  width: resolvedGridWidth,
+                  minWidth: resolvedGridWidth,
+                  height: '100%',
+                  pr: hasVerticalOverflow ? 2 : 0,
                 }}
-              />
+              >
+                <DataGrid
+                  rows={dataGridRows}
+                  columns={dataGridColumns}
+                  hideFooter
+                  rowHeight={ROW_HEIGHT}
+                  disableColumnResize
+                  initialState={{
+                    pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+                  }}
+                  slots={{
+                    columnMenu: CustomColumnMenu,
+                  }}
+                  sx={{
+                    borderRadius: 0,
+                    width: '100%',
+                    '& .MuiDataGrid-main': {
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                      '&::-webkit-scrollbar': {
+                        width: 0,
+                        height: 0,
+                      },
+                    },
+                    '& .MuiDataGrid-virtualScroller': {
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                      '&::-webkit-scrollbar': {
+                        width: 0,
+                        height: 0,
+                      },
+                    },
+                    '& .MuiDataGrid-cell': {
+                      borderRight: '0.5px solid',
+                      borderRightColor: 'divider',
+                    },
+                    '& .MuiDataGrid-columnHeaders': {
+                      backgroundColor: 'grey.50',
+                      minHeight: `${GRID_HEADER_HEIGHT}px !important`,
+                    },
+                    '& .MuiDataGrid-columnHeader': {
+                      backgroundColor: '#F1F1F1',
+                      padding: 0.5,
+                      borderRight: '0.5px solid',
+                      borderRightColor: 'divider',
+                      '&:last-child': {
+                        borderRight: 'none',
+                      },
+                      '&:focus': {
+                        outline: 'none',
+                      },
+                      '&:focus-within': {
+                        outline: 'none',
+                      },
+                    },
+                    '& .MuiDataGrid-columnHeaderTitle': {
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      color: 'text.primary',
+                      display: 'none', // Hide default title since we use custom header
+                    },
+                    '& .MuiDataGrid-row:hover': {
+                      backgroundColor: 'action.selected',
+                    },
+                    '& .MuiDataGrid-menuIcon': {
+                      marginRight: 0,
+                    },
+                  }}
+                />
+              </Box>
+            </Box>
+          )}
+          {!isLoading && (
+            <>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: ROW_DETAIL_COLUMN_WIDTH,
+                  height: GRID_HEADER_HEIGHT,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  fontVariantNumeric: 'tabular-nums',
+                  backgroundColor: 'grey.50',
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
+                  zIndex: 6,
+                  pointerEvents: 'none',
+                }}
+              >
+                #
+              </Box>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: GRID_HEADER_HEIGHT,
+                  bottom: 0,
+                  left: 0,
+                  width: ROW_DETAIL_COLUMN_WIDTH,
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.95))',
+                  zIndex: 5,
+                  pointerEvents: 'none',
+                }}
+              >
+                <Box sx={{ position: 'relative', height: '100%' }}>
+                  {overlayRows.map(({ row, displayIndex, key, offsetTop }) => (
+                    <Box
+                      key={key}
+                      sx={{
+                        position: 'absolute',
+                        top: offsetTop,
+                        left: 0,
+                        right: 0,
+                        height: ROW_HEIGHT,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        px: 1,
+                        gap: 0.5,
+                        borderBottom: '0.5px solid',
+                        borderBottomColor: 'divider',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 600,
+                          color: 'text.secondary',
+                          textAlign: 'left',
+                        }}
+                      >
+                        {displayIndex}
+                      </Typography>
+                      <Tooltip title="View full details">
+                        <Box component="span" sx={{ pointerEvents: 'auto', display: 'flex' }}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRowInfoClick(row);
+                            }}
+                            sx={{
+                              color: 'text.secondary',
+                              pointerEvents: 'auto',
+                              '&:hover': {
+                                color: 'primary.main',
+                                backgroundColor: 'primary.light',
+                                transform: 'scale(1.1)',
+                              },
+                              transition: 'all 0.2s ease-in-out',
+                            }}
+                          >
+                            <Info fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Tooltip>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </>
+          )}
+          {!isLoading && hasVerticalOverflow && (
+            <Box
+              ref={proxyScrollRef}
+              onScroll={handleProxyScroll}
+              sx={{
+                position: 'absolute',
+                top: GRID_HEADER_HEIGHT,
+                right: 0,
+                bottom: 0,
+                width: 16,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                zIndex: 5,
+                scrollbarWidth: 'thin',
+                '&::-webkit-scrollbar': {
+                  width: 6,
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  backgroundColor: 'rgba(0,0,0,0.35)',
+                  borderRadius: 4,
+                },
+                '&::-webkit-scrollbar-track': {
+                  backgroundColor: 'transparent',
+                },
+                borderLeft: '1px solid',
+                borderLeftColor: 'divider',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.6))',
+              }}
+            >
+              <Box sx={{ height: verticalScrollMetrics.scrollHeight }} />
             </Box>
           )}
         </CardContent>
@@ -719,7 +935,8 @@ const areEqual = (prev, next) => {
     prev.permutationId === next.permutationId &&
     shallowEqualObject(prev.permutationParams, next.permutationParams) &&
     prev.isLoading === next.isLoading &&
-    prev.onSendToLastPage === next.onSendToLastPage
+    prev.onSendToLastPage === next.onSendToLastPage &&
+    prev.maxGridWidth === next.maxGridWidth
   );
 };
 

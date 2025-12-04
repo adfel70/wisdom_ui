@@ -19,6 +19,7 @@ const ResultsGrid = ({
   permutationParams,
   onSendToLastPage,
   emptyStateType,
+  baseGridWidth,
 }) => {
   // Show loading spinner during initial search
   if (isSearching) {
@@ -59,6 +60,7 @@ const ResultsGrid = ({
                 permutationParams={permutationParams}
                 isLoading={isPending}
                 onSendToLastPage={onSendToLastPage}
+                maxGridWidth={baseGridWidth}
               />
             ) : (
               <TableCardSkeleton />

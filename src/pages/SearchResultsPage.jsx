@@ -40,8 +40,14 @@ import { getExpandedQueryInfo } from '../utils/searchUtils';
 const SearchResultsPage = () => {
   const navigate = useNavigate();
   const resultsContainerRef = useRef(null);
+  const baselineWidthRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  const getInitialBaseWidth = () => {
+    if (typeof window === 'undefined') return 0;
+    return Math.max(window.innerWidth - PANEL_COLLAPSED_WIDTH, 0);
+  };
+  const [baseResultsWidth, setBaseResultsWidth] = useState(getInitialBaseWidth);
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -58,6 +64,26 @@ const SearchResultsPage = () => {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const updateBaseWidth = () => {
+      if (!baselineWidthRef.current) return;
+      setBaseResultsWidth(baselineWidthRef.current.clientWidth);
+    };
+
+    updateBaseWidth();
+    const resizeObserver = new ResizeObserver(updateBaseWidth);
+    const node = baselineWidthRef.current;
+    if (node) {
+      resizeObserver.observe(node);
+    }
+
+    window.addEventListener('resize', updateBaseWidth);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateBaseWidth);
+    };
   }, []);
 
   // Modal states
@@ -335,6 +361,21 @@ const SearchResultsPage = () => {
       style={{ position: 'absolute', width: '100%', minHeight: '100vh' }}
     >
       <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', pb: totalPages > 1 ? 10 : 6 }}>
+        <Box
+          ref={baselineWidthRef}
+          sx={{
+            position: 'fixed',
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            zIndex: -1,
+            top: 0,
+            left: { xs: 0, lg: `${PANEL_COLLAPSED_WIDTH}px` },
+            right: 0,
+            height: 0,
+            px: { xs: 3, md: 8 },
+            boxSizing: 'border-box',
+          }}
+        />
         {/* Sticky Header */}
         <Box
           ref={headerRef}
@@ -398,12 +439,18 @@ const SearchResultsPage = () => {
         {/* Results Content */}
         <Box
           sx={{
-            ml: { xs: 0, lg: `${sidebarOffset}px` },
-            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` },
+            ml: { xs: 0, lg: `${sidebarOffset}px` },
+            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            justifyContent: 'flex-end',
           }}
         >
-          <Container maxWidth={false} sx={{ mt: 4, px: { xs: 3, md: 8 } }} ref={resultsContainerRef}>
+          <Container
+            maxWidth={false}
+            sx={{ mt: 4, px: { xs: 3, md: 8 }, mr: 0, ml: 0, width: '100%' }}
+            ref={resultsContainerRef}
+          >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <motion.div
@@ -431,6 +478,7 @@ const SearchResultsPage = () => {
                     permutationParams={appliedPermutationParams}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
+                    baseGridWidth={baseResultsWidth}
                   />
                 </motion.div>
               </Box>
