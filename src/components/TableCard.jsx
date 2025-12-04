@@ -163,6 +163,29 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
+const COLUMN_WIDTH_CONFIG = {
+  min: 140,
+  max: 360,
+  padding: 32,
+  charPixelSize: 8,
+};
+
+const ACTIONS_COLUMN_WIDTH = 100;
+
+const sampleColumnWidth = (column, rows = []) => {
+  const headerLength = column?.length ?? 0;
+  const longestValueLength = rows.reduce((maxLength, row) => {
+    const value = row?.[column];
+    if (value === undefined || value === null) {
+      return maxLength;
+    }
+    return Math.max(maxLength, String(value).length);
+  }, 0);
+  const estimatedCharacters = Math.max(headerLength, longestValueLength);
+  const pixelEstimate = estimatedCharacters * COLUMN_WIDTH_CONFIG.charPixelSize + COLUMN_WIDTH_CONFIG.padding;
+  return Math.min(COLUMN_WIDTH_CONFIG.max, Math.max(COLUMN_WIDTH_CONFIG.min, pixelEstimate));
+};
+
 const TableCard = ({
   table,
   query,
@@ -275,13 +298,31 @@ const TableCard = ({
     }));
   }, [table?.data]);
 
+  const sampledRows = React.useMemo(() => {
+    if (!table?.data) return [];
+    return table.data.slice(0, 50);
+  }, [table?.data]);
+
+  const columnSizeMap = React.useMemo(() => {
+    return columnOrder.reduce((acc, column) => {
+      acc[column] = sampleColumnWidth(column, sampledRows);
+      return acc;
+    }, {});
+  }, [columnOrder, sampledRows]);
+
+  const gridMinWidth = React.useMemo(() => {
+    return columnOrder.reduce((total, column) => {
+      return total + (columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min);
+    }, ACTIONS_COLUMN_WIDTH);
+  }, [columnOrder, columnSizeMap]);
+
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
     const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
-      flex: 1,
-      minWidth: 120,
+      width: columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min,
+      minWidth: columnSizeMap[column] ?? COLUMN_WIDTH_CONFIG.min,
       renderHeader: () => (
         <DraggableColumnHeader
           column={column}
@@ -351,7 +392,7 @@ const TableCard = ({
     });
 
     return columns;
-  }, [columnOrder, query, draggedColumn]);
+  }, [columnOrder, query, draggedColumn, columnSizeMap]);
 
   return (
     <Card
@@ -473,7 +514,13 @@ const TableCard = ({
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0, height: 400 }}>
+        <CardContent
+          sx={{
+            p: 0,
+            height: 400,
+            overflow: 'hidden',
+          }}
+        >
           {isLoading ? (
             <Box sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
@@ -484,56 +531,76 @@ const TableCard = ({
               <Skeleton variant="rectangular" height={48} animation="wave" />
             </Box>
           ) : (
-            <DataGrid
-              rows={dataGridRows}
-              columns={dataGridColumns}
-              hideFooter
-              rowHeight={40}
-              initialState={{
-                pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
-              }}
-              slots={{
-                columnMenu: CustomColumnMenu,
-              }}
+            <Box
               sx={{
-                borderRadius: 0,
-                '& .MuiDataGrid-cell': {
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
+                width: '100%',
+                height: '100%',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                contain: 'layout paint',
+                scrollbarWidth: 'thin',
+                '&::-webkit-scrollbar': {
+                  height: 8,
                 },
-                '& .MuiDataGrid-columnHeaders': {
-                  backgroundColor: 'grey.50',
-                  minHeight: '56px !important',
-                },
-                '& .MuiDataGrid-columnHeader': {
-                  backgroundColor: '#F1F1F1',
-                  padding: 0.5,
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
-                  '&:last-child': {
-                    borderRight: 'none',
-                  },
-                  '&:focus': {
-                    outline: 'none',
-                  },
-                  '&:focus-within': {
-                    outline: 'none',
-                  },
-                },
-                '& .MuiDataGrid-columnHeaderTitle': {
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  color: 'text.primary',
-                  display: 'none', // Hide default title since we use custom header
-                },
-                '& .MuiDataGrid-row:hover': {
-                  backgroundColor: 'action.selected',
-                },
-                '& .MuiDataGrid-menuIcon': {
-                  marginRight: 0,
+                '&::-webkit-scrollbar-thumb': {
+                  backgroundColor: 'rgba(0,0,0,0.2)',
+                  borderRadius: 4,
                 },
               }}
-            />
+            >
+              <DataGrid
+                rows={dataGridRows}
+                columns={dataGridColumns}
+                hideFooter
+                rowHeight={40}
+                disableColumnResize
+                initialState={{
+                  pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+                }}
+                slots={{
+                  columnMenu: CustomColumnMenu,
+                }}
+                sx={{
+                  borderRadius: 0,
+                  minWidth: gridMinWidth,
+                  '& .MuiDataGrid-cell': {
+                    borderRight: '0.5px solid',
+                    borderRightColor: 'divider',
+                  },
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: 'grey.50',
+                    minHeight: '56px !important',
+                  },
+                  '& .MuiDataGrid-columnHeader': {
+                    backgroundColor: '#F1F1F1',
+                    padding: 0.5,
+                    borderRight: '0.5px solid',
+                    borderRightColor: 'divider',
+                    '&:last-child': {
+                      borderRight: 'none',
+                    },
+                    '&:focus': {
+                      outline: 'none',
+                    },
+                    '&:focus-within': {
+                      outline: 'none',
+                    },
+                  },
+                  '& .MuiDataGrid-columnHeaderTitle': {
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    color: 'text.primary',
+                    display: 'none', // Hide default title since we use custom header
+                  },
+                  '& .MuiDataGrid-row:hover': {
+                    backgroundColor: 'action.selected',
+                  },
+                  '& .MuiDataGrid-menuIcon': {
+                    marginRight: 0,
+                  },
+                }}
+              />
+            </Box>
           )}
         </CardContent>
       </Collapse>
