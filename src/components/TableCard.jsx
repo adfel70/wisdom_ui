@@ -182,6 +182,8 @@ const TableCard = ({
   const [frozenColumnWidths, setFrozenColumnWidths] = useState(null);
   const gridContainerRef = useRef(null);
   const resizeObserverRef = useRef(null);
+  const maxContainerWidthRef = useRef(0);
+  const previousWidthRef = useRef(0);
 
   // Update column order when table changes
   useEffect(() => {
@@ -202,22 +204,26 @@ const TableCard = ({
   }, []);
 
   // Monitor container size and freeze column widths at widest layout
+  // Columns freeze when the container width starts shrinking (we've reached the peak)
   useEffect(() => {
     const container = gridContainerRef.current;
     if (!container) return;
 
-    // Set up ResizeObserver to detect when grid reaches widest layout
     resizeObserverRef.current = new ResizeObserver(() => {
       // Get the viewport element (DataGrid's internal scroll container)
       const viewport = container.querySelector('.MuiDataGrid-virtualScroller');
-      if (!viewport) return;
+      if (!viewport || frozenColumnWidths) return;
 
       const containerWidth = viewport.clientWidth;
-      const contentWidth = viewport.scrollWidth;
 
-      // Grid is at widest layout when all content fits without horizontal scroll
-      if (contentWidth <= containerWidth && !frozenColumnWidths) {
-        // Capture exact column widths at this moment
+      // Track the maximum width we've seen
+      if (containerWidth > maxContainerWidthRef.current) {
+        maxContainerWidthRef.current = containerWidth;
+      }
+
+      // If width shrinks, we've passed the widest layout - freeze columns now
+      if (previousWidthRef.current > 0 && containerWidth < previousWidthRef.current) {
+        // Capture exact column widths at the maximum width we reached
         const columnElements = container.querySelectorAll('.MuiDataGrid-columnHeader');
         const widths = {};
 
@@ -232,6 +238,8 @@ const TableCard = ({
           setFrozenColumnWidths(widths);
         }
       }
+
+      previousWidthRef.current = containerWidth;
     });
 
     resizeObserverRef.current.observe(container);
