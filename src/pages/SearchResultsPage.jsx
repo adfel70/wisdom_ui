@@ -42,6 +42,7 @@ const SearchResultsPage = () => {
   const resultsContainerRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  const [maxResultsWidth, setMaxResultsWidth] = useState(0);
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -58,6 +59,33 @@ const SearchResultsPage = () => {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  // Track maximum results container width using ResizeObserver
+  useEffect(() => {
+    const updateMaxWidth = () => {
+      if (resultsContainerRef.current) {
+        const currentWidth = resultsContainerRef.current.offsetWidth;
+        setMaxResultsWidth(prevMax => Math.max(prevMax, currentWidth));
+      }
+    };
+
+    // Use requestAnimationFrame to batch updates
+    let rafId;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateMaxWidth);
+    });
+
+    if (resultsContainerRef.current) {
+      updateMaxWidth(); // Initial measurement
+      observer.observe(resultsContainerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rafId);
+    };
   }, []);
 
   // Modal states
@@ -431,6 +459,7 @@ const SearchResultsPage = () => {
                     permutationParams={appliedPermutationParams}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
+                    maxGridWidth={maxResultsWidth}
                   />
                 </motion.div>
               </Box>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import TableCard from '../TableCard';
@@ -19,7 +19,12 @@ const ResultsGrid = ({
   permutationParams,
   onSendToLastPage,
   emptyStateType,
+  maxGridWidth,
 }) => {
+  // Memoize pending table IDs as a Set for O(1) lookup performance
+  const pendingTableIdsSet = useMemo(() => {
+    return new Set(pendingTableIdsRef.current);
+  }, [pendingTableIdsRef]);
   // Show loading spinner during initial search
   if (isSearching) {
     return (
@@ -39,7 +44,7 @@ const ResultsGrid = ({
     <AnimatePresence mode="popLayout">
       {visibleTableIds.map((tableId) => {
         const table = tableDataCache.current.get(tableId);
-        const isPending = pendingTableIdsRef.current.has(tableId);
+        const isPending = pendingTableIdsSet.has(tableId);
 
         return (
           <motion.div
@@ -59,6 +64,7 @@ const ResultsGrid = ({
                 permutationParams={permutationParams}
                 isLoading={isPending}
                 onSendToLastPage={onSendToLastPage}
+                maxGridWidth={maxGridWidth}
               />
             ) : (
               <TableCardSkeleton />

@@ -171,7 +171,8 @@ const TableCard = ({
   permutationId = 'none',
   permutationParams = {},
   isLoading = false,
-  onSendToLastPage
+  onSendToLastPage,
+  maxGridWidth = 0
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -179,6 +180,13 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+
+  // Calculate resolved grid width to lock columns when container is narrower than max observed width
+  const resolvedGridWidth = React.useMemo(() => {
+    const columnCount = columnOrder.length + 1; // +1 for actions column
+    const minWidth = columnCount * 150; // Minimum width per column
+    return Math.max(minWidth, maxGridWidth);
+  }, [columnOrder.length, maxGridWidth]);
 
   // Update column order when table changes
   useEffect(() => {
@@ -521,7 +529,7 @@ const TableCard = ({
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0, height: 400 }}>
+        <CardContent sx={{ p: 0, height: 400, overflow: 'hidden' }}>
           {isLoading ? (
             <Box sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
@@ -552,6 +560,17 @@ const TableCard = ({
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'grey.50',
                   minHeight: '56px !important',
+                  width: resolvedGridWidth ? `${resolvedGridWidth}px` : 'auto',
+                },
+                '& .MuiDataGrid-columnHeadersInner': {
+                  width: resolvedGridWidth ? `${resolvedGridWidth}px` : 'auto',
+                },
+                '& .MuiDataGrid-virtualScroller': {
+                  width: resolvedGridWidth ? `${resolvedGridWidth}px` : 'auto',
+                  overflow: 'auto',
+                },
+                '& .MuiDataGrid-main': {
+                  overflow: 'auto',
                 },
                 '& .MuiDataGrid-columnHeader': {
                   backgroundColor: '#F1F1F1',
@@ -579,6 +598,9 @@ const TableCard = ({
                 },
                 '& .MuiDataGrid-menuIcon': {
                   marginRight: 0,
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  minWidth: '100%',
                 },
               }}
             />
@@ -700,7 +722,8 @@ const areEqual = (prev, next) => {
     prev.permutationId === next.permutationId &&
     shallowEqualObject(prev.permutationParams, next.permutationParams) &&
     prev.isLoading === next.isLoading &&
-    prev.onSendToLastPage === next.onSendToLastPage
+    prev.onSendToLastPage === next.onSendToLastPage &&
+    prev.maxGridWidth === next.maxGridWidth
   );
 };
 
