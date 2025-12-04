@@ -292,7 +292,7 @@ const TableCard = ({
     const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
-      flex: 1,
+      width: 200,
       minWidth: COLUMN_MIN_WIDTH,
       renderHeader: () => (
         <DraggableColumnHeader
@@ -502,20 +502,10 @@ const TableCard = ({
               sx={{
                 width: '100%',
                 height: '100%',
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                contain: 'layout paint',
-                scrollbarWidth: 'thin',
-                '&::-webkit-scrollbar': {
-                  height: 8,
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  backgroundColor: 'rgba(0,0,0,0.2)',
-                  borderRadius: 4,
-                },
+                overflow: 'hidden',
               }}
             >
-              <Box sx={{ width: resolvedGridWidth, minWidth: resolvedGridWidth, height: '100%' }}>
+              <Box sx={{ width: '100%', height: '100%' }}>
                 <DataGrid
                   rows={dataGridRows}
                   columns={dataGridColumns}
