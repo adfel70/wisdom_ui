@@ -40,8 +40,11 @@ import { getExpandedQueryInfo } from '../utils/searchUtils';
 const SearchResultsPage = () => {
   const navigate = useNavigate();
   const resultsContainerRef = useRef(null);
+  const resultsContentRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  const [maxResultsWidth, setMaxResultsWidth] = useState(0);
+  const maxResultsWidthRef = useRef(0);
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -58,6 +61,40 @@ const SearchResultsPage = () => {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  // Track maximum results container width for stable DataGrid sizing
+  useEffect(() => {
+    const container = resultsContentRef.current;
+    if (!container) return;
+
+    let rafId = null;
+
+    const observer = new ResizeObserver((entries) => {
+      // Cancel any pending RAF to avoid stacking
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+
+      rafId = requestAnimationFrame(() => {
+        for (const entry of entries) {
+          const width = entry.contentRect.width;
+          if (width > maxResultsWidthRef.current) {
+            maxResultsWidthRef.current = width;
+            setMaxResultsWidth(width);
+          }
+        }
+      });
+    });
+
+    observer.observe(container);
+
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      observer.disconnect();
+    };
   }, []);
 
   // Modal states
@@ -405,7 +442,7 @@ const SearchResultsPage = () => {
         >
           <Container maxWidth={false} sx={{ mt: 4, px: { xs: 3, md: 8 } }} ref={resultsContainerRef}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch' }}>
-              <Box sx={{ flex: 1, width: '100%' }}>
+              <Box ref={resultsContentRef} sx={{ flex: 1, width: '100%' }}>
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -425,12 +462,10 @@ const SearchResultsPage = () => {
                     isSearching={isSearching}
                     visibleTableIds={visibleTableIds}
                     tableDataCache={tableDataCache}
-                    pendingTableIdsRef={tableLoading.pendingTableIdsRef}
-                    searchQuery={searchState.searchQuery}
-                    permutationId={appliedPermutationId}
-                    permutationParams={appliedPermutationParams}
+                    pendingTableIds={tableLoading.getPendingTableIds()}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
+                    maxResultsWidth={maxResultsWidth}
                   />
                 </motion.div>
               </Box>

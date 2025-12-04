@@ -31,41 +31,7 @@ import {
   ReplyAll,
   Download
 } from '@mui/icons-material';
-import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
- 
-/**
- * HighlightedText Component
- * Highlights matching text in search results
- */
-const HighlightedText = ({ text, query, permutationId = 'none', permutationParams = {} }) => {
-  if (!query || !text) return <span>{text}</span>;
-
-  const parts = highlightText(text, query, permutationId, permutationParams);
-
-  return (
-    <span>
-      {parts.map((part, index) =>
-        part.highlight ? (
-          <Box
-            key={index}
-            component="span"
-            sx={{
-              backgroundColor: 'rgba(37, 99, 235, 0.08)',
-              color: 'primary.main',
-              fontWeight: 500,
-              borderRadius: 0.5,
-            }}
-          >
-            {part.text}
-          </Box>
-        ) : (
-          <span key={index}>{part.text}</span>
-        )
-      )}
-    </span>
-  );
-};
 
 /**
  * CustomColumnMenu Component
@@ -167,11 +133,9 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  */
 const TableCard = ({
   table,
-  query,
-  permutationId = 'none',
-  permutationParams = {},
   isLoading = false,
-  onSendToLastPage
+  onSendToLastPage,
+  maxGridWidth = 0
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -179,6 +143,11 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+
+  // Compute resolved grid width: max(columnCount * 150, maxGridWidth)
+  // This ensures columns have enough space while respecting the container max width
+  const columnCount = columnOrder.length + 1; // +1 for actions column
+  const resolvedGridWidth = Math.max(columnCount * 150, maxGridWidth);
 
   // Update column order when table changes
   useEffect(() => {
@@ -341,7 +310,7 @@ const TableCard = ({
             }}
             title={params.value || 'N/A'}
           >
-            <HighlightedText text={params.value || 'N/A'} query={query} />
+            {params.value || 'N/A'}
           </Typography>
         </Box>
       ),
@@ -379,7 +348,7 @@ const TableCard = ({
     });
 
     return columns;
-  }, [columnOrder, query, draggedColumn]);
+  }, [columnOrder, draggedColumn]);
 
   return (
     <Card
@@ -545,13 +514,31 @@ const TableCard = ({
               }}
               sx={{
                 borderRadius: 0,
-                '& .MuiDataGrid-cell': {
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
+                // Lock header + rows to resolvedGridWidth, allow main to handle horizontal overflow
+                '& .MuiDataGrid-main': {
+                  overflowX: 'auto',
                 },
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'grey.50',
                   minHeight: '56px !important',
+                  width: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                  minWidth: '100%',
+                },
+                '& .MuiDataGrid-columnHeadersInner': {
+                  width: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                  minWidth: '100%',
+                },
+                '& .MuiDataGrid-virtualScroller': {
+                  width: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                  minWidth: '100%',
+                },
+                // Keep footer responsive - pinned to container width
+                '& .MuiDataGrid-footerContainer': {
+                  minWidth: '100%',
+                },
+                '& .MuiDataGrid-cell': {
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
                 },
                 '& .MuiDataGrid-columnHeader': {
                   backgroundColor: '#F1F1F1',
@@ -679,28 +666,12 @@ const TableCard = ({
   );
 };
 
-const shallowEqualObject = (a = {}, b = {}) => {
-  if (a === b) return true;
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (let i = 0; i < aKeys.length; i += 1) {
-    const key = aKeys[i];
-    if (a[key] !== b[key]) {
-      return false;
-    }
-  }
-  return true;
-};
-
 const areEqual = (prev, next) => {
   return (
     prev.table === next.table &&
-    prev.query === next.query &&
-    prev.permutationId === next.permutationId &&
-    shallowEqualObject(prev.permutationParams, next.permutationParams) &&
     prev.isLoading === next.isLoading &&
-    prev.onSendToLastPage === next.onSendToLastPage
+    prev.onSendToLastPage === next.onSendToLastPage &&
+    prev.maxGridWidth === next.maxGridWidth
   );
 };
 
