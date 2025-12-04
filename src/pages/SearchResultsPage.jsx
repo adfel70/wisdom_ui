@@ -42,6 +42,8 @@ const SearchResultsPage = () => {
   const resultsContainerRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  const [maxResultsWidth, setMaxResultsWidth] = useState(0);
+  const maxResultsWidthRef = useRef(0);
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -58,6 +60,36 @@ const SearchResultsPage = () => {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  // Track maximum width of results container for stable column widths
+  useEffect(() => {
+    const container = resultsContainerRef.current;
+    if (!container) return;
+
+    let rafId = null;
+    const observer = new ResizeObserver((entries) => {
+      // Cancel any pending rAF to avoid batching issues
+      if (rafId) cancelAnimationFrame(rafId);
+
+      rafId = requestAnimationFrame(() => {
+        for (const entry of entries) {
+          const currentWidth = entry.contentRect.width;
+          // Only update if we have a larger width (grids should never shrink)
+          if (currentWidth > maxResultsWidthRef.current) {
+            maxResultsWidthRef.current = currentWidth;
+            setMaxResultsWidth(currentWidth);
+          }
+        }
+      });
+    });
+
+    observer.observe(container);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, []);
 
   // Modal states
@@ -431,6 +463,7 @@ const SearchResultsPage = () => {
                     permutationParams={appliedPermutationParams}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
+                    maxGridWidth={maxResultsWidth}
                   />
                 </motion.div>
               </Box>

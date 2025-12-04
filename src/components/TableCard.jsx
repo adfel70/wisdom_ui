@@ -171,7 +171,8 @@ const TableCard = ({
   permutationId = 'none',
   permutationParams = {},
   isLoading = false,
-  onSendToLastPage
+  onSendToLastPage,
+  maxGridWidth = 0
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -186,6 +187,18 @@ const TableCard = ({
       setColumnOrder(table.columns);
     }
   }, [table?.columns]);
+
+  // Compute resolved grid width: max of estimated column width and maxGridWidth
+  // This ensures columns never shrink when the container narrows
+  const resolvedGridWidth = React.useMemo(() => {
+    const columnMinWidth = 120;
+    const actionsColumnWidth = 80;
+    const numColumns = columnOrder.length;
+    // Estimated width based on column minimum widths
+    const estimatedWidth = (numColumns * columnMinWidth) + actionsColumnWidth;
+    // Use the larger of: estimated column width or the max container width seen
+    return Math.max(estimatedWidth, maxGridWidth);
+  }, [columnOrder.length, maxGridWidth]);
 
   // Global drag end handler
   useEffect(() => {
@@ -545,13 +558,32 @@ const TableCard = ({
               }}
               sx={{
                 borderRadius: 0,
-                '& .MuiDataGrid-cell': {
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
+                // Enable horizontal scroll on the main container
+                '& .MuiDataGrid-main': {
+                  overflowX: 'auto',
                 },
+                // Lock column headers and rows to resolved width
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'grey.50',
                   minHeight: '56px !important',
+                  minWidth: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                },
+                '& .MuiDataGrid-columnHeadersInner': {
+                  minWidth: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                },
+                '& .MuiDataGrid-virtualScroller': {
+                  minWidth: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                },
+                '& .MuiDataGrid-virtualScrollerContent': {
+                  minWidth: resolvedGridWidth > 0 ? `${resolvedGridWidth}px` : 'auto',
+                },
+                // Ensure footer stays responsive and full width
+                '& .MuiDataGrid-footerContainer': {
+                  minWidth: '100%',
+                },
+                '& .MuiDataGrid-cell': {
+                  borderRight: '0.5px solid',
+                  borderRightColor: 'divider',
                 },
                 '& .MuiDataGrid-columnHeader': {
                   backgroundColor: '#F1F1F1',
@@ -700,7 +732,8 @@ const areEqual = (prev, next) => {
     prev.permutationId === next.permutationId &&
     shallowEqualObject(prev.permutationParams, next.permutationParams) &&
     prev.isLoading === next.isLoading &&
-    prev.onSendToLastPage === next.onSendToLastPage
+    prev.onSendToLastPage === next.onSendToLastPage &&
+    prev.maxGridWidth === next.maxGridWidth
   );
 };
 
