@@ -31,6 +31,7 @@ import {
   ReplyAll
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
+import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
  
 /**
  * HighlightedText Component
@@ -175,6 +176,7 @@ const TableCard = ({
   onSendToLastPage,
   maxGridWidth = 0,
 }) => {
+  const { isSidePanelCollapsed } = useTableContext();
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -189,6 +191,63 @@ const TableCard = ({
     scrollHeight: 0,
     clientHeight: 0,
   });
+  const [frozenColumnWidth, setFrozenColumnWidth] = useState(null);
+  const containerRef = useRef(null);
+  const tableIdRef = useRef(table?.id);
+
+  // Reset frozen width when table changes
+  if (tableIdRef.current !== table?.id) {
+    tableIdRef.current = table?.id;
+    setFrozenColumnWidth(null);
+  }
+
+  useLayoutEffect(() => {
+    if (isLoading || !containerRef.current) return;
+
+    // Function to calculate and set width
+    const updateWidth = () => {
+      const width = containerRef.current?.clientWidth;
+      if (width > 0 && columnOrder.length > 0) {
+        const actionsWidth = 80; 
+        // Calculate the effective available width:
+        // If sidebar is collapsed (true): current width is already "wide".
+        // If sidebar is expanded (false): current width is "narrow". 
+        // We want to target the "wide" width always.
+        // So if expanded, add the difference back.
+        const sidebarDiff = isSidePanelCollapsed ? 0 : (PANEL_EXPANDED_WIDTH - PANEL_COLLAPSED_WIDTH);
+        
+        const availableWidth = (width + sidebarDiff) - actionsWidth - 2; 
+        const calculated = Math.floor(availableWidth / columnOrder.length);
+        const finalWidth = Math.max(COLUMN_MIN_WIDTH, calculated);
+        
+        // Only set if not already frozen or if significantly different (e.g. during initial layout settle)
+        // But user wants strictly "initial render" fit. 
+        // We'll set it once.
+        setFrozenColumnWidth(prev => (prev === null ? finalWidth : prev));
+      }
+    };
+
+    // Use ResizeObserver to catch the exact moment the container has width
+    const observer = new ResizeObserver(() => {
+      // We use requestAnimationFrame to avoid "ResizeObserver loop limit exceeded"
+      requestAnimationFrame(() => {
+        // We check inside if we need to update
+        // We only want to set it once per table load.
+        // However, ResizeObserver fires continuously on resize. 
+        // We must rely on the state check inside updateWidth logic or here.
+        if (frozenColumnWidth === null) {
+          updateWidth();
+        }
+      });
+    });
+
+    observer.observe(containerRef.current);
+    
+    // Also try immediately in case it's already ready
+    updateWidth();
+
+    return () => observer.disconnect();
+  }, [isLoading, columnOrder.length, frozenColumnWidth]);
 
   // Update column order when table changes
   useEffect(() => {
@@ -292,7 +351,7 @@ const TableCard = ({
     const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
-      width: 200,
+      width: frozenColumnWidth || COLUMN_MIN_WIDTH, // Use calculated or default
       minWidth: COLUMN_MIN_WIDTH,
       renderHeader: () => (
         <DraggableColumnHeader
@@ -363,7 +422,7 @@ const TableCard = ({
     });
 
     return columns;
-  }, [columnOrder, query, draggedColumn]);
+  }, [columnOrder, query, draggedColumn, frozenColumnWidth]);
 
   const resolvedGridWidth = maxGridWidth > 0 ? `${maxGridWidth}px` : '100%';
 
@@ -499,6 +558,7 @@ const TableCard = ({
             </Box>
           ) : (
             <Box
+              ref={containerRef}
               sx={{
                 width: '100%',
                 height: '100%',
