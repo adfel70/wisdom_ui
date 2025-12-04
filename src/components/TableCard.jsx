@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -164,9 +164,6 @@ const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDrag
  * Displays a single table with expandable data view using MUI components
  */
 const COLUMN_MIN_WIDTH = 160;
-const ROW_HEIGHT = 40;
-const GRID_HEADER_HEIGHT = 56;
-const ROW_DETAIL_COLUMN_WIDTH = 80;
 const ROW_DETAIL_COLUMN_FIELD = '__row_details';
 
 const TableCard = ({
@@ -191,7 +188,6 @@ const TableCard = ({
   const [verticalScrollMetrics, setVerticalScrollMetrics] = useState({
     scrollHeight: 0,
     clientHeight: 0,
-    scrollTop: 0,
   });
 
   // Update column order when table changes
@@ -216,10 +212,10 @@ const TableCard = ({
     setIsExpanded(!isExpanded);
   };
 
-  const handleRowInfoClick = useCallback((row) => {
+  const handleRowInfoClick = (row) => {
     setSelectedRow(row);
     setIsPopupOpen(true);
-  }, []);
+  };
 
   const handleClosePopup = () => {
     setIsPopupOpen(false);
@@ -293,22 +289,6 @@ const TableCard = ({
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
-    const rowDetailsColumn = {
-      field: ROW_DETAIL_COLUMN_FIELD,
-      headerName: '#',
-      width: ROW_DETAIL_COLUMN_WIDTH,
-      minWidth: ROW_DETAIL_COLUMN_WIDTH,
-      maxWidth: ROW_DETAIL_COLUMN_WIDTH,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      resizable: false,
-      hideable: false,
-      disableReorder: true,
-      renderHeader: () => null,
-      renderCell: () => null,
-    };
-
     const columns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
@@ -325,132 +305,67 @@ const TableCard = ({
         />
       ),
       renderCell: (params) => (
-        <Box
-          sx={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: 'flex',
-            alignItems: 'center',
-            height: '100%'
-          }}
-        >
-          <Typography
-            variant="body2"
+          <Box
             sx={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              textAlign: 'left',
-              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              height: '100%'
             }}
-            title={
-              params.value !== undefined && params.value !== null
-                ? String(params.value)
-                : 'N/A'
-            }
           >
+            <Typography
+              variant="body2"
+              sx={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                textAlign: 'left',
+                flex: 1,
+              }}
+            title={params.value || 'N/A'}
+            >
             <HighlightedText text={params.value || 'N/A'} query={query} />
-          </Typography>
-        </Box>
+            </Typography>
+          </Box>
       ),
     }));
-    return [rowDetailsColumn, ...columns];
 
+    // Add actions column
+    columns.push({
+      field: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Tooltip title="View full details">
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRowInfoClick(params.row);
+            }}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: 'primary.light',
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease-in-out',
+            }}
+          >
+            <Info fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    });
+
+    return columns;
   }, [columnOrder, query, draggedColumn]);
 
   const resolvedGridWidth = maxGridWidth > 0 ? `${maxGridWidth}px` : '100%';
-  const hasVerticalOverflow = verticalScrollMetrics.scrollHeight > (verticalScrollMetrics.clientHeight + 1);
-
-  const overlayRows = React.useMemo(() => {
-    const { clientHeight, scrollTop } = verticalScrollMetrics;
-    if (!clientHeight || dataGridRows.length === 0) {
-      return [];
-    }
-    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT));
-    const visibleCount = Math.ceil(clientHeight / ROW_HEIGHT) + 2;
-    const endIndex = Math.min(dataGridRows.length, startIndex + visibleCount);
-    const rows = [];
-    for (let index = startIndex; index < endIndex; index += 1) {
-      const row = dataGridRows[index];
-      if (!row) continue;
-      rows.push({
-        row,
-        displayIndex: index + 1,
-        key: row.id ?? index,
-        offsetTop: index * ROW_HEIGHT - scrollTop,
-      });
-    }
-    return rows;
-  }, [dataGridRows, verticalScrollMetrics]);
-
-  useLayoutEffect(() => {
-    if (isLoading) return undefined;
-    const wrapper = gridWrapperRef.current;
-    if (!wrapper) return undefined;
-
-    const virtualScroller = wrapper.querySelector('.MuiDataGrid-virtualScroller');
-    if (!virtualScroller) return undefined;
-
-    virtualScrollerRef.current = virtualScroller;
-
-    const syncProxyPosition = () => {
-      if (!proxyScrollRef.current) return;
-      if (scrollSyncStateRef.current.fromProxy) {
-        scrollSyncStateRef.current.fromProxy = false;
-        return;
-      }
-      scrollSyncStateRef.current.fromGrid = true;
-      proxyScrollRef.current.scrollTop = virtualScroller.scrollTop;
-      scrollSyncStateRef.current.fromGrid = false;
-    };
-
-    const updateMetrics = () => {
-      setVerticalScrollMetrics({
-        scrollHeight: virtualScroller.scrollHeight,
-        clientHeight: virtualScroller.clientHeight,
-        scrollTop: virtualScroller.scrollTop,
-      });
-    };
-
-    updateMetrics();
-    syncProxyPosition();
-
-    const handleGridScroll = () => {
-      syncProxyPosition();
-      setVerticalScrollMetrics((prev) => ({
-        ...prev,
-        scrollTop: virtualScroller.scrollTop,
-      }));
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateMetrics();
-      syncProxyPosition();
-    });
-    resizeObserver.observe(virtualScroller);
-
-    virtualScroller.addEventListener('scroll', handleGridScroll);
-
-    return () => {
-      virtualScroller.removeEventListener('scroll', handleGridScroll);
-      resizeObserver.disconnect();
-      virtualScrollerRef.current = null;
-    };
-  }, [dataGridRows.length, isLoading]);
-
-  const handleProxyScroll = (event) => {
-    if (!virtualScrollerRef.current) return;
-    if (scrollSyncStateRef.current.fromGrid) {
-      scrollSyncStateRef.current.fromGrid = false;
-      return;
-    }
-    scrollSyncStateRef.current.fromProxy = true;
-    virtualScrollerRef.current.scrollTop = event.currentTarget.scrollTop;
-    setVerticalScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: event.currentTarget.scrollTop,
-    }));
-  };
 
   return (
     <Card
@@ -518,9 +433,9 @@ const TableCard = ({
                 <Typography variant="body2" color="text.secondary">
                   Categories:
                 </Typography>
-                {table.categories.map((category, index) => (
+                {table.categories.map((category) => (
                   <Chip
-                    key={`${category}-${index}`}
+                    key={category}
                     label={category}
                     size="small"
                     variant="outlined"
@@ -572,14 +487,7 @@ const TableCard = ({
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent
-          sx={{
-            p: 0,
-            height: 400,
-            overflow: 'hidden',
-            position: 'relative',
-          }}
-        >
+        <CardContent sx={{ p: 0, height: 400, overflow: 'hidden' }}>
           {isLoading ? (
             <Box sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
@@ -607,20 +515,12 @@ const TableCard = ({
                 },
               }}
             >
-              <Box
-                ref={gridWrapperRef}
-                sx={{
-                  width: resolvedGridWidth,
-                  minWidth: resolvedGridWidth,
-                  height: '100%',
-                  pr: hasVerticalOverflow ? 2 : 0,
-                }}
-              >
+              <Box sx={{ width: resolvedGridWidth, minWidth: resolvedGridWidth, height: '100%' }}>
                 <DataGrid
                   rows={dataGridRows}
                   columns={dataGridColumns}
                   hideFooter
-                  rowHeight={ROW_HEIGHT}
+                  rowHeight={40}
                   disableColumnResize
                   initialState={{
                     pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
@@ -631,29 +531,13 @@ const TableCard = ({
                   sx={{
                     borderRadius: 0,
                     width: '100%',
-                    '& .MuiDataGrid-main': {
-                      scrollbarWidth: 'none',
-                      msOverflowStyle: 'none',
-                      '&::-webkit-scrollbar': {
-                        width: 0,
-                        height: 0,
-                      },
-                    },
-                    '& .MuiDataGrid-virtualScroller': {
-                      scrollbarWidth: 'none',
-                      msOverflowStyle: 'none',
-                      '&::-webkit-scrollbar': {
-                        width: 0,
-                        height: 0,
-                      },
-                    },
                     '& .MuiDataGrid-cell': {
                       borderRight: '0.5px solid',
                       borderRightColor: 'divider',
                     },
                     '& .MuiDataGrid-columnHeaders': {
                       backgroundColor: 'grey.50',
-                      minHeight: `${GRID_HEADER_HEIGHT}px !important`,
+                      minHeight: '56px !important',
                     },
                     '& .MuiDataGrid-columnHeader': {
                       backgroundColor: '#F1F1F1',
@@ -685,137 +569,6 @@ const TableCard = ({
                   }}
                 />
               </Box>
-            </Box>
-          )}
-          {!isLoading && (
-            <>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: ROW_DETAIL_COLUMN_WIDTH,
-                  height: GRID_HEADER_HEIGHT,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  fontVariantNumeric: 'tabular-nums',
-                  backgroundColor: 'grey.50',
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
-                  zIndex: 6,
-                  pointerEvents: 'none',
-                }}
-              >
-                #
-              </Box>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: GRID_HEADER_HEIGHT,
-                  bottom: 0,
-                  left: 0,
-                  width: ROW_DETAIL_COLUMN_WIDTH,
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.95))',
-                  zIndex: 5,
-                  pointerEvents: 'none',
-                }}
-              >
-                <Box sx={{ position: 'relative', height: '100%' }}>
-                  {overlayRows.map(({ row, displayIndex, key, offsetTop }) => (
-                    <Box
-                      key={key}
-                      sx={{
-                        position: 'absolute',
-                        top: offsetTop,
-                        left: 0,
-                        right: 0,
-                        height: ROW_HEIGHT,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        px: 1,
-                        gap: 0.5,
-                        borderBottom: '0.5px solid',
-                        borderBottomColor: 'divider',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontWeight: 600,
-                          color: 'text.secondary',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {displayIndex}
-                      </Typography>
-                      <Tooltip title="View full details">
-                        <Box component="span" sx={{ pointerEvents: 'auto', display: 'flex' }}>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRowInfoClick(row);
-                            }}
-                            sx={{
-                              color: 'text.secondary',
-                              pointerEvents: 'auto',
-                              '&:hover': {
-                                color: 'primary.main',
-                                backgroundColor: 'primary.light',
-                                transform: 'scale(1.1)',
-                              },
-                              transition: 'all 0.2s ease-in-out',
-                            }}
-                          >
-                            <Info fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Tooltip>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            </>
-          )}
-          {!isLoading && hasVerticalOverflow && (
-            <Box
-              ref={proxyScrollRef}
-              onScroll={handleProxyScroll}
-              sx={{
-                position: 'absolute',
-                top: GRID_HEADER_HEIGHT,
-                right: 0,
-                bottom: 0,
-                width: 16,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                zIndex: 5,
-                scrollbarWidth: 'thin',
-                '&::-webkit-scrollbar': {
-                  width: 6,
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  backgroundColor: 'rgba(0,0,0,0.35)',
-                  borderRadius: 4,
-                },
-                '&::-webkit-scrollbar-track': {
-                  backgroundColor: 'transparent',
-                },
-                borderLeft: '1px solid',
-                borderLeftColor: 'divider',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.6))',
-              }}
-            >
-              <Box sx={{ height: verticalScrollMetrics.scrollHeight }} />
             </Box>
           )}
         </CardContent>
