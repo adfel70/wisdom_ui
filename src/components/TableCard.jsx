@@ -28,9 +28,11 @@ import {
   Close,
   DragIndicator,
   ContentCopy,
-  ReplyAll
+  ReplyAll,
+  Download
 } from '@mui/icons-material';
 import { highlightText } from '../utils/searchUtils';
+import * as XLSX from 'xlsx';
  
 /**
  * HighlightedText Component
@@ -223,6 +225,32 @@ const TableCard = ({
     } catch (err) {
       console.error('Failed to copy row content:', err);
     }
+  };
+
+  const handleDownloadExcel = () => {
+    if (!table?.data || table.data.length === 0) {
+      return;
+    }
+
+    const formattedRows = table.data.map((row) => {
+      const formattedRow = {};
+      columnOrder.forEach((column) => {
+        formattedRow[column] = row?.[column] ?? 'N/A';
+      });
+      return formattedRow;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows);
+    const workbook = XLSX.utils.book_new();
+    const sheetName = (table.name || 'Data').slice(0, 31);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    const safeFileName = `${table.name || 'table'}_${table.year || 'data'}`.replace(
+      /[\\/:*?"<>|]/g,
+      '_'
+    );
+
+    XLSX.writeFile(workbook, `${safeFileName}.xlsx`);
   };
 
   // Drag and drop handlers for column reordering
@@ -451,6 +479,26 @@ const TableCard = ({
                   }}
                 >
                   <ReplyAll />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!!table?.data?.length && (
+              <Tooltip title="Download as Excel">
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadExcel();
+                  }}
+                  sx={{
+                    backgroundColor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                    '&:hover': {
+                      backgroundColor: 'grey.100',
+                    },
+                  }}
+                >
+                  <Download />
                 </IconButton>
               </Tooltip>
             )}
