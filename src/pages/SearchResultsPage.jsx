@@ -399,7 +399,7 @@ const SearchResultsPage = () => {
         <Box
           sx={{
             ml: { xs: 0, lg: `${sidebarOffset}px` },
-            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             width: { xs: '100%', lg: `calc(100% - ${sidebarOffset}px)` },
           }}
         >
