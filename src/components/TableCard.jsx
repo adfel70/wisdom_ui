@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -179,6 +179,9 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [frozenColumnWidths, setFrozenColumnWidths] = useState(null);
+  const gridContainerRef = useRef(null);
+  const resizeObserverRef = useRef(null);
 
   // Update column order when table changes
   useEffect(() => {
@@ -197,6 +200,48 @@ const TableCard = ({
     document.addEventListener('dragend', handleGlobalDragEnd);
     return () => document.removeEventListener('dragend', handleGlobalDragEnd);
   }, []);
+
+  // Monitor container size and freeze column widths at widest layout
+  useEffect(() => {
+    const container = gridContainerRef.current;
+    if (!container) return;
+
+    // Set up ResizeObserver to detect when grid reaches widest layout
+    resizeObserverRef.current = new ResizeObserver(() => {
+      // Get the viewport element (DataGrid's internal scroll container)
+      const viewport = container.querySelector('.MuiDataGrid-virtualScroller');
+      if (!viewport) return;
+
+      const containerWidth = viewport.clientWidth;
+      const contentWidth = viewport.scrollWidth;
+
+      // Grid is at widest layout when all content fits without horizontal scroll
+      if (contentWidth <= containerWidth && !frozenColumnWidths) {
+        // Capture exact column widths at this moment
+        const columnElements = container.querySelectorAll('.MuiDataGrid-columnHeader');
+        const widths = {};
+
+        columnElements.forEach((el) => {
+          const field = el.getAttribute('data-field');
+          if (field) {
+            widths[field] = el.offsetWidth;
+          }
+        });
+
+        if (Object.keys(widths).length > 0) {
+          setFrozenColumnWidths(widths);
+        }
+      }
+    });
+
+    resizeObserverRef.current.observe(container);
+
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [frozenColumnWidths]);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -305,12 +350,21 @@ const TableCard = ({
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
-    const columns = columnOrder.map((column) => ({
-      field: column,
-      headerName: column,
-      flex: 1,
-      minWidth: 120,
-      renderHeader: () => (
+    const columns = columnOrder.map((column) => {
+      const columnConfig = {
+        field: column,
+        headerName: column,
+      };
+
+      // Use frozen widths if available, otherwise use flexible sizing
+      if (frozenColumnWidths && frozenColumnWidths[column]) {
+        columnConfig.width = frozenColumnWidths[column];
+      } else {
+        columnConfig.flex = 1;
+        columnConfig.minWidth = 120;
+      }
+
+      columnConfig.renderHeader = () => (
         <DraggableColumnHeader
           column={column}
           onDragStart={(e) => handleDragStart(e, column)}
@@ -319,8 +373,9 @@ const TableCard = ({
           isDragging={draggedColumn === column}
           isDragOver={dragOverColumn === column}
         />
-      ),
-      renderCell: (params) => (
+      );
+
+      columnConfig.renderCell = (params) => (
         <Box
           sx={{
             overflow: 'hidden',
@@ -344,8 +399,10 @@ const TableCard = ({
             <HighlightedText text={params.value || 'N/A'} query={query} />
           </Typography>
         </Box>
-      ),
-    }));
+      );
+
+      return columnConfig;
+    });
 
     // Add actions column
     columns.push({
@@ -379,7 +436,7 @@ const TableCard = ({
     });
 
     return columns;
-  }, [columnOrder, query, draggedColumn]);
+  }, [columnOrder, query, draggedColumn, frozenColumnWidths]);
 
   return (
     <Card
@@ -521,7 +578,7 @@ const TableCard = ({
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0, height: 400 }}>
+        <CardContent sx={{ p: 0, height: 400 }} ref={gridContainerRef}>
           {isLoading ? (
             <Box sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
