@@ -245,7 +245,7 @@ const TableCard = ({
     const sheetName = (table.name || 'Data').slice(0, 31);
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-    const safeFileName = `${table.name || 'table'}_${table.year || 'data'}`.replace(
+    const safeFileName = `${table.name || 'table'}`.replace(
       /[\\/:*?"<>|]/g,
       '_'
     );
