@@ -10,7 +10,8 @@
       "value": 9882,
       "company": "DevTeam",
       "name": "Jack Young",
-      "percent": "54%"
+      "percent": "54%",
+      "empty column": "empty column1"
     },
     {
       "tableKey": "t1",

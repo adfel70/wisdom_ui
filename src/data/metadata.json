@@ -34,6 +34,10 @@
         {
           "name": "percent",
           "type": "percentage"
+        }, 
+       {
+          "name": "empty column",
+          "type": "text"
         }
       ],
       "categories": [
