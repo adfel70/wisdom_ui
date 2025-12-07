@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { searchTablesByQuery, getMultipleTablesData } from '../data/mockDatabaseNew';
+import { searchTablesByQuery, getTableDataPaginatedById } from '../data/mockDatabaseNew';
+import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 
 /**
  * Hook to manage search execution and table data fetching
  * Handles two-phase loading: search for IDs, then fetch table data
+ * Now supports paginated table data
  */
 export const useSearchResults = ({
   searchQuery,
@@ -17,6 +19,7 @@ export const useSearchResults = ({
   lastSearchSignature,
   setLastSearchSignature,
   tableLoadingHook,
+  tablePaginationHook,
 }) => {
   const [isSearching, setIsSearching] = useState(true);
   const [isLoadingTableData, setIsLoadingTableData] = useState(false);
@@ -107,7 +110,7 @@ export const useSearchResults = ({
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);
 
-  // Step 2: Load table data for visible table IDs
+  // Step 2: Load table data for visible table IDs (with pagination)
   useEffect(() => {
     let isCancelled = false;
 
@@ -138,13 +141,24 @@ export const useSearchResults = ({
       }
 
       try {
-        const newTables = await getMultipleTablesData(
-          idsToFetch,
-          searchQuery,
-          filters,
-          permutationId,
-          permutationParams
-        );
+        // Fetch paginated data for each table (first page only)
+        const tablePromises = idsToFetch.map(async (tableId) => {
+          // Fetch first page of records
+          const tableData = await getTableDataPaginatedById(tableId, {}, RECORDS_PER_PAGE);
+
+          // Initialize pagination state for this table
+          if (tablePaginationHook && !isCancelled) {
+            tablePaginationHook.initializeTable(
+              tableId,
+              tableData.data,
+              tableData.paginationInfo
+            );
+          }
+
+          return tableData;
+        });
+
+        const newTables = await Promise.all(tablePromises);
 
         if (!isCancelled) {
           newTables.forEach(t => tableDataCache.current.set(t.id, t));

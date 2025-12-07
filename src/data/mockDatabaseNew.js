@@ -6,7 +6,7 @@
  * Data is NOT loaded at module import time - it's fetched on-demand.
  */
 
-import { get_tables_metadata, db1, db2, db3, db4, getDatabaseConfig, getTablesMetadataForDatabase, getTableData } from '../api/backend.js';
+import { get_tables_metadata, db1, db2, db3, db4, getDatabaseConfig, getTablesMetadataForDatabase, getTableData, getTableDataPaginated } from '../api/backend.js';
 import { applySearchAndFilters } from '../utils/searchUtils.js';
 
 // Get metadata and config (small, loaded upfront)
@@ -330,4 +330,15 @@ export async function getMultipleTablesData(tableIds, query = '', filters = {}, 
     // Return table with empty data if no matches (shouldn't happen)
     return { ...table, data: [], matchCount: 0 };
   }).filter(table => table.data.length > 0);
+}
+
+/**
+ * Get paginated table data by ID
+ * @param {string} tableId - Table ID
+ * @param {Object} paginationState - Current pagination state
+ * @param {number} pageSize - Number of records to fetch
+ * @returns {Promise<Object>} Table object with paginated data and pagination info
+ */
+export async function getTableDataPaginatedById(tableId, paginationState = {}, pageSize) {
+  return await getTableDataPaginated(tableId, paginationState, pageSize);
 }

@@ -29,8 +29,10 @@ import {
   DragIndicator,
   ContentCopy,
   ReplyAll,
-  Download
+  Download,
+  ExpandCircleDown
 } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
  
@@ -171,7 +173,10 @@ const TableCard = ({
   permutationId = 'none',
   permutationParams = {},
   isLoading = false,
-  onSendToLastPage
+  onSendToLastPage,
+  hasMore = false,
+  onLoadMore = null,
+  isLoadingMore = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -430,6 +435,27 @@ const TableCard = ({
                 variant="outlined"
                 sx={{ fontWeight: 500 }}
               />
+              {hasMore && onLoadMore && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={isLoadingMore ? <CircularProgress size={14} /> : <ExpandCircleDown />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLoadMore();
+                  }}
+                  disabled={isLoadingMore}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    height: '24px',
+                    px: 1,
+                    minWidth: 'auto',
+                  }}
+                >
+                  {isLoadingMore ? 'Loading...' : 'Load More'}
+                </Button>
+              )}
             </Box>
 
             <Box
@@ -521,7 +547,7 @@ const TableCard = ({
 
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <CardContent sx={{ p: 0, height: 400 }}>
+        <CardContent sx={{ p: 0, height: 400, position: 'relative' }}>
           {isLoading ? (
             <Box sx={{ p: 3 }}>
               <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
@@ -532,56 +558,77 @@ const TableCard = ({
               <Skeleton variant="rectangular" height={48} animation="wave" />
             </Box>
           ) : (
-            <DataGrid
-              rows={dataGridRows}
-              columns={dataGridColumns}
-              hideFooter
-              rowHeight={40}
-              initialState={{
-                pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
-              }}
-              slots={{
-                columnMenu: CustomColumnMenu,
-              }}
-              sx={{
-                borderRadius: 0,
-                '& .MuiDataGrid-cell': {
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
-                },
-                '& .MuiDataGrid-columnHeaders': {
-                  backgroundColor: 'grey.50',
-                  minHeight: '56px !important',
-                },
-                '& .MuiDataGrid-columnHeader': {
-                  backgroundColor: '#F1F1F1',
-                  padding: 0.5,
-                  borderRight: '0.5px solid',
-                  borderRightColor: 'divider',
-                  '&:last-child': {
-                    borderRight: 'none',
+            <>
+              <DataGrid
+                rows={dataGridRows}
+                columns={dataGridColumns}
+                hideFooter
+                rowHeight={40}
+                initialState={{
+                  pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
+                }}
+                slots={{
+                  columnMenu: CustomColumnMenu,
+                }}
+                sx={{
+                  borderRadius: 0,
+                  '& .MuiDataGrid-cell': {
+                    borderRight: '0.5px solid',
+                    borderRightColor: 'divider',
                   },
-                  '&:focus': {
-                    outline: 'none',
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: 'grey.50',
+                    minHeight: '56px !important',
                   },
-                  '&:focus-within': {
-                    outline: 'none',
+                  '& .MuiDataGrid-columnHeader': {
+                    backgroundColor: '#F1F1F1',
+                    padding: 0.5,
+                    borderRight: '0.5px solid',
+                    borderRightColor: 'divider',
+                    '&:last-child': {
+                      borderRight: 'none',
+                    },
+                    '&:focus': {
+                      outline: 'none',
+                    },
+                    '&:focus-within': {
+                      outline: 'none',
+                    },
                   },
-                },
-                '& .MuiDataGrid-columnHeaderTitle': {
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  color: 'text.primary',
-                  display: 'none', // Hide default title since we use custom header
-                },
-                '& .MuiDataGrid-row:hover': {
-                  backgroundColor: 'action.selected',
-                },
-                '& .MuiDataGrid-menuIcon': {
-                  marginRight: 0,
-                },
-              }}
-            />
+                  '& .MuiDataGrid-columnHeaderTitle': {
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    color: 'text.primary',
+                    display: 'none', // Hide default title since we use custom header
+                  },
+                  '& .MuiDataGrid-row:hover': {
+                    backgroundColor: 'action.selected',
+                  },
+                  '& .MuiDataGrid-menuIcon': {
+                    marginRight: 0,
+                  },
+                }}
+              />
+              {/* Semi-transparent loading overlay for Load More */}
+              {isLoadingMore && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1,
+                  }}
+                >
+                  <CircularProgress size={40} />
+                </Box>
+              )}
+            </>
           )}
         </CardContent>
       </Collapse>
