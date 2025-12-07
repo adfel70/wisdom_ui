@@ -329,30 +329,52 @@ const SearchResultsPage = () => {
     tablePagination.setLoadingMore(tableId, true);
 
     try {
-      // Fetch next page of records
-      const tableData = await getTableDataPaginatedById(
-        tableId,
-        paginationState,
-        tablePagination.pageSize
-      );
+      // Keep fetching batches until we have enough matching records
+      const targetRecords = tablePagination.pageSize;
+      let allMatchingRecords = [];
+      let currentPaginationState = paginationState;
+      let lastPaginationInfo = null;
+      let hasMoreRecords = true;
 
-      // Apply search filter to the new data (if there's a search query)
-      let newRecords = tableData.data;
-      if (searchState.searchQuery && searchState.searchQuery.trim()) {
-        const filtered = applySearchAndFilters(
-          [tableData],
-          searchState.searchQuery,
-          {}, // Don't apply filters again
-          searchState.permutationId,
-          searchState.permutationParams
+      while (allMatchingRecords.length < targetRecords && hasMoreRecords) {
+        // Fetch next batch
+        const tableData = await getTableDataPaginatedById(
+          tableId,
+          currentPaginationState,
+          tablePagination.pageSize
         );
+        lastPaginationInfo = tableData.paginationInfo;
 
-        if (filtered.length > 0 && filtered[0].data.length > 0) {
-          newRecords = filtered[0].data;
-        } else {
-          newRecords = [];
+        // Apply search filter to this batch
+        let matchingRecords = tableData.data;
+        if (searchState.searchQuery && searchState.searchQuery.trim()) {
+          const filtered = applySearchAndFilters(
+            [tableData],
+            searchState.searchQuery,
+            {}, // Don't apply filters again
+            searchState.permutationId,
+            searchState.permutationParams
+          );
+
+          if (filtered.length > 0 && filtered[0].data.length > 0) {
+            matchingRecords = filtered[0].data;
+          } else {
+            matchingRecords = [];
+          }
+        }
+
+        // Accumulate matching records
+        allMatchingRecords = [...allMatchingRecords, ...matchingRecords];
+
+        // Update pagination state for next fetch
+        hasMoreRecords = tableData.paginationInfo.hasMore;
+        if (hasMoreRecords) {
+          currentPaginationState = tableData.paginationInfo.nextPaginationState;
         }
       }
+
+      // Limit to target number of records
+      const newRecords = allMatchingRecords.slice(0, targetRecords);
 
       // Update the cache with filtered new data
       const cachedTable = tableDataCache.current.get(tableId);
@@ -365,7 +387,7 @@ const SearchResultsPage = () => {
       }
 
       // Then update pagination state (this also triggers re-render)
-      tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
+      tablePagination.appendRecords(tableId, newRecords, lastPaginationInfo);
 
       // Force re-render by updating counter
       setCacheUpdateCounter(prev => prev + 1);

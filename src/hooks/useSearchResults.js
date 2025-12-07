@@ -144,34 +144,66 @@ export const useSearchResults = ({
       try {
         // Fetch paginated data for each table (first page only)
         const tablePromises = idsToFetch.map(async (tableId) => {
-          // Fetch first page of records
-          const tableData = await getTableDataPaginatedById(tableId, {}, RECORDS_PER_PAGE);
+          // Keep fetching batches until we have enough matching records
+          const targetRecords = RECORDS_PER_PAGE;
+          let allMatchingRecords = [];
+          let currentPaginationState = {};
+          let lastPaginationInfo = null;
+          let lastTableData = null;
+          let hasMoreRecords = true;
 
-          // Apply search filter to the loaded data (if there's a search query)
-          let filteredTable = tableData;
-          if (searchQuery && searchQuery.trim()) {
-            const filtered = applySearchAndFilters(
-              [tableData],
-              searchQuery,
-              {}, // Don't apply filters again (already applied in searchTablesByQuery)
-              permutationId,
-              permutationParams
-            );
+          while (allMatchingRecords.length < targetRecords && hasMoreRecords) {
+            // Fetch next batch
+            lastTableData = await getTableDataPaginatedById(tableId, currentPaginationState, RECORDS_PER_PAGE);
+            lastPaginationInfo = lastTableData.paginationInfo;
 
-            if (filtered.length > 0 && filtered[0].data.length > 0) {
-              filteredTable = filtered[0];
-            } else {
-              // No matching records in this page
-              filteredTable = { ...tableData, data: [], matchCount: 0 };
+            // Apply search filter to this batch
+            let matchingRecords = lastTableData.data;
+            if (searchQuery && searchQuery.trim()) {
+              const filtered = applySearchAndFilters(
+                [lastTableData],
+                searchQuery,
+                {}, // Don't apply filters again
+                permutationId,
+                permutationParams
+              );
+
+              if (filtered.length > 0 && filtered[0].data.length > 0) {
+                matchingRecords = filtered[0].data;
+              } else {
+                matchingRecords = [];
+              }
+            }
+
+            // Accumulate matching records
+            allMatchingRecords = [...allMatchingRecords, ...matchingRecords];
+
+            // Update pagination state for next fetch
+            hasMoreRecords = lastTableData.paginationInfo.hasMore;
+            if (hasMoreRecords) {
+              currentPaginationState = lastTableData.paginationInfo.nextPaginationState;
             }
           }
 
-          // Initialize pagination state for this table with filtered data
+          // Create table object with accumulated matches
+          const filteredTable = {
+            id: tableId,
+            name: lastTableData.name,
+            year: lastTableData.year,
+            country: lastTableData.country,
+            categories: lastTableData.categories,
+            count: lastTableData.count,
+            columns: lastTableData.columns,
+            data: allMatchingRecords.slice(0, targetRecords), // Limit to target
+            matchCount: allMatchingRecords.length
+          };
+
+          // Initialize pagination state for this table
           if (tablePaginationHook && !isCancelled) {
             tablePaginationHook.initializeTable(
               tableId,
               filteredTable.data,
-              tableData.paginationInfo // Keep original pagination info
+              lastPaginationInfo // Use last pagination info
             );
           }
 
