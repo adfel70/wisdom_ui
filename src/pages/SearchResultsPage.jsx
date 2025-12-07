@@ -24,11 +24,12 @@ import {
   useTableLoading,
   useURLSync,
   useSearchResults,
+  useTablePagination,
 } from '../hooks';
 
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
-import { getDatabaseMetadata } from '../data/mockDatabaseNew';
+import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
 
 /**
@@ -66,6 +67,7 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
+  const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
 
   // Global context
   const {
@@ -83,6 +85,7 @@ const SearchResultsPage = () => {
   const pagination = usePagination();
   const tableLoading = useTableLoading();
   const urlSync = useURLSync();
+  const tablePagination = useTablePagination();
 
   // Get database metadata
   const databaseMetadata = getDatabaseMetadata();
@@ -112,6 +115,7 @@ const SearchResultsPage = () => {
     lastSearchSignature,
     setLastSearchSignature,
     tableLoadingHook: tableLoading,
+    tablePaginationHook: tablePagination,
   });
 
   // Initialize state from URL params
@@ -312,6 +316,51 @@ const SearchResultsPage = () => {
     focusTableCard(tableId);
   }, [matchingTableIds, activeDatabase, currentPage, handlePageChange, focusTableCard, pagination]);
 
+  const handleLoadMore = useCallback(async (tableId) => {
+    // Get current pagination state for this table
+    const paginationState = tablePagination.getPaginationState(tableId);
+
+    if (!paginationState) {
+      console.error('No pagination state found for table:', tableId);
+      return;
+    }
+
+    // Set loading state
+    tablePagination.setLoadingMore(tableId, true);
+
+    try {
+      // Backend handles batch-fetching to return exactly pageSize matching records
+      const tableData = await getTableDataPaginatedById(
+        tableId,
+        paginationState,
+        tablePagination.pageSize,
+        searchState.searchQuery,
+        searchState.permutationId,
+        searchState.permutationParams
+      );
+
+      const newRecords = tableData.data;
+
+      // Update the cache with new data
+      const cachedTable = tableDataCache.current.get(tableId);
+      if (cachedTable) {
+        const updatedTable = {
+          ...cachedTable,
+          data: [...cachedTable.data, ...newRecords],
+        };
+        tableDataCache.current.set(tableId, updatedTable);
+      }
+
+      // Update pagination state (this also triggers re-render)
+      tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
+
+      // Force re-render by updating counter
+      setCacheUpdateCounter(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to load more records:', error);
+    }
+  }, [tablePagination, tableDataCache, searchState]);
+
   // Determine empty state type
   const getEmptyStateType = () => {
     const hasFilters = Object.values(searchState.filters).some(v => {
@@ -431,6 +480,8 @@ const SearchResultsPage = () => {
                     permutationParams={appliedPermutationParams}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
+                    tablePaginationHook={tablePagination}
+                    onLoadMore={handleLoadMore}
                   />
                 </motion.div>
               </Box>

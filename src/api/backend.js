@@ -9,6 +9,11 @@
  */
 
 import metadataFile from '../data/metadata.json' with { type: 'json' };
+import {
+  RECORDS_PER_PAGE,
+  PAGINATION_STRATEGY,
+  getPaginationStrategy
+} from '../config/paginationConfig';
 
 // Metadata loaded once on app start (small file, OK to keep in memory)
 const METADATA = metadataFile.metadata;
@@ -215,5 +220,204 @@ export async function getTableData(tableKey) {
     count: meta.recordCount,
     columns: meta.columns.map(col => col.name),
     data: data
+  };
+}
+
+/**
+ * Get paginated data for a specific table
+ * Supports both cursor-based and offset-based pagination
+ * When searchQuery is provided, fetches batches until pageSize matching records found
+ * @param {string} tableKey - Table key (e.g., 't1')
+ * @param {Object} paginationState - Current pagination state
+ *   - For cursor strategy: { cursor: string | null }
+ *   - For offset strategy: { offset: number }
+ * @param {number} pageSize - Number of records to fetch (default: RECORDS_PER_PAGE)
+ * @param {string} searchQuery - Optional search query to filter records
+ * @param {string} permutationId - Optional permutation ID for search
+ * @param {Object} permutationParams - Optional permutation parameters
+ * @returns {Promise<Object>} Paginated table data with pagination info
+ */
+export async function getTableDataPaginated(tableKey, paginationState = {}, pageSize = RECORDS_PER_PAGE, searchQuery = '', permutationId = 'none', permutationParams = {}) {
+  const meta = METADATA[tableKey];
+  if (!meta) {
+    throw new Error(`Table ${tableKey} not found`);
+  }
+
+  // Find which database contains this table
+  let dbKey = null;
+  for (const [key, tableKeys] of Object.entries(DATABASE_ASSIGNMENTS)) {
+    if (tableKeys.includes(tableKey)) {
+      dbKey = key;
+      break;
+    }
+  }
+
+  if (!dbKey) {
+    throw new Error(`Table ${tableKey} not found in any database`);
+  }
+
+  // Get all records for this table
+  const allRecords = await getTableRecords(tableKey);
+
+  // Determine pagination strategy
+  const strategy = getPaginationStrategy(dbKey);
+
+  // If no search query, use simple pagination
+  if (!searchQuery || !searchQuery.trim()) {
+    let records = [];
+    let nextPaginationState = null;
+    let hasMore = false;
+
+    if (strategy === PAGINATION_STRATEGY.CURSOR) {
+      // Cursor-based pagination
+      const cursor = paginationState.cursor || null;
+      const startIndex = cursor ? parseInt(cursor, 10) : 0;
+      const endIndex = startIndex + pageSize;
+
+      records = allRecords.slice(startIndex, endIndex);
+      hasMore = endIndex < allRecords.length;
+
+      nextPaginationState = hasMore ? {
+        cursor: endIndex.toString()
+      } : null;
+    } else {
+      // Offset-based pagination
+      const offset = paginationState.offset || 0;
+      const startIndex = offset;
+      const endIndex = startIndex + pageSize;
+
+      records = allRecords.slice(startIndex, endIndex);
+      hasMore = endIndex < allRecords.length;
+
+      nextPaginationState = hasMore ? {
+        offset: endIndex
+      } : null;
+    }
+
+    // Remove tableKey field from records
+    const data = records.map(record => {
+      const { tableKey: _, ...rowData } = record;
+      return rowData;
+    });
+
+    return {
+      id: tableKey,
+      name: meta.name,
+      year: meta.year,
+      country: meta.country,
+      categories: meta.categories,
+      count: meta.recordCount,
+      columns: meta.columns.map(col => col.name),
+      data: data,
+      paginationInfo: {
+        hasMore,
+        nextPaginationState,
+        strategy,
+        loadedRecords: data.length,
+        totalRecords: meta.recordCount,
+      }
+    };
+  }
+
+  // With search query: batch-fetch until we have pageSize matching records
+  const { applySearchAndFilters } = await import('../utils/searchUtils.js');
+
+  let matchingRecords = [];
+  let currentPaginationState = paginationState;
+  let lastPaginationInfo = null;
+  let hasMoreRecords = true;
+  let totalFetchedIndex = 0;
+
+  while (matchingRecords.length < pageSize && hasMoreRecords) {
+    // Calculate batch indices based on strategy
+    let batchRecords = [];
+    let batchEndIndex = 0;
+
+    if (strategy === PAGINATION_STRATEGY.CURSOR) {
+      const cursor = currentPaginationState.cursor || null;
+      const startIndex = cursor ? parseInt(cursor, 10) : 0;
+      const endIndex = startIndex + pageSize;
+
+      batchRecords = allRecords.slice(startIndex, endIndex);
+      batchEndIndex = endIndex;
+      hasMoreRecords = endIndex < allRecords.length;
+    } else {
+      const offset = currentPaginationState.offset || 0;
+      const startIndex = offset;
+      const endIndex = startIndex + pageSize;
+
+      batchRecords = allRecords.slice(startIndex, endIndex);
+      batchEndIndex = endIndex;
+      hasMoreRecords = endIndex < allRecords.length;
+    }
+
+    // If no more records in this batch, break
+    if (batchRecords.length === 0) {
+      break;
+    }
+
+    // Create temporary table object for filtering
+    const tempTable = {
+      id: tableKey,
+      name: meta.name,
+      year: meta.year,
+      country: meta.country,
+      categories: meta.categories,
+      count: meta.recordCount,
+      columns: meta.columns.map(col => col.name),
+      data: batchRecords.map(record => {
+        const { tableKey: _, ...rowData } = record;
+        return rowData;
+      })
+    };
+
+    // Apply search filter to this batch
+    const filtered = applySearchAndFilters(
+      [tempTable],
+      searchQuery,
+      {}, // Don't apply filters, they were applied in searchTablesByQuery
+      permutationId,
+      permutationParams
+    );
+
+    // Extract matching records from this batch
+    if (filtered.length > 0 && filtered[0].data.length > 0) {
+      matchingRecords = [...matchingRecords, ...filtered[0].data];
+    }
+
+    // Update pagination state for next batch
+    totalFetchedIndex = batchEndIndex;
+    if (hasMoreRecords) {
+      currentPaginationState = strategy === PAGINATION_STRATEGY.CURSOR
+        ? { cursor: batchEndIndex.toString() }
+        : { offset: batchEndIndex };
+    }
+  }
+
+  // Limit to pageSize matching records
+  const finalRecords = matchingRecords.slice(0, pageSize);
+
+  // Determine if there are more matching records
+  // We have more if either:
+  // 1. We collected more than pageSize matches (we sliced them)
+  // 2. We stopped because we ran out of DB records, but there might be more
+  const hasMoreMatches = matchingRecords.length > pageSize || hasMoreRecords;
+
+  return {
+    id: tableKey,
+    name: meta.name,
+    year: meta.year,
+    country: meta.country,
+    categories: meta.categories,
+    count: meta.recordCount,
+    columns: meta.columns.map(col => col.name),
+    data: finalRecords,
+    paginationInfo: {
+      hasMore: hasMoreMatches,
+      nextPaginationState: hasMoreMatches ? currentPaginationState : null,
+      strategy,
+      loadedRecords: finalRecords.length,
+      totalRecords: meta.recordCount,
+    }
   };
 }

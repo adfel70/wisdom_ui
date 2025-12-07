@@ -19,6 +19,8 @@ const ResultsGrid = ({
   permutationParams,
   onSendToLastPage,
   emptyStateType,
+  tablePaginationHook,
+  onLoadMore,
 }) => {
   // Show loading spinner during initial search
   if (isSearching) {
@@ -59,6 +61,9 @@ const ResultsGrid = ({
                 permutationParams={permutationParams}
                 isLoading={isPending}
                 onSendToLastPage={onSendToLastPage}
+                hasMore={tablePaginationHook?.hasMoreRecords(tableId) || false}
+                onLoadMore={onLoadMore ? () => onLoadMore(tableId) : null}
+                isLoadingMore={tablePaginationHook?.isTableLoadingMore(tableId) || false}
               />
             ) : (
               <TableCardSkeleton />

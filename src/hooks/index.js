@@ -5,3 +5,4 @@ export { useTableLoading } from './useTableLoading';
 export { useURLSync } from './useURLSync';
 export { useSearchResults } from './useSearchResults';
 export { useTokenState } from './useTokenState';
+export { useTablePagination } from './useTablePagination';
