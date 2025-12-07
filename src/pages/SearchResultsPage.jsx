@@ -336,24 +336,14 @@ const SearchResultsPage = () => {
         tablePagination.pageSize
       );
 
-      console.log(`[Load More] Fetched ${tableData.data.length} more records for table ${tableId}`);
-
-      // Update the cache with new data FIRST
+      // Update the cache with new data
       const cachedTable = tableDataCache.current.get(tableId);
       if (cachedTable) {
-        console.log(`[Load More] Current cache has ${cachedTable.data.length} records`);
         const updatedTable = {
           ...cachedTable,
           data: [...cachedTable.data, ...tableData.data],
         };
-        console.log(`[Load More] Created updated table with ${updatedTable.data.length} records`);
-        console.log(`[Load More] Table references are different:`, updatedTable !== cachedTable);
-        console.log(`[Load More] Data references are different:`, updatedTable.data !== cachedTable.data);
         tableDataCache.current.set(tableId, updatedTable);
-        const verifyCache = tableDataCache.current.get(tableId);
-        console.log(`[Load More] Verified cache now has ${verifyCache.data.length} records`);
-      } else {
-        console.error('[Load More] Cache miss for table:', tableId);
       }
 
       // Then update pagination state (this also triggers re-render)

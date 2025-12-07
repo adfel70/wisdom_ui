@@ -359,8 +359,6 @@ export const searchTables = (tables, query, permutationId = 'none', permutationP
   if (typeof query === 'string') {
     if (!query.trim()) return tables;
     tokens = parseQueryString(query);
-    console.log('[Search] Query:', query);
-    console.log('[Search] Parsed tokens:', tokens);
   } else {
     // Handle token-based queries
     tokens = query.tokens || [];
@@ -374,7 +372,6 @@ export const searchTables = (tables, query, permutationId = 'none', permutationP
 
   // Parse tokens into AST (supports nested parentheses)
   const ast = parseTokensToAST(tokens);
-  console.log('[Search] AST:', JSON.stringify(ast, null, 2));
 
   // If there's current input, parse it and combine with main AST using OR
   let finalAST = ast;
