@@ -30,7 +30,7 @@ import {
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
-import { getExpandedQueryInfo } from '../utils/searchUtils';
+import { getExpandedQueryInfo, applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
@@ -336,25 +336,43 @@ const SearchResultsPage = () => {
         tablePagination.pageSize
       );
 
-      // Update the cache with new data
+      // Apply search filter to the new data (if there's a search query)
+      let newRecords = tableData.data;
+      if (searchState.searchQuery && searchState.searchQuery.trim()) {
+        const filtered = applySearchAndFilters(
+          [tableData],
+          searchState.searchQuery,
+          {}, // Don't apply filters again
+          searchState.permutationId,
+          searchState.permutationParams
+        );
+
+        if (filtered.length > 0 && filtered[0].data.length > 0) {
+          newRecords = filtered[0].data;
+        } else {
+          newRecords = [];
+        }
+      }
+
+      // Update the cache with filtered new data
       const cachedTable = tableDataCache.current.get(tableId);
       if (cachedTable) {
         const updatedTable = {
           ...cachedTable,
-          data: [...cachedTable.data, ...tableData.data],
+          data: [...cachedTable.data, ...newRecords],
         };
         tableDataCache.current.set(tableId, updatedTable);
       }
 
       // Then update pagination state (this also triggers re-render)
-      tablePagination.appendRecords(tableId, tableData.data, tableData.paginationInfo);
+      tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
 
       // Force re-render by updating counter
       setCacheUpdateCounter(prev => prev + 1);
     } catch (error) {
       console.error('Failed to load more records:', error);
     }
-  }, [tablePagination, tableDataCache]);
+  }, [tablePagination, tableDataCache, searchState]);
 
   // Determine empty state type
   const getEmptyStateType = () => {

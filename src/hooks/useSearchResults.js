@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { searchTablesByQuery, getTableDataPaginatedById } from '../data/mockDatabaseNew';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
+import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * Hook to manage search execution and table data fetching
@@ -146,16 +147,35 @@ export const useSearchResults = ({
           // Fetch first page of records
           const tableData = await getTableDataPaginatedById(tableId, {}, RECORDS_PER_PAGE);
 
-          // Initialize pagination state for this table
+          // Apply search filter to the loaded data (if there's a search query)
+          let filteredTable = tableData;
+          if (searchQuery && searchQuery.trim()) {
+            const filtered = applySearchAndFilters(
+              [tableData],
+              searchQuery,
+              {}, // Don't apply filters again (already applied in searchTablesByQuery)
+              permutationId,
+              permutationParams
+            );
+
+            if (filtered.length > 0 && filtered[0].data.length > 0) {
+              filteredTable = filtered[0];
+            } else {
+              // No matching records in this page
+              filteredTable = { ...tableData, data: [], matchCount: 0 };
+            }
+          }
+
+          // Initialize pagination state for this table with filtered data
           if (tablePaginationHook && !isCancelled) {
             tablePaginationHook.initializeTable(
               tableId,
-              tableData.data,
-              tableData.paginationInfo
+              filteredTable.data,
+              tableData.paginationInfo // Keep original pagination info
             );
           }
 
-          return tableData;
+          return filteredTable;
         });
 
         const newTables = await Promise.all(tablePromises);
