@@ -236,48 +236,39 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     };
   }
 
-  // For search queries, we need to fetch the data and search through it
-  const dbFunctions = { db1, db2, db3, db4 };
-  const dbQueryFunc = dbFunctions[dbId];
+  // For search queries, search only in metadata (table names)
+  // Don't fetch record data - that defeats the purpose of pagination
+  const matchingTables = tablesWithoutData.filter(table => {
+    // Apply metadata search (table name only)
+    const nameMatch = !query || table.name.toLowerCase().includes(query.toLowerCase());
 
-  if (!dbQueryFunc) {
-    throw new Error(`Database ${dbId} not found`);
-  }
-
-  // Fetch all data for this database
-  const allRecords = await dbQueryFunc();
-
-  // Group records by tableKey
-  const recordsByTable = {};
-  allRecords.forEach(record => {
-    const { tableKey } = record;
-    if (!recordsByTable[tableKey]) {
-      recordsByTable[tableKey] = [];
+    if (!nameMatch) {
+      return false;
     }
-    recordsByTable[tableKey].push(record);
-  });
 
-  // Create full table objects with data
-  const tablesWithData = tablesMetadata.map(meta => {
-    const records = recordsByTable[meta.id] || [];
-    const data = records.map(record => {
-      const { tableKey: _, ...rowData } = record;
-      return rowData;
-    });
-    return {
-      ...meta,
-      data: data
-    };
-  });
+    // Apply filters
+    if (filters && Object.keys(filters).length > 0) {
+      const { tableName, year, category, country, selectedTables } = filters;
 
-  // Apply search and filters
-  const matchingTables = applySearchAndFilters(
-    tablesWithData,
-    query,
-    filters,
-    permutationId,
-    permutationParams
-  );
+      if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
+        return false;
+      }
+      if (tableName && !table.name.toLowerCase().includes(tableName.toLowerCase())) {
+        return false;
+      }
+      if (year && year !== 'all' && table.year !== parseInt(year)) {
+        return false;
+      }
+      if (category && category !== 'all' && !table.categories.includes(category)) {
+        return false;
+      }
+      if (country && country !== 'all' && table.country !== country) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   return {
     tableIds: matchingTables.map(t => t.id),
