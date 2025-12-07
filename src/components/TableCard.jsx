@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -14,19 +14,16 @@ import {
   Button,
   Divider,
   Tooltip,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
   Skeleton
 } from '@mui/material';
-import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import {
   ExpandMore,
   ExpandLess,
   TableChart,
   Info,
   Close,
-  DragIndicator,
   ContentCopy,
   ReplyAll,
   Download,
@@ -35,6 +32,11 @@ import {
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+import '../styles/agGridOverrides.css';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
  
 /**
  * HighlightedText Component
@@ -70,100 +72,6 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
 };
 
 /**
- * CustomColumnMenu Component
- * Custom column menu that extends the default MUI DataGrid column menu
- */
-const CustomColumnMenu = (props) => {
-  const { hideMenu, colDef } = props;
-
-  const handleCopyColumnName = async () => {
-    try {
-      const text = colDef.headerName ?? colDef.field;
-      await navigator.clipboard.writeText(text);
-    } catch (err) {
-      console.error('Failed to copy column name:', err);
-    } finally {
-      hideMenu?.();
-    }
-  };
-
-  return (
-    <GridColumnMenuContainer 
-      {...props}
-      sx={{
-        borderRadius: 1,              
-        boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
-    }}>
-      <GridColumnMenuSortItem colDef={colDef} onClick={hideMenu} />
-      <Divider />
-      <GridColumnMenuFilterItem colDef={colDef} onClick={hideMenu} />
-      <Divider />
-      <GridColumnMenuHideItem colDef={colDef} onClick={hideMenu} />
-      <GridColumnMenuManageItem colDef={colDef} onClick={hideMenu} />
-      <MenuItem onClick={handleCopyColumnName}>
-        <ListItemIcon>
-          <ContentCopy fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Copy column name" />
-      </MenuItem>
-    </GridColumnMenuContainer>
-  );
-};
-
-/**
- * DraggableColumnHeader Component
- * Custom column header with drag and drop functionality
- */
-const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDragging, isDragOver }) => {
-  return (
-    <Box
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        cursor: isDragging ? 'grabbing' : 'grab',
-        userSelect: 'none',
-        opacity: isDragging ? 0.5 : 1,
-        backgroundColor: isDragOver ? 'primary.light' : 'transparent',
-        border: isDragOver ? '2px dashed' : '2px solid transparent',
-        borderColor: isDragOver ? 'primary.main' : 'transparent',
-        borderRadius: 1,
-        transition: 'all 0.2s ease',
-        padding: '8px 12px',
-        minHeight: '40px',
-        width: '100%',
-        '&:hover': {
-          backgroundColor: isDragOver ? 'primary.light' : 'action.hover',
-        },
-      }}
-    >
-      <DragIndicator
-        sx={{
-          fontSize: '1rem',
-          color: 'text.secondary',
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
-      />
-      <Typography
-        variant="body2"
-        sx={{
-          fontWeight: 600,
-          fontSize: '0.875rem',
-          color: 'text.primary',
-          flex: 1,
-        }}
-      >
-        {column}
-      </Typography>
-    </Box>
-  );
-};
-
-/**
  * TableCard Component
  * Displays a single table with expandable data view using MUI components
  */
@@ -182,8 +90,6 @@ const TableCard = ({
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
-  const [draggedColumn, setDraggedColumn] = useState(null);
-  const [dragOverColumn, setDragOverColumn] = useState(null);
 
   // Update column order when table changes
   useEffect(() => {
@@ -192,25 +98,14 @@ const TableCard = ({
     }
   }, [table?.columns]);
 
-  // Global drag end handler
-  useEffect(() => {
-    const handleGlobalDragEnd = () => {
-      setDraggedColumn(null);
-      setDragOverColumn(null);
-    };
-
-    document.addEventListener('dragend', handleGlobalDragEnd);
-    return () => document.removeEventListener('dragend', handleGlobalDragEnd);
-  }, []);
-
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
   };
 
-  const handleRowInfoClick = (row) => {
+  const handleRowInfoClick = useCallback((row) => {
     setSelectedRow(row);
     setIsPopupOpen(true);
-  };
+  }, []);
 
   const handleClosePopup = () => {
     setIsPopupOpen(false);
@@ -258,49 +153,8 @@ const TableCard = ({
     XLSX.writeFile(workbook, `${safeFileName}.xlsx`);
   };
 
-  // Drag and drop handlers for column reordering
-  const handleDragStart = (e, column) => {
-    setDraggedColumn(column);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e, column) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverColumn(column);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedColumn(null);
-    setDragOverColumn(null);
-  };
-
-  const handleDrop = (e, targetColumn) => {
-    e.preventDefault();
-
-    if (!draggedColumn || draggedColumn === targetColumn) {
-      setDraggedColumn(null);
-      setDragOverColumn(null);
-      return;
-    }
-
-    const newOrder = [...columnOrder];
-    const draggedIndex = newOrder.indexOf(draggedColumn);
-    const targetIndex = newOrder.indexOf(targetColumn);
-
-    // Remove dragged column from its current position
-    newOrder.splice(draggedIndex, 1);
-
-    // Insert dragged column at target position
-    newOrder.splice(targetIndex, 0, draggedColumn);
-
-    setColumnOrder(newOrder);
-    setDraggedColumn(null);
-    setDragOverColumn(null);
-  };
-
-  // Transform data for DataGrid (add id field)
-  const dataGridRows = React.useMemo(() => {
+  // Transform data for AG Grid (add id field)
+  const rowData = React.useMemo(() => {
     if (!table?.data) return [];
     return table.data.map((row, index) => ({
       id: index,
@@ -308,31 +162,17 @@ const TableCard = ({
     }));
   }, [table?.data, table?.id]);
 
-  // Create DataGrid columns configuration
-  const dataGridColumns = React.useMemo(() => {
-    const dataColumns = columnOrder.map((column) => ({
-      field: column,
-      headerName: column,
-      flex: 1,
-      minWidth: 120,
-      renderHeader: () => (
-        <DraggableColumnHeader
-          column={column}
-          onDragStart={(e) => handleDragStart(e, column)}
-          onDragOver={(e) => handleDragOver(e, column)}
-          onDrop={(e) => handleDrop(e, column)}
-          isDragging={draggedColumn === column}
-          isDragOver={dragOverColumn === column}
-        />
-      ),
-      renderCell: (params) => (
+  const renderHighlightCell = useCallback(
+    (params) => {
+      return (
         <Box
           sx={{
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'flex',
             alignItems: 'center',
-            height: '100%'
+            height: '100%',
+            width: '100%',
           }}
         >
           <Typography
@@ -344,43 +184,30 @@ const TableCard = ({
               textAlign: 'left',
               flex: 1,
             }}
-            title={params.value || 'N/A'}
+            title={params.value ?? 'N/A'}
           >
-            <HighlightedText text={params.value || 'N/A'} query={query} />
+            <HighlightedText text={params.value ?? 'N/A'} query={query} />
           </Typography>
         </Box>
-      ),
-    }));
+      );
+    },
+    [query]
+  );
 
-    const rowDetailsColumn = {
-      field: '__rowDetails__',
-      headerName: '',
-      width: 56,
-      minWidth: 56,
-      maxWidth: 56,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      resizable: false,
-      renderHeader: () => (
-        <Box
-          sx={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
-      ),
-      renderCell: (params) => (
+  const renderActionCell = useCallback(
+    (params) => {
+      const row = params.data;
+      if (!row) return null;
+
+      return (
         <Tooltip title="View full details">
           <IconButton
             size="small"
             disableRipple
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              handleRowInfoClick(params.row);
+              handleRowInfoClick(row);
             }}
             sx={{
               width: 28,
@@ -414,11 +241,83 @@ const TableCard = ({
             </Typography>
           </IconButton>
         </Tooltip>
-      ),
+      );
+    },
+    [handleRowInfoClick]
+  );
+
+  const columnDefs = React.useMemo(() => {
+    const rowDetailsColumn = {
+      field: '__rowDetails__',
+      headerName: '',
+      width: 64,
+      minWidth: 64,
+      maxWidth: 64,
+      pinned: 'left',
+      lockPinned: true,
+      suppressMovable: true,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      cellRenderer: renderActionCell,
+      colId: '__rowDetails__',
+      menuTabs: [],
     };
 
+    const dataColumns = columnOrder.map((column) => ({
+      field: column,
+      headerName: column,
+      flex: 1,
+      minWidth: 140,
+      filter: 'agTextColumnFilter',
+      sortable: true,
+      cellRenderer: renderHighlightCell,
+      wrapText: false,
+      autoHeight: false,
+    }));
+
     return [rowDetailsColumn, ...dataColumns];
-  }, [columnOrder, query, draggedColumn]);
+  }, [columnOrder, renderActionCell, renderHighlightCell]);
+
+  const defaultColDef = React.useMemo(
+    () => ({
+      resizable: true,
+      sortable: true,
+      filter: 'agTextColumnFilter',
+      menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
+      suppressHeaderMenuButton: false,
+    }),
+    []
+  );
+
+  const getMainMenuItems = useCallback((params) => {
+    const defaultItems = params.defaultItems ?? [];
+
+    const copyItem = {
+      name: 'Copy column name',
+      action: async () => {
+        try {
+          const text = params.column.getColDef().headerName ?? params.column.getColId();
+          await navigator.clipboard.writeText(text);
+        } catch (error) {
+          console.error('Failed to copy column name:', error);
+        }
+      },
+    };
+
+    return [...defaultItems, 'separator', copyItem];
+  }, []);
+
+  const handleColumnMoved = useCallback((event) => {
+    if (!event?.finished || !event?.columnApi) return;
+    const ordered = event.columnApi
+      .getAllGridColumns()
+      .map((col) => col.getColId())
+      .filter((field) => field && field !== '__rowDetails__');
+    if (ordered.length) {
+      setColumnOrder(ordered);
+    }
+  }, []);
 
   return (
     <Card
@@ -593,64 +492,24 @@ const TableCard = ({
             </Box>
           ) : (
             <>
-              <DataGrid
-                rows={dataGridRows}
-                columns={dataGridColumns}
-                hideFooter
-                rowHeight={40}
-                slots={{
-                  columnMenu: CustomColumnMenu,
-                }}
-                sx={{
-                  borderRadius: 0,
-                  '& .MuiDataGrid-cell': {
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                  },
-                  '& .MuiDataGrid-columnHeaders': {
-                    backgroundColor: 'grey.50',
-                    minHeight: '56px !important',
-                  },
-                  '& .MuiDataGrid-columnHeader': {
-                    backgroundColor: '#F1F1F1',
-                    padding: 0.5,
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                    '&:last-child': {
-                      borderRight: 'none',
-                    },
-                    '&:focus': {
-                      outline: 'none',
-                    },
-                    '&:focus-within': {
-                      outline: 'none',
-                    },
-                  },
-                  '& .MuiDataGrid-columnHeaderTitle': {
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    color: 'text.primary',
-                    display: 'none', // Hide default title since we use custom header
-                  },
-                  '& .MuiDataGrid-columnHeader[data-field="__rowDetails__"]': {
-                    backgroundColor: 'grey.100',
-                    borderRightColor: 'divider',
-                  },
-                  '& .MuiDataGrid-cell[data-field="__rowDetails__"]': {
-                    backgroundColor: 'grey.50',
-                    borderRightColor: 'divider',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
-                  '& .MuiDataGrid-row:hover': {
-                    backgroundColor: 'action.selected',
-                  },
-                  '& .MuiDataGrid-menuIcon': {
-                    marginRight: 0,
-                  },
-                }}
-              />
+              <Box className="ag-theme-wisdom" sx={{ height: '100%', width: '100%' }}>
+                <AgGridReact
+                  rowData={rowData}
+                  columnDefs={columnDefs}
+                  defaultColDef={defaultColDef}
+                  rowHeight={40}
+                  headerHeight={56}
+                  animateRows
+                  suppressRowClickSelection
+                  enableCellTextSelection
+                  getMainMenuItems={getMainMenuItems}
+                  onColumnMoved={handleColumnMoved}
+                  tooltipShowDelay={200}
+                  suppressDragLeaveHidesColumns
+                  domLayout="normal"
+                  getRowId={(params) => params?.data?.id}
+                />
+              </Box>
               {/* Semi-transparent loading overlay for Load More */}
               {isLoadingMore && (
                 <Box
