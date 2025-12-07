@@ -336,10 +336,9 @@ const SearchResultsPage = () => {
         tablePagination.pageSize
       );
 
-      // Append new records to table
-      tablePagination.appendRecords(tableId, tableData.data, tableData.paginationInfo);
+      console.log(`[Load More] Fetched ${tableData.data.length} more records for table ${tableId}`);
 
-      // Update the cache with new data
+      // Update the cache with new data FIRST
       const cachedTable = tableDataCache.current.get(tableId);
       if (cachedTable) {
         const updatedTable = {
@@ -347,12 +346,18 @@ const SearchResultsPage = () => {
           data: [...cachedTable.data, ...tableData.data],
         };
         tableDataCache.current.set(tableId, updatedTable);
-        // Trigger re-render
-        setCacheUpdateCounter(prev => prev + 1);
+        console.log(`[Load More] Updated cache for ${tableId}. Total records: ${updatedTable.data.length}`);
+      } else {
+        console.error('[Load More] Cache miss for table:', tableId);
       }
+
+      // Then update pagination state (this also triggers re-render)
+      tablePagination.appendRecords(tableId, tableData.data, tableData.paginationInfo);
+
+      // Force re-render by updating counter
+      setCacheUpdateCounter(prev => prev + 1);
     } catch (error) {
       console.error('Failed to load more records:', error);
-      tablePagination.setLoadingMore(tableId, false);
     }
   }, [tablePagination, tableDataCache]);
 

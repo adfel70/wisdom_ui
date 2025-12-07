@@ -302,11 +302,12 @@ const TableCard = ({
   // Transform data for DataGrid (add id field)
   const dataGridRows = React.useMemo(() => {
     if (!table?.data) return [];
+    console.log(`[TableCard] ${table.id}: Rendering with ${table.data.length} records`);
     return table.data.map((row, index) => ({
       id: index,
       ...row,
     }));
-  }, [table?.data]);
+  }, [table?.data, table?.id]);
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
@@ -747,7 +748,10 @@ const areEqual = (prev, next) => {
     prev.permutationId === next.permutationId &&
     shallowEqualObject(prev.permutationParams, next.permutationParams) &&
     prev.isLoading === next.isLoading &&
-    prev.onSendToLastPage === next.onSendToLastPage
+    prev.onSendToLastPage === next.onSendToLastPage &&
+    prev.hasMore === next.hasMore &&
+    prev.isLoadingMore === next.isLoadingMore &&
+    prev.onLoadMore === next.onLoadMore
   );
 };
 
