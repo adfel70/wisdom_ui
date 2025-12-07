@@ -310,7 +310,7 @@ const TableCard = ({
 
   // Create DataGrid columns configuration
   const dataGridColumns = React.useMemo(() => {
-    const columns = columnOrder.map((column) => ({
+    const dataColumns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
       flex: 1,
@@ -352,38 +352,72 @@ const TableCard = ({
       ),
     }));
 
-    // Add actions column
-    columns.push({
-      field: 'actions',
-      headerName: 'Actions',
-      width: 80,
+    const rowDetailsColumn = {
+      field: '__rowDetails__',
+      headerName: '',
+      width: 56,
+      minWidth: 56,
+      maxWidth: 56,
       sortable: false,
       filterable: false,
+      disableColumnMenu: true,
+      resizable: false,
+      renderHeader: () => (
+        <Box
+          sx={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        />
+      ),
       renderCell: (params) => (
         <Tooltip title="View full details">
           <IconButton
             size="small"
+            disableRipple
             onClick={(e) => {
               e.stopPropagation();
               handleRowInfoClick(params.row);
             }}
             sx={{
+              width: 28,
+              height: 28,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: '50%',
               color: 'text.secondary',
-              '&:hover': {
-                color: 'primary.main',
-                backgroundColor: 'primary.light',
-                transform: 'scale(1.1)',
-              },
+              backgroundColor: 'transparent',
+              boxShadow: 'none',
               transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                backgroundColor: 'transparent',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                transform: 'translateY(-2px)',
+                boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+              },
             }}
           >
-            <Info fontSize="small" />
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1,
+                fontSize: '0.85rem',
+                textTransform: 'lowercase',
+              }}
+            >
+              i
+            </Typography>
           </IconButton>
         </Tooltip>
       ),
-    });
+    };
 
-    return columns;
+    return [rowDetailsColumn, ...dataColumns];
   }, [columnOrder, query, draggedColumn]);
 
   return (
@@ -597,6 +631,17 @@ const TableCard = ({
                     fontSize: '0.875rem',
                     color: 'text.primary',
                     display: 'none', // Hide default title since we use custom header
+                  },
+                  '& .MuiDataGrid-columnHeader[data-field="__rowDetails__"]': {
+                    backgroundColor: 'grey.100',
+                    borderRightColor: 'divider',
+                  },
+                  '& .MuiDataGrid-cell[data-field="__rowDetails__"]': {
+                    backgroundColor: 'grey.50',
+                    borderRightColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   },
                   '& .MuiDataGrid-row:hover': {
                     backgroundColor: 'action.selected',
