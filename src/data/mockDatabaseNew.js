@@ -236,17 +236,11 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     };
   }
 
-  // For search queries, search only in metadata (table names)
-  // Don't fetch record data - that defeats the purpose of pagination
+  // For search queries with content search, we need to check records
+  // NOTE: This is a mock limitation - real backend will search server-side
+  // For now, we search in table metadata to keep it fast
   const matchingTables = tablesWithoutData.filter(table => {
-    // Apply metadata search (table name only)
-    const nameMatch = !query || table.name.toLowerCase().includes(query.toLowerCase());
-
-    if (!nameMatch) {
-      return false;
-    }
-
-    // Apply filters
+    // Apply filters first
     if (filters && Object.keys(filters).length > 0) {
       const { tableName, year, category, country, selectedTables } = filters;
 
@@ -263,6 +257,21 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
         return false;
       }
       if (country && country !== 'all' && table.country !== country) {
+        return false;
+      }
+    }
+
+    // For search, check table name, country, and categories (metadata only)
+    // Note: In real backend, search would happen server-side across all record content
+    if (query) {
+      const searchTerm = query.toLowerCase();
+      const searchableText = [
+        table.name,
+        table.country,
+        ...table.categories
+      ].join(' ').toLowerCase();
+
+      if (!searchableText.includes(searchTerm)) {
         return false;
       }
     }

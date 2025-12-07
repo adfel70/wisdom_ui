@@ -302,11 +302,13 @@ const TableCard = ({
   // Transform data for DataGrid (add id field)
   const dataGridRows = React.useMemo(() => {
     if (!table?.data) return [];
-    console.log(`[TableCard] ${table.id}: Rendering with ${table.data.length} records`);
-    return table.data.map((row, index) => ({
+    console.log(`[TableCard ${table.id}] Re-rendering with ${table.data.length} records. Table object:`, table);
+    const rows = table.data.map((row, index) => ({
       id: index,
       ...row,
     }));
+    console.log(`[TableCard ${table.id}] Generated ${rows.length} DataGrid rows`);
+    return rows;
   }, [table?.data, table?.id]);
 
   // Create DataGrid columns configuration
@@ -430,7 +432,7 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                label={`${table.matchCount || table.count} Records`}
+                label={`${table.data?.length || 0} / ${table.matchCount || table.count} Records`}
                 size="small"
                 color="primary"
                 variant="outlined"

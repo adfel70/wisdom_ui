@@ -341,12 +341,17 @@ const SearchResultsPage = () => {
       // Update the cache with new data FIRST
       const cachedTable = tableDataCache.current.get(tableId);
       if (cachedTable) {
+        console.log(`[Load More] Current cache has ${cachedTable.data.length} records`);
         const updatedTable = {
           ...cachedTable,
           data: [...cachedTable.data, ...tableData.data],
         };
+        console.log(`[Load More] Created updated table with ${updatedTable.data.length} records`);
+        console.log(`[Load More] Table references are different:`, updatedTable !== cachedTable);
+        console.log(`[Load More] Data references are different:`, updatedTable.data !== cachedTable.data);
         tableDataCache.current.set(tableId, updatedTable);
-        console.log(`[Load More] Updated cache for ${tableId}. Total records: ${updatedTable.data.length}`);
+        const verifyCache = tableDataCache.current.get(tableId);
+        console.log(`[Load More] Verified cache now has ${verifyCache.data.length} records`);
       } else {
         console.error('[Load More] Cache miss for table:', tableId);
       }
