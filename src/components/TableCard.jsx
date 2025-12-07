@@ -476,9 +476,9 @@ const TableCard = ({
                 <Typography variant="body2" color="text.secondary">
                   Categories:
                 </Typography>
-                {table.categories.map((category) => (
+                {table.categories.map((category, index) => (
                   <Chip
-                    key={category}
+                    key={`${category}-${index}`}
                     label={category}
                     size="small"
                     variant="outlined"
@@ -567,9 +567,6 @@ const TableCard = ({
                 columns={dataGridColumns}
                 hideFooter
                 rowHeight={40}
-                initialState={{
-                  pagination: { paginationModel: { pageSize: dataGridRows.length, page: 0 } }
-                }}
                 slots={{
                   columnMenu: CustomColumnMenu,
                 }}
