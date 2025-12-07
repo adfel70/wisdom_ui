@@ -339,8 +339,11 @@ export async function getMultipleTablesData(tableIds, query = '', filters = {}, 
  * @param {string} tableId - Table ID
  * @param {Object} paginationState - Current pagination state
  * @param {number} pageSize - Number of records to fetch
+ * @param {string} searchQuery - Optional search query to filter records
+ * @param {string} permutationId - Optional permutation ID for search
+ * @param {Object} permutationParams - Optional permutation parameters
  * @returns {Promise<Object>} Table object with paginated data and pagination info
  */
-export async function getTableDataPaginatedById(tableId, paginationState = {}, pageSize) {
-  return await getTableDataPaginated(tableId, paginationState, pageSize);
+export async function getTableDataPaginatedById(tableId, paginationState = {}, pageSize, searchQuery = '', permutationId = 'none', permutationParams = {}) {
+  return await getTableDataPaginated(tableId, paginationState, pageSize, searchQuery, permutationId, permutationParams);
 }

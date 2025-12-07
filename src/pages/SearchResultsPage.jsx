@@ -30,7 +30,7 @@ import {
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
-import { getExpandedQueryInfo, applySearchAndFilters } from '../utils/searchUtils';
+import { getExpandedQueryInfo } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
@@ -329,54 +329,19 @@ const SearchResultsPage = () => {
     tablePagination.setLoadingMore(tableId, true);
 
     try {
-      // Keep fetching batches until we have enough matching records
-      const targetRecords = tablePagination.pageSize;
-      let allMatchingRecords = [];
-      let currentPaginationState = paginationState;
-      let lastPaginationInfo = null;
-      let hasMoreRecords = true;
+      // Backend handles batch-fetching to return exactly pageSize matching records
+      const tableData = await getTableDataPaginatedById(
+        tableId,
+        paginationState,
+        tablePagination.pageSize,
+        searchState.searchQuery,
+        searchState.permutationId,
+        searchState.permutationParams
+      );
 
-      while (allMatchingRecords.length < targetRecords && hasMoreRecords) {
-        // Fetch next batch
-        const tableData = await getTableDataPaginatedById(
-          tableId,
-          currentPaginationState,
-          tablePagination.pageSize
-        );
-        lastPaginationInfo = tableData.paginationInfo;
+      const newRecords = tableData.data;
 
-        // Apply search filter to this batch
-        let matchingRecords = tableData.data;
-        if (searchState.searchQuery && searchState.searchQuery.trim()) {
-          const filtered = applySearchAndFilters(
-            [tableData],
-            searchState.searchQuery,
-            {}, // Don't apply filters again
-            searchState.permutationId,
-            searchState.permutationParams
-          );
-
-          if (filtered.length > 0 && filtered[0].data.length > 0) {
-            matchingRecords = filtered[0].data;
-          } else {
-            matchingRecords = [];
-          }
-        }
-
-        // Accumulate matching records
-        allMatchingRecords = [...allMatchingRecords, ...matchingRecords];
-
-        // Update pagination state for next fetch
-        hasMoreRecords = tableData.paginationInfo.hasMore;
-        if (hasMoreRecords) {
-          currentPaginationState = tableData.paginationInfo.nextPaginationState;
-        }
-      }
-
-      // Limit to target number of records
-      const newRecords = allMatchingRecords.slice(0, targetRecords);
-
-      // Update the cache with filtered new data
+      // Update the cache with new data
       const cachedTable = tableDataCache.current.get(tableId);
       if (cachedTable) {
         const updatedTable = {
@@ -386,8 +351,8 @@ const SearchResultsPage = () => {
         tableDataCache.current.set(tableId, updatedTable);
       }
 
-      // Then update pagination state (this also triggers re-render)
-      tablePagination.appendRecords(tableId, newRecords, lastPaginationInfo);
+      // Update pagination state (this also triggers re-render)
+      tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
 
       // Force re-render by updating counter
       setCacheUpdateCounter(prev => prev + 1);

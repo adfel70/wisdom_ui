@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { searchTablesByQuery, getTableDataPaginatedById } from '../data/mockDatabaseNew';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
-import { applySearchAndFilters } from '../utils/searchUtils';
 
 /**
  * Hook to manage search execution and table data fetching
@@ -143,71 +142,27 @@ export const useSearchResults = ({
 
       try {
         // Fetch paginated data for each table (first page only)
+        // Backend handles batch-fetching to return exactly RECORDS_PER_PAGE matching records
         const tablePromises = idsToFetch.map(async (tableId) => {
-          // Keep fetching batches until we have enough matching records
-          const targetRecords = RECORDS_PER_PAGE;
-          let allMatchingRecords = [];
-          let currentPaginationState = {};
-          let lastPaginationInfo = null;
-          let lastTableData = null;
-          let hasMoreRecords = true;
-
-          while (allMatchingRecords.length < targetRecords && hasMoreRecords) {
-            // Fetch next batch
-            lastTableData = await getTableDataPaginatedById(tableId, currentPaginationState, RECORDS_PER_PAGE);
-            lastPaginationInfo = lastTableData.paginationInfo;
-
-            // Apply search filter to this batch
-            let matchingRecords = lastTableData.data;
-            if (searchQuery && searchQuery.trim()) {
-              const filtered = applySearchAndFilters(
-                [lastTableData],
-                searchQuery,
-                {}, // Don't apply filters again
-                permutationId,
-                permutationParams
-              );
-
-              if (filtered.length > 0 && filtered[0].data.length > 0) {
-                matchingRecords = filtered[0].data;
-              } else {
-                matchingRecords = [];
-              }
-            }
-
-            // Accumulate matching records
-            allMatchingRecords = [...allMatchingRecords, ...matchingRecords];
-
-            // Update pagination state for next fetch
-            hasMoreRecords = lastTableData.paginationInfo.hasMore;
-            if (hasMoreRecords) {
-              currentPaginationState = lastTableData.paginationInfo.nextPaginationState;
-            }
-          }
-
-          // Create table object with accumulated matches
-          const filteredTable = {
-            id: tableId,
-            name: lastTableData.name,
-            year: lastTableData.year,
-            country: lastTableData.country,
-            categories: lastTableData.categories,
-            count: lastTableData.count,
-            columns: lastTableData.columns,
-            data: allMatchingRecords.slice(0, targetRecords), // Limit to target
-            matchCount: allMatchingRecords.length
-          };
+          const tableData = await getTableDataPaginatedById(
+            tableId,
+            {}, // Initial pagination state
+            RECORDS_PER_PAGE,
+            searchQuery,
+            permutationId,
+            permutationParams
+          );
 
           // Initialize pagination state for this table
           if (tablePaginationHook && !isCancelled) {
             tablePaginationHook.initializeTable(
               tableId,
-              filteredTable.data,
-              lastPaginationInfo // Use last pagination info
+              tableData.data,
+              tableData.paginationInfo
             );
           }
 
-          return filteredTable;
+          return tableData;
         });
 
         const newTables = await Promise.all(tablePromises);
