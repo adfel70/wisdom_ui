@@ -236,48 +236,50 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     };
   }
 
-  // For search queries with content search, we need to check records
-  // NOTE: This is a mock limitation - real backend will search server-side
-  // For now, we search in table metadata to keep it fast
-  const matchingTables = tablesWithoutData.filter(table => {
-    // Apply filters first
-    if (filters && Object.keys(filters).length > 0) {
-      const { tableName, year, category, country, selectedTables } = filters;
+  // For search queries, we need to fetch the data and search through it
+  // NOTE: This is a mock limitation - in the real backend, search happens server-side
+  // and returns only matching table IDs without fetching all records
+  const dbFunctions = { db1, db2, db3, db4 };
+  const dbQueryFunc = dbFunctions[dbId];
 
-      if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
-        return false;
-      }
-      if (tableName && !table.name.toLowerCase().includes(tableName.toLowerCase())) {
-        return false;
-      }
-      if (year && year !== 'all' && table.year !== parseInt(year)) {
-        return false;
-      }
-      if (category && category !== 'all' && !table.categories.includes(category)) {
-        return false;
-      }
-      if (country && country !== 'all' && table.country !== country) {
-        return false;
-      }
+  if (!dbQueryFunc) {
+    throw new Error(`Database ${dbId} not found`);
+  }
+
+  // Fetch all data for this database
+  const allRecords = await dbQueryFunc();
+
+  // Group records by tableKey
+  const recordsByTable = {};
+  allRecords.forEach(record => {
+    const { tableKey } = record;
+    if (!recordsByTable[tableKey]) {
+      recordsByTable[tableKey] = [];
     }
-
-    // For search, check table name, country, and categories (metadata only)
-    // Note: In real backend, search would happen server-side across all record content
-    if (query) {
-      const searchTerm = query.toLowerCase();
-      const searchableText = [
-        table.name,
-        table.country,
-        ...table.categories
-      ].join(' ').toLowerCase();
-
-      if (!searchableText.includes(searchTerm)) {
-        return false;
-      }
-    }
-
-    return true;
+    recordsByTable[tableKey].push(record);
   });
+
+  // Create full table objects with data
+  const tablesWithData = tablesMetadata.map(meta => {
+    const records = recordsByTable[meta.id] || [];
+    const data = records.map(record => {
+      const { tableKey: _, ...rowData } = record;
+      return rowData;
+    });
+    return {
+      ...meta,
+      data: data
+    };
+  });
+
+  // Apply search and filters
+  const matchingTables = applySearchAndFilters(
+    tablesWithData,
+    query,
+    filters,
+    permutationId,
+    permutationParams
+  );
 
   return {
     tableIds: matchingTables.map(t => t.id),
