@@ -429,7 +429,7 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                label={`${table.data?.length || 0} / ${table.matchCount || table.count} Records`}
+                label={`${table.data?.length || 0} Records`}
                 size="small"
                 color="primary"
                 variant="outlined"
