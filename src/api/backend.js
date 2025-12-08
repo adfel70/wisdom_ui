@@ -422,105 +422,98 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   };
 }
 
-const createFilterSet = (values = [], normalizer = (value) => value) => {
-  const normalized = Array.isArray(values) ? values : [];
-  return new Set(
-    normalized
-      .map((value) => {
-        if (value === null || value === undefined) {
-          return '';
-        }
-        const transformed = normalizer(value);
-        return String(transformed).trim();
-      })
-      .filter(Boolean)
-  );
-};
-
-const increment = (bucket, key) => {
+const increment = (bucket, key, amount = 1) => {
   if (!key) {
     return;
   }
-  bucket[key] = (bucket[key] || 0) + 1;
+  bucket[key] = (bucket[key] || 0) + amount;
 };
 
-export function fetchFacetAggregates(dbKey, filters = {}) {
-  return new Promise((resolve, reject) => {
-    (async () => {
-      try {
-        const config = DATABASE_CONFIG[dbKey];
-        if (!config) {
-          throw new Error(`Database ${dbKey} not found`);
-        }
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-        const records = await fetchDatabaseRecords(dbKey);
+export async function fetchFacetAggregates(
+  dbKey,
+  filters = {},
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {}
+) {
+  if (!DATABASE_CONFIG[dbKey]) {
+    throw new Error(`Database ${dbKey} not found`);
+  }
 
-        const categoriesFilter = createFilterSet(filters.categories, (value) => String(value).toLowerCase());
-        const regionsFilter = createFilterSet(filters.regions, (value) => String(value).toUpperCase());
-        const tableNamesFilter = createFilterSet(filters.tableNames, (value) => String(value).toLowerCase());
-        const tableYearsFilter = createFilterSet(filters.tableYears, (value) => value);
+  const records = await fetchDatabaseRecords(dbKey);
+  const { applySearchAndFilters } = await import('../utils/searchUtils.js');
 
-        const filteredRecords = records.filter((record) => {
-          const meta = METADATA[record.tableKey];
-          if (!meta) {
-            return false;
-          }
+  // Group records by table for search + filter alignment with the main results
+  const recordsByTable = records.reduce((acc, record) => {
+    const { tableKey, ...rowData } = record;
+    if (!tableKey) {
+      return acc;
+    }
+    if (!acc[tableKey]) {
+      acc[tableKey] = [];
+    }
+    acc[tableKey].push(rowData);
+    return acc;
+  }, {});
 
-          const uniqueCategories = Array.isArray(meta.categories)
-            ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
-            : [];
-
-          const categoryMatch =
-            categoriesFilter.size === 0 ||
-            uniqueCategories.some((category) => categoriesFilter.has(category.toLowerCase()));
-
-          const region = (meta.country || record.country || '').toUpperCase();
-          const regionMatch = regionsFilter.size === 0 || regionsFilter.has(region);
-
-          const tableNameLabel = (meta.name || record.tableKey || '').trim();
-          const tableNameMatch =
-            tableNamesFilter.size === 0 ||
-            tableNamesFilter.has(tableNameLabel.toLowerCase()) ||
-            tableNamesFilter.has((record.tableKey || '').toLowerCase());
-
-          const yearLabel = meta.year ? String(meta.year).trim() : '';
-          const tableYearMatch = tableYearsFilter.size === 0 || tableYearsFilter.has(yearLabel);
-
-          return categoryMatch && regionMatch && tableNameMatch && tableYearMatch;
-        });
-
-        const aggregates = {
-          categories: {},
-          regions: {},
-          tableNames: {},
-          tableYears: {}
-        };
-
-        filteredRecords.forEach((record) => {
-          const meta = METADATA[record.tableKey];
-          if (!meta) {
-            return;
-          }
-
-          const categories = Array.isArray(meta.categories)
-            ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
-            : [];
-          categories.forEach((category) => increment(aggregates.categories, category));
-
-          const region = (meta.country || record.country || '').toUpperCase();
-          increment(aggregates.regions, region);
-
-          const tableName = (meta.name || record.tableKey || '').trim();
-          increment(aggregates.tableNames, tableName);
-
-          const yearKey = meta.year ? String(meta.year).trim() : 'unknown';
-          increment(aggregates.tableYears, yearKey);
-        });
-
-        setTimeout(() => resolve(aggregates), 150);
-      } catch (error) {
-        reject(error);
+  const tables = (DATABASE_ASSIGNMENTS[dbKey] || [])
+    .map((tableKey) => {
+      const meta = METADATA[tableKey];
+      if (!meta) {
+        return null;
       }
-    })();
+      return {
+        id: tableKey,
+        name: meta.name,
+        year: meta.year,
+        country: meta.country,
+        categories: meta.categories,
+        data: recordsByTable[tableKey] || []
+      };
+    })
+    .filter(Boolean);
+
+  // Apply the same search + filters pipeline used for table results
+  const matchingTables = applySearchAndFilters(
+    tables,
+    searchQuery,
+    filters || {},
+    permutationId,
+    permutationParams
+  );
+
+  const aggregates = {
+    categories: {},
+    regions: {},
+    tableNames: {},
+    tableYears: {}
+  };
+
+  matchingTables.forEach((table) => {
+    const meta = METADATA[table.id];
+    if (!meta || !Array.isArray(table.data) || table.data.length === 0) {
+      return;
+    }
+
+    const rowCount = table.data.length;
+
+    const categories = Array.isArray(meta.categories)
+      ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
+      : [];
+    categories.forEach((category) => increment(aggregates.categories, category, rowCount));
+
+    const region = (meta.country || '').toUpperCase();
+    increment(aggregates.regions, region, rowCount);
+
+    const tableName = (meta.name || table.id || '').trim();
+    increment(aggregates.tableNames, tableName, rowCount);
+
+    const yearKey = meta.year ? String(meta.year).trim() : 'unknown';
+    increment(aggregates.tableYears, yearKey, rowCount);
   });
+
+  await delay(150);
+  return aggregates;
 }

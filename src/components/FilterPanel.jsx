@@ -21,7 +21,14 @@ const initialFacetData = {
   tableYears: {}
 };
 
-const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilters = {} }) => {
+const FilterPanel = ({
+  databaseId = 'db1',
+  onApplyFilters = () => {},
+  activeFilters = {},
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {}
+}) => {
   const [facetData, setFacetData] = useState(initialFacetData);
   const [loading, setLoading] = useState(false);
   const [categoriesSelected, setCategoriesSelected] = useState([]);
@@ -48,7 +55,7 @@ const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilt
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchFacetAggregates(databaseId, appliedFilters)
+    fetchFacetAggregates(databaseId, appliedFilters, searchQuery, permutationId, permutationParams)
       .then((data) => {
         if (!isMounted) return;
         setFacetData(data || initialFacetData);
@@ -65,7 +72,7 @@ const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilt
     return () => {
       isMounted = false;
     };
-  }, [appliedFilters, databaseId]);
+  }, [appliedFilters, databaseId, searchQuery, permutationId, JSON.stringify(permutationParams)]);
 
   const facetOptions = useMemo(
     () => ({

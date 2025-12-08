@@ -101,6 +101,7 @@ const FacetGroup = ({
           sx={{
             flex: '1 1 auto',
             overflowY: 'auto',
+            overflowX: 'hidden',
             pr: 0.5,
             display: 'flex',
             flexDirection: 'column',

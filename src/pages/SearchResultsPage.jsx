@@ -453,6 +453,9 @@ const SearchResultsPage = () => {
           onToggleCollapse={toggleSidePanel}
           onApplyFilters={handleApplyFilters}
           activeFilters={searchState.filters}
+          searchQuery={searchState.searchQuery}
+          permutationId={searchState.permutationId}
+          permutationParams={searchState.permutationParams}
           topOffset={headerHeight}
         />
 
