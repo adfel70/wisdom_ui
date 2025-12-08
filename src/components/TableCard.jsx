@@ -17,7 +17,7 @@ import {
   Skeleton
 } from '@mui/material';
 import { AgGridReact } from 'ag-grid-react';
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
   ExpandMore,
   ExpandLess,
@@ -32,9 +32,6 @@ import {
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
-import '../styles/agGridOverrides.css';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
  
@@ -284,7 +281,6 @@ const TableCard = ({
       resizable: true,
       sortable: true,
       filter: 'agTextColumnFilter',
-      menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
       suppressHeaderMenuButton: false,
     }),
     []
@@ -492,13 +488,12 @@ const TableCard = ({
             </Box>
           ) : (
             <>
-              <Box className="ag-theme-wisdom" sx={{ height: '100%', width: '100%' }}>
+              <Box sx={{ height: '100%', width: '100%' }}>
                 <AgGridReact
+                  theme={themeQuartz}
                   rowData={rowData}
                   columnDefs={columnDefs}
                   defaultColDef={defaultColDef}
-                  rowHeight={40}
-                  headerHeight={56}
                   animateRows
                   suppressRowClickSelection
                   enableCellTextSelection
