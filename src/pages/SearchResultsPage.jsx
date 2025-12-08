@@ -441,6 +441,7 @@ const SearchResultsPage = () => {
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
+          onApplyFilters={handleApplyFilters}
           topOffset={headerHeight}
         />
 
