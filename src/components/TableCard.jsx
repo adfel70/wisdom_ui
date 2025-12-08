@@ -14,7 +14,6 @@ import {
   Button,
   Divider,
   Tooltip,
-  Skeleton,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -69,7 +68,7 @@ const CustomLoadingOverlay = () => (
 
 /**
  * Custom No Rows Overlay Component
- * Shows loading animation when no data is available
+ * Shows a friendly message when there is nothing to render
  */
 const CustomNoRowsOverlay = () => (
   <Box
@@ -81,7 +80,9 @@ const CustomNoRowsOverlay = () => (
       width: '100%'
     }}
   >
-    <CircularProgress size={32} />
+    <Typography variant="body2" color="text.secondary">
+      No rows to display
+    </Typography>
   </Box>
 );
 
@@ -422,7 +423,10 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [gridApi, setGridApi] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
-  const [isDataLoading, setIsDataLoading] = useState(!table?.data);
+
+  const hasRows = Array.isArray(table?.data) && table.data.length > 0;
+  const expectsRows = (table?.count ?? 0) > 0;
+  const isGridLoading = isLoading || (!hasRows && expectsRows);
 
   // Update column order when table changes
   useEffect(() => {
@@ -431,14 +435,26 @@ const TableCard = ({
     }
   }, [table?.columns]);
 
-  // Track data loading state
-  useEffect(() => {
-    setIsDataLoading(!table?.data);
-  }, [table?.data]);
-
   const onGridReady = useCallback((params) => {
     setGridApi(params.api);
   }, []);
+
+  // Keep AG Grid overlays in sync with loading state to avoid the "no rows" flash
+  useEffect(() => {
+    if (!gridApi) return;
+
+    if (isGridLoading) {
+      gridApi.showLoadingOverlay();
+      return;
+    }
+
+    if (!hasRows) {
+      gridApi.showNoRowsOverlay();
+      return;
+    }
+
+    gridApi.hideOverlay();
+  }, [gridApi, isGridLoading, hasRows]);
 
   const handleResetView = useCallback(() => {
     if (!gridApi) return;
@@ -893,9 +909,8 @@ const TableCard = ({
                   enableCellTextSelection
                   enableCellCopy
                   enableRangeSelection
-                  noRowsOverlayComponent={isDataLoading ? CustomNoRowsOverlay : undefined}
-                  loading={false}
-                  loadingOverlayComponent={undefined}
+                  loadingOverlayComponent={CustomLoadingOverlay}
+                  noRowsOverlayComponent={CustomNoRowsOverlay}
                   getMainMenuItems={getMainMenuItems}
                   onColumnMoved={handleColumnMoved}
                   onCellClicked={handleCellClicked}
