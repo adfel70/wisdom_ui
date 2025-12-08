@@ -7,6 +7,7 @@ import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import QueryBuilderModal from '../components/QueryBuilderModal';
 import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
+import { queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
 
 /**
  * HomePage Component
@@ -132,7 +133,9 @@ const HomePage = () => {
 
   const handleQueryBuilderApply = (queryJSON) => {
     // Query builder now returns JSON array
-    setSearchQuery(queryJSON);
+    // Convert to string for display in search input
+    const displayString = queryJSONToString(queryJSON);
+    setSearchQuery(displayString);
     setIsQueryBuilderOpen(false);
   };
 
@@ -518,7 +521,7 @@ const HomePage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={searchQuery}
+          initialQuery={queryStringToJSON(searchQuery)}
         />
       </Box>
     </motion.div>

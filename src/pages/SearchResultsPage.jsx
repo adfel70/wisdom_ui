@@ -30,7 +30,7 @@ import {
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
-import { getExpandedQueryInfo } from '../utils/searchUtils';
+import { getExpandedQueryInfo, queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
@@ -337,7 +337,9 @@ const SearchResultsPage = () => {
 
   const handleQueryBuilderApply = (queryJSON) => {
     // Query builder now returns JSON array
-    searchState.setInputValue(queryJSON);
+    // Convert to string for display in search input
+    const displayString = queryJSONToString(queryJSON);
+    searchState.setInputValue(displayString);
     handleSearch(queryJSON);
     setIsQueryBuilderOpen(false);
   };
@@ -419,7 +421,8 @@ const SearchResultsPage = () => {
       if (Array.isArray(v)) return v.length > 0;
       return v && v !== 'all';
     });
-    const hasSearch = searchState.searchQuery.trim() !== '';
+    // Check if query is a non-empty array (new JSON format)
+    const hasSearch = Array.isArray(searchState.searchQuery) && searchState.searchQuery.length > 0;
     const currentTableCount = matchingTableIds[activeDatabase]?.length || 0;
 
     if (currentTableCount === 0 && !hasFilters && !hasSearch) return 'empty-database';
@@ -562,7 +565,7 @@ const SearchResultsPage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={searchState.inputValue}
+          initialQuery={queryStringToJSON(searchState.inputValue)}
         />
       </Box>
     </motion.div>

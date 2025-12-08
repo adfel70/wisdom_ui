@@ -121,6 +121,105 @@ const extractTermsFromQuery = (elements) => {
 };
 
 /**
+ * Convert JSON query array to a display string
+ * For showing in the search input field
+ * @param {Array} queryJSON - JSON query array
+ * @returns {string} Display string (e.g., "john AND marketing")
+ */
+export const queryJSONToString = (queryJSON) => {
+  if (!queryJSON || !Array.isArray(queryJSON) || queryJSON.length === 0) {
+    return '';
+  }
+
+  const buildString = (elements) => {
+    const parts = [];
+
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+
+      if (element.type === 'clause') {
+        parts.push(element.content.value);
+      } else if (element.type === 'operator') {
+        parts.push(element.content.operator);
+      } else if (element.type === 'subQuery') {
+        const subString = buildString(element.content.elements);
+        parts.push(`(${subString})`);
+      }
+    }
+
+    return parts.join(' ');
+  };
+
+  return buildString(queryJSON);
+};
+
+/**
+ * Convert a query string to JSON query array
+ * Simple parser for basic AND/OR queries with parentheses
+ * @param {string} queryString - Query string (e.g., "john AND marketing")
+ * @returns {Array} JSON query array
+ */
+export const queryStringToJSON = (queryString) => {
+  if (!queryString || !queryString.trim()) {
+    return [];
+  }
+
+  // Use the existing parseQueryString and parseTokensToAST functions
+  const tokens = parseQueryString(queryString);
+
+  // Convert tokens to JSON format
+  const convertTokensToJSON = (tokens) => {
+    const elements = [];
+    let i = 0;
+    const stack = [elements]; // Stack to handle nested groups
+
+    while (i < tokens.length) {
+      const token = tokens[i];
+      const currentElements = stack[stack.length - 1];
+
+      if (token.type === 'term') {
+        currentElements.push({
+          type: 'clause',
+          content: {
+            value: token.value,
+            bdt: null
+          }
+        });
+      } else if (token.type === 'keyword') {
+        currentElements.push({
+          type: 'operator',
+          content: {
+            operator: token.value.toUpperCase()
+          }
+        });
+      } else if (token.type === 'parenthesis' && token.value === '(') {
+        // Start a new subQuery
+        const subElements = [];
+        stack.push(subElements);
+      } else if (token.type === 'parenthesis' && token.value === ')') {
+        // Close the subQuery
+        if (stack.length > 1) {
+          const subElements = stack.pop();
+          const parentElements = stack[stack.length - 1];
+          parentElements.push({
+            type: 'subQuery',
+            content: {
+              elements: subElements
+            }
+          });
+        }
+      }
+
+      i++;
+    }
+
+    return elements;
+  };
+
+  return convertTokensToJSON(tokens);
+};
+
+/**
  * Expand all terms in groups with permutations
  * @param {Array} groups - Array of AND groups (each group is an array of terms)
  * @param {string} permutationId - The permutation to apply (e.g., 'reverse', 'double', 'none')
@@ -653,5 +752,7 @@ export default {
   filterTables,
   applySearchAndFilters,
   highlightText,
-  getExpandedQueryInfo
+  getExpandedQueryInfo,
+  queryJSONToString,
+  queryStringToJSON
 };
