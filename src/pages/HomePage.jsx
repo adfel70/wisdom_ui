@@ -146,8 +146,19 @@ const HomePage = () => {
 
   const handleSearchQueryChange = (value) => {
     setSearchQuery(value);
-    // Clear stored JSON when user types manually (so we don't use stale QueryBuilder data)
-    setSearchQueryJSON(null);
+
+    // Only clear stored JSON if the value actually changed (user typed something new)
+    // If searchQueryJSON exists and value matches its display string, keep it
+    if (searchQueryJSON) {
+      const currentDisplayString = queryJSONToString(searchQueryJSON);
+      // Normalize whitespace for comparison
+      const normalize = (str) => str.trim().replace(/\s+/g, ' ');
+      if (normalize(value) !== normalize(currentDisplayString)) {
+        // User typed something different - clear stored JSON
+        setSearchQueryJSON(null);
+      }
+      // Otherwise keep searchQueryJSON (value matches, just re-parsing from SearchBar)
+    }
   };
 
   return (
