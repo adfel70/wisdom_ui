@@ -599,7 +599,7 @@ const TableCard = ({
     const dataColumns = columnOrder.map((column) => ({
       field: column,
       headerName: column,
-      flex: 1,
+      width: 200,
       minWidth: 140,
       filter: 'agTextColumnFilter',
       sortable: true,
@@ -876,6 +876,7 @@ const TableCard = ({
                   onCellClicked={handleCellClicked}
                   tooltipShowDelay={200}
                   suppressDragLeaveHidesColumns
+                  suppressSizeToFit
                   domLayout="normal"
                   getRowId={(params) => params?.data?.id}
                   onGridReady={onGridReady}
