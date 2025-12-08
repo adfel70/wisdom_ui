@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { parseValueToTokens, parseInput, hasUnclosedQuote, isKeyword } from '../utils/tokenParser';
 import { cleanupTokens, removeEmptyParenthesisGroups } from '../utils/tokenValidator';
 import { applyTransformation } from '../utils/transformUtils';
@@ -18,6 +18,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
   const [originalText, setOriginalText] = useState('');
   const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
+  const isTransformingRef = useRef(false);
 
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
@@ -59,6 +60,15 @@ export const useTokenState = (value, onChange, onSubmit) => {
   // Reset transform state when search bar becomes completely empty
   useEffect(() => {
     if (tokens.length === 0 && currentInput === '' && hasTransformed) {
+      setOriginalText('');
+      setOriginalTokens([]);
+      setHasTransformed(false);
+    }
+  }, [tokens, currentInput, hasTransformed]);
+
+  // Reset transform state when input changes at all (user types or modifies search)
+  useEffect(() => {
+    if (hasTransformed && !isTransformingRef.current) {
       setOriginalText('');
       setOriginalTokens([]);
       setHasTransformed(false);
@@ -271,6 +281,8 @@ export const useTokenState = (value, onChange, onSubmit) => {
   const handleTransformChange = (transformId) => {
     if (!transformId) return;
 
+    isTransformingRef.current = true;
+
     // Store original text and tokens before first transformation
     if (!hasTransformed) {
       setOriginalText(currentInput);
@@ -293,6 +305,11 @@ export const useTokenState = (value, onChange, onSubmit) => {
     // Apply transformation to current input text (chainable)
     const transformed = applyTransformation(currentInput, transformId);
     setCurrentInput(transformed);
+
+    // Reset the transforming flag after a short delay to allow state updates to complete
+    setTimeout(() => {
+      isTransformingRef.current = false;
+    }, 0);
   };
 
   // Revert to original state before transformations
