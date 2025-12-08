@@ -50,6 +50,24 @@ import * as XLSX from 'xlsx';
 ModuleRegistry.registerModules([AllCommunityModule]);
  
 /**
+ * Custom Loading Overlay Component
+ * Shows a circular progress indicator instead of default "Loading..." text
+ */
+const CustomLoadingOverlay = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      width: '100%'
+    }}
+  >
+    <CircularProgress size={32} />
+  </Box>
+);
+
+/**
  * HighlightedText Component
  * Highlights matching text in search results
  */
@@ -828,13 +846,16 @@ const TableCard = ({
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <CardContent sx={{ p: 0, height: 400, position: 'relative' }}>
           {isLoading ? (
-            <Box sx={{ p: 3 }}>
-              <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} animation="wave" />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                minHeight: 200
+              }}
+            >
+              <CircularProgress size={48} />
             </Box>
           ) : (
             <>
@@ -848,6 +869,8 @@ const TableCard = ({
                   enableCellTextSelection
                   enableCellCopy
                   enableRangeSelection
+                  loading={!table?.data || isLoading}
+                  loadingOverlayComponent={CustomLoadingOverlay}
                   getMainMenuItems={getMainMenuItems}
                   onColumnMoved={handleColumnMoved}
                   onCellClicked={handleCellClicked}
