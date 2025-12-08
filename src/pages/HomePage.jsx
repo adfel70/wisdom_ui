@@ -54,16 +54,11 @@ const HomePage = () => {
       // Already in JSON format from query builder
       queryJSON = query;
     } else {
-      // Simple string input - convert to JSON format
+      // Simple string input - parse to JSON format
       if (!query || !query.trim()) return;
 
-      queryJSON = [{
-        type: 'clause',
-        content: {
-          value: query.trim(),
-          bdt: null
-        }
-      }];
+      // Use queryStringToJSON to properly parse AND/OR operators
+      queryJSON = queryStringToJSON(query);
     }
 
     // Validate query is not empty

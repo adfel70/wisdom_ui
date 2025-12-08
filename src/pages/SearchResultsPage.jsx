@@ -211,28 +211,16 @@ const SearchResultsPage = () => {
       // Already in JSON format
       queryJSON = query;
     } else if (query) {
-      // Simple string input - convert to JSON format
+      // Simple string input - parse to JSON format
       if (typeof query === 'string' && query.trim()) {
-        queryJSON = [{
-          type: 'clause',
-          content: {
-            value: query.trim(),
-            bdt: null
-          }
-        }];
+        queryJSON = queryStringToJSON(query);
       } else {
         // Use current input value
         const inputValue = searchState.inputValue;
         if (Array.isArray(inputValue)) {
           queryJSON = inputValue;
         } else if (typeof inputValue === 'string' && inputValue.trim()) {
-          queryJSON = [{
-            type: 'clause',
-            content: {
-              value: inputValue.trim(),
-              bdt: null
-            }
-          }];
+          queryJSON = queryStringToJSON(inputValue);
         }
       }
     } else {
@@ -241,13 +229,7 @@ const SearchResultsPage = () => {
       if (Array.isArray(inputValue)) {
         queryJSON = inputValue;
       } else if (typeof inputValue === 'string' && inputValue.trim()) {
-        queryJSON = [{
-          type: 'clause',
-          content: {
-            value: inputValue.trim(),
-            bdt: null
-          }
-        }];
+        queryJSON = queryStringToJSON(inputValue);
       }
     }
 
