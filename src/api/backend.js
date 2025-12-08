@@ -421,3 +421,127 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
     }
   };
 }
+
+const REGION_COUNTRY_MAP = {
+  US: ['United States', 'United States of America', 'USA', 'Mexico', 'Brazil', 'Canada', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Venezuela', 'Costa Rica', 'Panama'],
+  EU: ['France', 'Germany', 'Spain', 'Italy', 'Sweden', 'Denmark', 'Norway', 'Finland', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Portugal', 'Poland', 'Czech Republic', 'Ireland', 'Greece'],
+  APAC: ['Japan', 'Australia', 'India', 'China', 'South Korea', 'Singapore', 'Indonesia', 'Vietnam', 'Philippines', 'Malaysia', 'Thailand', 'New Zealand', 'Taiwan', 'Hong Kong']
+};
+
+const createFilterSet = (values = [], normalizer = (value) => value) => {
+  const normalized = Array.isArray(values) ? values : [];
+  return new Set(
+    normalized
+      .map((value) => {
+        if (value === null || value === undefined) {
+          return '';
+        }
+        const transformed = normalizer(value);
+        return String(transformed).trim();
+      })
+      .filter(Boolean)
+  );
+};
+
+const inferRegionFromCountry = (country = '') => {
+  const normalized = (country || '').trim().toLowerCase();
+  if (!normalized) {
+    return 'Other';
+  }
+
+  for (const [region, countries] of Object.entries(REGION_COUNTRY_MAP)) {
+    if (countries.some((name) => name.toLowerCase() === normalized)) {
+      return region;
+    }
+  }
+
+  return 'Other';
+};
+
+const increment = (bucket, key) => {
+  if (!key) {
+    return;
+  }
+  bucket[key] = (bucket[key] || 0) + 1;
+};
+
+export function fetchFacetAggregates(dbKey, filters = {}) {
+  return new Promise((resolve, reject) => {
+    (async () => {
+      try {
+        const config = DATABASE_CONFIG[dbKey];
+        if (!config) {
+          throw new Error(`Database ${dbKey} not found`);
+        }
+
+        const records = await fetchDatabaseRecords(dbKey);
+
+        const categoriesFilter = createFilterSet(filters.categories, (value) => String(value).toLowerCase());
+        const regionsFilter = createFilterSet(filters.regions, (value) => String(value).toUpperCase());
+        const tableNamesFilter = createFilterSet(filters.tableNames, (value) => String(value).toLowerCase());
+        const tableYearsFilter = createFilterSet(filters.tableYears, (value) => value);
+
+        const filteredRecords = records.filter((record) => {
+          const meta = METADATA[record.tableKey];
+          if (!meta) {
+            return false;
+          }
+
+          const uniqueCategories = Array.isArray(meta.categories)
+            ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
+            : [];
+
+          const categoryMatch =
+            categoriesFilter.size === 0 ||
+            uniqueCategories.some((category) => categoriesFilter.has(category.toLowerCase()));
+
+          const region = inferRegionFromCountry(meta.country || record.country);
+          const regionMatch = regionsFilter.size === 0 || regionsFilter.has(region);
+
+          const tableNameLabel = (meta.name || record.tableKey || '').trim();
+          const tableNameMatch =
+            tableNamesFilter.size === 0 ||
+            tableNamesFilter.has(tableNameLabel.toLowerCase()) ||
+            tableNamesFilter.has((record.tableKey || '').toLowerCase());
+
+          const yearLabel = meta.year ? String(meta.year).trim() : '';
+          const tableYearMatch = tableYearsFilter.size === 0 || tableYearsFilter.has(yearLabel);
+
+          return categoryMatch && regionMatch && tableNameMatch && tableYearMatch;
+        });
+
+        const aggregates = {
+          categories: {},
+          regions: {},
+          tableNames: {},
+          tableYears: {}
+        };
+
+        filteredRecords.forEach((record) => {
+          const meta = METADATA[record.tableKey];
+          if (!meta) {
+            return;
+          }
+
+          const categories = Array.isArray(meta.categories)
+            ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
+            : [];
+          categories.forEach((category) => increment(aggregates.categories, category));
+
+          const region = inferRegionFromCountry(meta.country || record.country);
+          increment(aggregates.regions, region);
+
+          const tableName = (meta.name || record.tableKey || '').trim();
+          increment(aggregates.tableNames, tableName);
+
+          const yearKey = meta.year ? String(meta.year).trim() : 'unknown';
+          increment(aggregates.tableYears, yearKey);
+        });
+
+        setTimeout(() => resolve(aggregates), 150);
+      } catch (error) {
+        reject(error);
+      }
+    })();
+  });
+}
