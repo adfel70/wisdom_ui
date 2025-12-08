@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Container, Typography, Paper, Button, Chip, Menu, MenuItem } from '@mui/material';
 import { School, FilterList, Shuffle, ChevronRight, AccountTree } from '@mui/icons-material';
@@ -24,6 +24,7 @@ const HomePage = () => {
   const [permutationParams, setPermutationParams] = useState({});
   const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
+  const isApplyingQueryBuilderRef = useRef(false);  // Flag to prevent clearing JSON during apply
 
   // Get selected permutation metadata
   const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
@@ -134,6 +135,9 @@ const HomePage = () => {
   };
 
   const handleQueryBuilderApply = (queryJSON) => {
+    // Set flag to prevent handleSearchQueryChange from clearing JSON during this update
+    isApplyingQueryBuilderRef.current = true;
+
     // Query builder returns JSON array - store it to preserve bdt values
     setSearchQueryJSON(queryJSON);
 
@@ -142,10 +146,20 @@ const HomePage = () => {
     setSearchQuery(displayString);
 
     setIsQueryBuilderOpen(false);
+
+    // Reset flag after state updates (use setTimeout to ensure it happens after)
+    setTimeout(() => {
+      isApplyingQueryBuilderRef.current = false;
+    }, 0);
   };
 
   const handleSearchQueryChange = (value) => {
     setSearchQuery(value);
+
+    // Don't clear JSON if we're in the middle of applying from QueryBuilder
+    if (isApplyingQueryBuilderRef.current) {
+      return;
+    }
 
     // Only clear stored JSON if the value actually changed (user typed something new)
     // If searchQueryJSON exists and value matches its display string, keep it
