@@ -13,8 +13,10 @@ import {
   IconButton,
   Typography,
   Paper,
+  InputLabel,
 } from '@mui/material';
 import { Close as CloseIcon, Add, Close as DeleteIcon } from '@mui/icons-material';
+import { getColumnTypes } from '../api/backend';
 
 /**
  * QueryBuilderModal Component
@@ -22,16 +24,19 @@ import { Close as CloseIcon, Add, Close as DeleteIcon } from '@mui/icons-materia
  */
 const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   // Root state: holds the entire query tree
-  // Each node can be a condition {id, type: 'condition', value, operator}
+  // Each node can be a condition {id, type: 'condition', value, operator, bdt}
   // or a group {id, type: 'group', operator, children: [...nodes]}
   const [queryTree, setQueryTree] = useState({
     id: 'root',
     type: 'group',
     operator: 'and', // This doesn't apply to root, but we'll keep for consistency
     children: [
-      { id: generateId(), type: 'condition', value: '', operator: 'and' }
+      { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
     ]
   });
+
+  // Column types (business data types) for dropdown
+  const [columnTypes, setColumnTypes] = useState([]);
 
   // Generate unique IDs for conditions and groups
   function generateId() {
@@ -47,7 +52,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         type: 'group',
         operator: 'and',
         children: [
-          { id: generateId(), type: 'condition', value: '', operator: 'and' }
+          { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
         ]
       };
     }
@@ -63,7 +68,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       type: 'group',
       operator: 'and',
       children: [
-        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+        { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
       ]
     };
   };
@@ -86,7 +91,8 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           id: generateId(),
           type: 'condition',
           value: element.content.value,
-          operator: operator
+          operator: operator,
+          bdt: element.content.bdt || null  // Preserve column type
         });
 
         previousOperator = null; // Reset after using
@@ -119,11 +125,19 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       type: 'group',
       operator: 'and',
       children: children.length > 0 ? children : [
-        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+        { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
       ]
     };
   };
 
+
+  // Load column types when modal opens
+  useEffect(() => {
+    if (open) {
+      const types = getColumnTypes();
+      setColumnTypes(types);
+    }
+  }, [open]);
 
   // Initialize tree from initialQuery when modal opens
   useEffect(() => {
@@ -139,7 +153,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       ...node,
       children: [
         ...node.children,
-        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+        { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
       ]
     })));
   };
@@ -155,7 +169,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           type: 'group',
           operator: 'and',
           children: [
-            { id: generateId(), type: 'condition', value: '', operator: 'and' }
+            { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
           ]
         }
       ]
@@ -180,6 +194,14 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     setQueryTree(prev => updateTreeNode(prev, nodeId, (node) => ({
       ...node,
       operator
+    })));
+  };
+
+  // Update a node's column type (bdt)
+  const updateNodeBdt = (nodeId, bdt) => {
+    setQueryTree(prev => updateTreeNode(prev, nodeId, (node) => ({
+      ...node,
+      bdt: bdt === '' ? null : bdt  // Convert empty string to null
     })));
   };
 
@@ -226,7 +248,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
         type: 'clause',
         content: {
           value: value,
-          bdt: null  // Column type (null for Phase 1)
+          bdt: node.bdt || null  // Column type from dropdown (null if not selected)
         }
       };
     }
@@ -362,7 +384,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       type: 'group',
       operator: 'and',
       children: [
-        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+        { id: generateId(), type: 'condition', value: '', operator: 'and', bdt: null }
       ]
     });
     onClose();
@@ -435,6 +457,39 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             }
           }}
         />
+
+        {/* Column Type dropdown */}
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id={`column-type-label-${condition.id}`}>Column Type</InputLabel>
+          <Select
+            labelId={`column-type-label-${condition.id}`}
+            value={condition.bdt || ''}
+            onChange={(e) => updateNodeBdt(condition.id, e.target.value)}
+            label="Column Type"
+            sx={{
+              fontSize: '0.875rem',
+              backgroundColor: 'white',
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'rgba(0, 0, 0, 0.23)',
+              },
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'rgba(0, 0, 0, 0.4)',
+              },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'primary.main',
+              },
+            }}
+          >
+            <MenuItem value="">
+              <em>All Columns</em>
+            </MenuItem>
+            {columnTypes.map(type => (
+              <MenuItem key={type} value={type}>
+                {type}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         {/* Delete button - shows on hover */}
         <IconButton

@@ -47,18 +47,48 @@ async function fetchDatabaseRecords(dbKey) {
 /**
  * Evaluate a JSON query element against a record
  * @param {Object} element - Query element (clause, operator, or subQuery)
- * @param {Object} record - Record object
+ * @param {Object} record - Record object (must have tableKey field)
  * @returns {boolean|null} True if matches, false if doesn't match, null for operators
  */
 function evaluateElement(element, record) {
   if (element.type === 'clause') {
     const { value, bdt } = element.content;
-
-    // For Phase 1, bdt is always null - search all fields
-    // In Phase 2, bdt will filter to specific column types
-
     const lowerTerm = value.toLowerCase();
-    return Object.values(record).some(fieldValue => {
+
+    // If bdt is null, search all fields (Phase 1 behavior)
+    if (!bdt) {
+      return Object.values(record).some(fieldValue => {
+        if (fieldValue == null) return false;
+        return String(fieldValue).toLowerCase().includes(lowerTerm);
+      });
+    }
+
+    // Phase 2: bdt specified - only search columns with matching type
+    const tableKey = record.tableKey;
+    if (!tableKey) {
+      console.warn('Record missing tableKey, cannot filter by column type');
+      return false;
+    }
+
+    const tableMeta = METADATA[tableKey];
+    if (!tableMeta) {
+      console.warn(`Table metadata not found for ${tableKey}`);
+      return false;
+    }
+
+    // Find columns that match the specified type
+    const matchingColumns = tableMeta.columns
+      .filter(col => col.type === bdt)
+      .map(col => col.name);
+
+    if (matchingColumns.length === 0) {
+      // No columns of this type in this table
+      return false;
+    }
+
+    // Search only in columns of the specified type
+    return matchingColumns.some(columnName => {
+      const fieldValue = record[columnName];
       if (fieldValue == null) return false;
       return String(fieldValue).toLowerCase().includes(lowerTerm);
     });
@@ -230,6 +260,24 @@ export function getDataStats() {
       tableCount: DATABASE_ASSIGNMENTS[dbKey].length
     }))
   };
+}
+
+/**
+ * Get all unique column types (bdt - business data types) from metadata
+ * @returns {Array} Sorted array of unique column type strings
+ */
+export function getColumnTypes() {
+  const types = new Set();
+
+  Object.values(METADATA).forEach(table => {
+    table.columns.forEach(column => {
+      if (column.type) {
+        types.add(column.type);
+      }
+    });
+  });
+
+  return Array.from(types).sort();
 }
 
 /**
