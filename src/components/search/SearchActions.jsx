@@ -71,7 +71,7 @@ const SearchActions = ({
                 color: 'primary.main',
                 transition: 'all 0.2s',
                 '&:hover': {
-                  backgroundColor: 'primary.light',
+                  backgroundColor: 'rgba(37, 99, 235, 0.08)',
                   color: 'primary.dark',
                   transform: 'scale(1.05)',
                 },
