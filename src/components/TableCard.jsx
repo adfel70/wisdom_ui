@@ -14,7 +14,11 @@ import {
   Button,
   Divider,
   Tooltip,
-  Skeleton
+  Skeleton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
@@ -27,7 +31,14 @@ import {
   ContentCopy,
   ReplyAll,
   Download,
-  ExpandCircleDown
+  ExpandCircleDown,
+  FilterAlt,
+  MoreVert,
+  PushPin,
+  PushPinOutlined,
+  ArrowUpward,
+  ArrowDownward,
+  ViewWeek
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
@@ -65,6 +76,182 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
         )
       )}
     </span>
+  );
+};
+
+/**
+ * CustomHeader Component
+ * Renders column header with sort, filter, and custom menu
+ */
+const CustomHeader = (props) => {
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [sortState, setSortState] = useState(null);
+
+  const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
+
+  useEffect(() => {
+    const onSortChanged = () => {
+      if (column.isSortAscending()) {
+        setSortState('asc');
+      } else if (column.isSortDescending()) {
+        setSortState('desc');
+      } else {
+        setSortState(null);
+      }
+    };
+    
+    onSortChanged();
+    
+    column.addEventListener('sortChanged', onSortChanged);
+    return () => column.removeEventListener('sortChanged', onSortChanged);
+  }, [column]);
+
+  const handleMenuClick = (event) => {
+    event.stopPropagation();
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleSort = (e) => {
+    if (enableSorting) {
+      progressSort(e.shiftKey);
+    }
+  };
+
+  const handleFilterClick = (e) => {
+    e.stopPropagation();
+    showColumnMenu(e.currentTarget);
+  };
+
+  const handlePin = (pinned) => {
+    api.setColumnsPinned([column], pinned);
+    handleMenuClose();
+  };
+
+  const handleAutosize = () => {
+    api.autoSizeColumns([column]);
+    handleMenuClose();
+  };
+
+  const handleAutosizeAll = () => {
+    api.autoSizeAllColumns();
+    handleMenuClose();
+  };
+
+  const handleCopyName = async () => {
+    try {
+      const text = displayName ?? column.getColId();
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy column name:', error);
+    }
+    handleMenuClose();
+  };
+
+  return (
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        width: '100%', 
+        height: '100%',
+        gap: 0.5
+      }}
+    >
+      <Box
+        onClick={handleSort}
+        sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            cursor: enableSorting ? 'pointer' : 'default',
+            overflow: 'hidden',
+            height: '100%'
+        }}
+      >
+        <Typography 
+            variant="subtitle2" 
+            fontWeight={600} 
+            noWrap 
+            sx={{ 
+                mr: 0.5, 
+                fontSize: '0.75rem', 
+                color: 'text.secondary' 
+            }}
+        >
+            {displayName}
+        </Typography>
+        {sortState === 'asc' && <ArrowUpward fontSize="small" sx={{ fontSize: 14, color: 'text.secondary' }} />}
+        {sortState === 'desc' && <ArrowDownward fontSize="small" sx={{ fontSize: 14, color: 'text.secondary' }} />}
+      </Box>
+
+      {/* Filter Button */}
+      <Tooltip title="Filter">
+         <IconButton 
+            size="small" 
+            onClick={handleFilterClick} 
+            sx={{ 
+                p: 0.5,
+                opacity: 0.7,
+                '&:hover': { opacity: 1 }
+            }}
+         >
+            <FilterAlt fontSize="small" sx={{ fontSize: 16 }} />
+         </IconButton>
+      </Tooltip>
+
+      {/* Column Menu Button */}
+      <Tooltip title="Column Options">
+        <IconButton 
+            size="small" 
+            onClick={handleMenuClick} 
+            sx={{ 
+                p: 0.5,
+                opacity: 0.7,
+                '&:hover': { opacity: 1 }
+            }}
+        >
+            <MoreVert fontSize="small" sx={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+        MenuListProps={{ dense: true }}
+      >
+        <MenuItem onClick={() => handlePin('left')}>
+            <ListItemIcon><PushPin fontSize="small" /></ListItemIcon>
+            <ListItemText>Pin Left</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handlePin('right')}>
+            <ListItemIcon><PushPin sx={{ transform: 'scaleX(-1)' }} fontSize="small" /></ListItemIcon>
+            <ListItemText>Pin Right</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handlePin(null)}>
+            <ListItemIcon><PushPinOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText>Unpin</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleAutosize}>
+            <ListItemIcon><ViewWeek fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize This Column</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleAutosizeAll}>
+            <ListItemIcon><ViewWeek fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize All</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleCopyName}>
+            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy Name</ListItemText>
+        </MenuItem>
+      </Menu>
+    </Box>
   );
 };
 
@@ -278,11 +465,12 @@ const TableCard = ({
 
   const defaultColDef = React.useMemo(
     () => ({
+      headerComponent: CustomHeader,
       resizable: true,
       sortable: true,
       filter: true,
       unSortIcon: true,
-      suppressHeaderMenuButton: false,
+      suppressHeaderMenuButton: true,
     }),
     []
   );
