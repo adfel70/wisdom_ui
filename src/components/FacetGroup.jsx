@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Accordion,
   AccordionSummary,
@@ -7,10 +7,12 @@ import {
   FormControlLabel,
   Checkbox,
   Skeleton,
-  Stack,
-  Box
+  Box,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import Search from '@mui/icons-material/Search';
 
 const FacetGroup = ({
   title,
@@ -19,6 +21,16 @@ const FacetGroup = ({
   onChange = () => {},
   loading = false
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredOptions = useMemo(() => {
+    const term = (searchTerm || '').trim().toLowerCase();
+    if (!term) {
+      return options;
+    }
+    return options.filter(({ label }) => label.toLowerCase().includes(term));
+  }, [options, searchTerm]);
+
   const handleToggle = (label) => {
     const isSelected = selected.includes(label);
     const nextSelection = isSelected
@@ -62,23 +74,55 @@ const FacetGroup = ({
         sx={{
           px: 2,
           py: 1.5,
-          pt: 0
+          pt: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1
         }}
       >
-        {loading ? (
-          <Stack spacing={1}>
-            {Array.from({ length: 6 }).map((_, index) => (
+        <TextField
+          size="small"
+          placeholder="Search options"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+            sx: {
+              borderRadius: 2
+            }
+          }}
+        />
+
+        <Box
+          sx={{
+            flex: '1 1 auto',
+            overflowY: 'auto',
+            pr: 0.5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.75,
+            maxHeight: 220
+          }}
+        >
+          {loading ? (
+            Array.from({ length: 6 }).map((_, index) => (
               <Skeleton
                 key={index}
                 variant="rectangular"
                 height={28}
                 sx={{ borderRadius: 1 }}
               />
-            ))}
-          </Stack>
-        ) : (
-          <Stack spacing={0.5}>
-            {options.map(({ label, count }) => (
+            ))
+          ) : filteredOptions.length === 0 ? (
+            <Typography variant="caption" color="text.secondary" align="center">
+              No options match “{searchTerm}”
+            </Typography>
+          ) : (
+            filteredOptions.map(({ label, count }) => (
               <FormControlLabel
                 key={label}
                 control={
@@ -86,28 +130,38 @@ const FacetGroup = ({
                     size="small"
                     checked={selected.includes(label)}
                     onChange={() => handleToggle(label)}
+                    sx={{ p: 0.5, mr: 0.75 }}
                   />
                 }
                 label={
-                  <Box component="span" sx={{ typography: 'body2', flex: 1 }}>
-                    {`${label} (${count})`}
-                  </Box>
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}
+                  >
+                    <Box component="span" sx={{ flex: 1 }}>
+                      {label}
+                    </Box>
+                    <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>
+                      ({count})
+                    </Box>
+                  </Typography>
                 }
                 sx={{
                   width: '100%',
                   borderRadius: 1,
                   px: 0.5,
                   '& .MuiFormControlLabel-label': {
-                    width: '100%',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontWeight: 400
+                    width: '100%'
+                  },
+                  '&:hover': {
+                    backgroundColor: 'action.hover'
                   }
                 }}
               />
-            ))}
-          </Stack>
-        )}
+            ))
+          )}
+        </Box>
       </AccordionDetails>
     </Accordion>
   );

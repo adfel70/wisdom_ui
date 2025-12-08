@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button } from '@mui/material';
+import { Box, Button, Stack, Divider } from '@mui/material';
 import FacetGroup from './FacetGroup';
 import { fetchFacetAggregates } from '../api/backend';
 import {
@@ -108,37 +108,39 @@ const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilt
           py: 2
         }}
       >
-        <FacetGroup
-          title="Categories"
-          options={facetOptions.categories}
-          selected={categoriesSelected}
-          loading={loading}
-          onChange={setCategoriesSelected}
-        />
+        <Stack spacing={2}>
+          <FacetGroup
+            title="Categories"
+            options={facetOptions.categories}
+            selected={categoriesSelected}
+            loading={loading}
+            onChange={setCategoriesSelected}
+          />
 
-        <FacetGroup
-          title="Regions"
-          options={facetOptions.regions}
-          selected={regionsSelected}
-          loading={loading}
-          onChange={setRegionsSelected}
-        />
+          <FacetGroup
+            title="Regions"
+            options={facetOptions.regions}
+            selected={regionsSelected}
+            loading={loading}
+            onChange={setRegionsSelected}
+          />
 
-        <FacetGroup
-          title="Table Names"
-          options={facetOptions.tableNames}
-          selected={tableNamesSelected}
-          loading={loading}
-          onChange={setTableNamesSelected}
-        />
+          <FacetGroup
+            title="Table Names"
+            options={facetOptions.tableNames}
+            selected={tableNamesSelected}
+            loading={loading}
+            onChange={setTableNamesSelected}
+          />
 
-        <FacetGroup
-          title="Table Years"
-          options={facetOptions.tableYears}
-          selected={tableYearsSelected}
-          loading={loading}
-          onChange={setTableYearsSelected}
-        />
+          <FacetGroup
+            title="Table Years"
+            options={facetOptions.tableYears}
+            selected={tableYearsSelected}
+            loading={loading}
+            onChange={setTableYearsSelected}
+          />
+        </Stack>
       </Box>
 
       <Box
@@ -150,11 +152,19 @@ const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilt
           borderTop: '1px solid',
           borderColor: 'divider',
           px: 2,
-          py: 1.5,
-          bgcolor: 'background.paper'
+          py: 1.25,
+          bgcolor: 'background.paper',
+          boxShadow: '0 -6px 16px rgba(0,0,0,0.08)'
         }}
       >
-        <Button variant="contained" fullWidth onClick={handleApplyFilters} disabled={loading}>
+        <Divider sx={{ mb: 1 }} />
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleApplyFilters}
+          disabled={loading}
+          sx={{ borderRadius: 2, py: 1.25 }}
+        >
           Apply Filters
         </Button>
       </Box>
