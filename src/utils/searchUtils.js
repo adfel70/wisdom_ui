@@ -3,6 +3,8 @@
  */
 
 import { applyPermutation } from './permutationUtils';
+import { inferRegionFromCountry } from './regionUtils';
+import { normalizeFacetArray } from './facetUtils';
 
 /**
  * Expand all terms in groups with permutations
@@ -418,7 +420,30 @@ export const searchTables = (tables, query, permutationId = 'none', permutationP
  * @returns {Array} Filtered tables
  */
 export const filterTables = (tables, filters) => {
-  const { tableName, year, category, country, selectedTables, minDate, maxDate } = filters;
+  const {
+    tableName,
+    year,
+    category,
+    country,
+    selectedTables,
+    minDate,
+    maxDate,
+    categories,
+    regions,
+    tableNames,
+    tableYears
+  } = filters;
+
+  const normalizedCategoryFilters = normalizeFacetArray(categories).map((value) =>
+    value.toLowerCase()
+  );
+  const normalizedRegionFilters = normalizeFacetArray(regions).map((value) =>
+    value.toUpperCase()
+  );
+  const normalizedTableNameFilters = normalizeFacetArray(tableNames).map((value) =>
+    value.toLowerCase()
+  );
+  const normalizedTableYearFilters = normalizeFacetArray(tableYears);
 
   return tables.filter(table => {
     // Filter by selected tables (if any are selected)
@@ -444,6 +469,41 @@ export const filterTables = (tables, filters) => {
     // Filter by country
     if (country && country !== 'all' && table.country !== country) {
       return false;
+    }
+
+    if (normalizedCategoryFilters.length > 0) {
+      const tableCategories = Array.isArray(table.categories)
+        ? table.categories.map((cat) => (cat ? cat.toString().toLowerCase() : ''))
+        : [];
+      if (!normalizedCategoryFilters.some((filterValue) => tableCategories.includes(filterValue))) {
+        return false;
+      }
+    }
+
+    if (normalizedRegionFilters.length > 0) {
+      const tableRegion = inferRegionFromCountry(table.country);
+      if (!normalizedRegionFilters.includes(tableRegion)) {
+        return false;
+      }
+    }
+
+    if (normalizedTableNameFilters.length > 0) {
+      const lowerTableName = table.name ? table.name.toLowerCase() : '';
+      const lowerTableId = table.id ? table.id.toLowerCase() : '';
+      if (
+        !normalizedTableNameFilters.some(
+          (filterValue) => filterValue === lowerTableName || filterValue === lowerTableId
+        )
+      ) {
+        return false;
+      }
+    }
+
+    if (normalizedTableYearFilters.length > 0) {
+      const yearValue = table.year ? String(table.year).trim() : '';
+      if (!normalizedTableYearFilters.includes(yearValue)) {
+        return false;
+      }
     }
 
     // Filter by date range

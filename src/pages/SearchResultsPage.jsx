@@ -31,6 +31,7 @@ import {
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
 import { getExpandedQueryInfo } from '../utils/searchUtils';
+import { FACET_KEYS } from '../utils/facetUtils';
 
 /**
  * SearchResultsPage Component
@@ -215,15 +216,24 @@ const SearchResultsPage = () => {
     });
   };
 
-  const handleApplyFilters = (newFilters) => {
-    searchState.setFilters(newFilters);
+  const handleApplyFilters = (facetFilters = {}) => {
+    const updatedFilters = { ...searchState.filters };
+    FACET_KEYS.forEach((key) => {
+      if (Array.isArray(facetFilters[key]) && facetFilters[key].length > 0) {
+        updatedFilters[key] = facetFilters[key];
+      } else {
+        delete updatedFilters[key];
+      }
+    });
+
+    searchState.setFilters(updatedFilters);
     pagination.resetAllPages();
     urlSync.updateURL({
       query: searchState.inputValue,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: newFilters,
+      filters: updatedFilters,
     });
   };
 
@@ -442,6 +452,7 @@ const SearchResultsPage = () => {
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
           onApplyFilters={handleApplyFilters}
+          activeFilters={searchState.filters}
           topOffset={headerHeight}
         />
 

@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button } from '@mui/material';
 import FacetGroup from './FacetGroup';
 import { fetchFacetAggregates } from '../api/backend';
+import {
+  getFacetSelections,
+  sanitizeFacetFilters,
+  serializeFacetFilters
+} from '../utils/facetUtils';
 
 const toFacetOptions = (bucket = {}) =>
   Object.entries(bucket).map(([label, count]) => ({
@@ -16,19 +21,29 @@ const initialFacetData = {
   tableYears: {}
 };
 
-const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {} }) => {
+const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {}, activeFilters = {} }) => {
   const [facetData, setFacetData] = useState(initialFacetData);
   const [loading, setLoading] = useState(false);
   const [categoriesSelected, setCategoriesSelected] = useState([]);
   const [regionsSelected, setRegionsSelected] = useState([]);
   const [tableNamesSelected, setTableNamesSelected] = useState([]);
   const [tableYearsSelected, setTableYearsSelected] = useState([]);
-  const [appliedFilters, setAppliedFilters] = useState({
-    categories: [],
-    regions: [],
-    tableNames: [],
-    tableYears: []
-  });
+  const [appliedFilters, setAppliedFilters] = useState(() => sanitizeFacetFilters(activeFilters));
+
+  useEffect(() => {
+    const sanitized = sanitizeFacetFilters(activeFilters);
+    setAppliedFilters((prev) => {
+      if (serializeFacetFilters(prev) === serializeFacetFilters(sanitized)) {
+        return prev;
+      }
+      return sanitized;
+    });
+    const selections = getFacetSelections(activeFilters);
+    setCategoriesSelected(selections.categories);
+    setRegionsSelected(selections.regions);
+    setTableNamesSelected(selections.tableNames);
+    setTableYearsSelected(selections.tableYears);
+  }, [activeFilters]);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,8 +84,8 @@ const FilterPanel = ({ databaseId = 'db1', onApplyFilters = () => {} }) => {
       tableNames: tableNamesSelected,
       tableYears: tableYearsSelected
     };
-    setAppliedFilters(nextFilters);
-    onApplyFilters(nextFilters);
+    const sanitized = sanitizeFacetFilters(nextFilters);
+    onApplyFilters(sanitized);
   };
 
   return (

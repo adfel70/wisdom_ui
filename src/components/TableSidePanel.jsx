@@ -112,6 +112,7 @@ const TableSidePanel = ({
   isCollapsed = false,
   onToggleCollapse,
   onApplyFilters = () => {},
+  activeFilters = {},
   topOffset = 280
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
@@ -387,7 +388,11 @@ const TableSidePanel = ({
             </LayoutGroup>
           )
         ) : (
-          <FilterPanel databaseId={databaseId} onApplyFilters={onApplyFilters} />
+          <FilterPanel
+            databaseId={databaseId}
+            activeFilters={activeFilters}
+            onApplyFilters={onApplyFilters}
+          />
         )}
       </Box>
       )}
