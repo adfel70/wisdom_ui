@@ -20,7 +20,8 @@ const SearchActions = ({
   hasTransformed,
   onRevert,
   transformValue,
-  onTransformChange
+  onTransformChange,
+  shortcutTriggered = false
 }) => {
   return (
     <Box
@@ -70,7 +71,7 @@ const SearchActions = ({
                 color: 'primary.main',
                 transition: 'all 0.2s',
                 '&:hover': {
-                  backgroundColor: 'primary.light',
+                  backgroundColor: 'rgba(37, 99, 235, 0.08)',
                   color: 'primary.dark',
                   transform: 'scale(1.05)',
                 },
@@ -87,7 +88,14 @@ const SearchActions = ({
           size="small"
           renderValue={() => (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <AutoAwesome sx={{ fontSize: '1rem' }} />
+              <AutoAwesome sx={{
+                fontSize: '1rem',
+                transition: 'all 0.2s',
+                ...(shortcutTriggered && {
+                  transform: 'scale(1.1) rotate(10deg)',
+                  color: 'primary.main'
+                })
+              }} />
               <span>Transform</span>
             </Box>
           )}
@@ -95,8 +103,17 @@ const SearchActions = ({
             minWidth: 'fit-content',
             borderRadius: '12px',
             transition: 'all 0.2s',
+            ...(shortcutTriggered && {
+              transform: 'scale(1.05)',
+              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)',
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'primary.main',
+                borderWidth: '2px',
+              },
+            }),
             '& .MuiOutlinedInput-notchedOutline': {
               borderColor: 'rgba(37, 99, 235, 0.5)', // Light blue border
+              transition: 'all 0.2s',
             },
             '& .MuiSelect-select': {
               py: 0.75,
@@ -124,7 +141,17 @@ const SearchActions = ({
           </MenuItem>
           {TRANSFORMATIONS.map((transform) => (
             <MenuItem key={transform.id} value={transform.id}>
-              {transform.label}
+              <Box sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%'
+              }}>
+                <span style={{ marginRight: '8px' }}>{transform.label}</span>
+                <span style={{ color: '#9e9e9e', fontSize: '0.75rem', fontWeight: 'normal', marginLeft: '8px' }}>
+                  {transform.shortcut}
+                </span>
+              </Box>
             </MenuItem>
           ))}
         </Select>

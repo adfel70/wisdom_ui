@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -14,28 +14,78 @@ import {
   Button,
   Divider,
   Tooltip,
+  Menu,
   MenuItem,
   ListItemIcon,
-  ListItemText,
-  Skeleton
+  ListItemText
 } from '@mui/material';
-import { DataGrid, GridColumnMenuContainer, GridColumnMenuSortItem, GridColumnMenuFilterItem, GridColumnMenuHideItem, GridColumnMenuManageItem } from '@mui/x-data-grid';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
   ExpandMore,
   ExpandLess,
   TableChart,
   Info,
   Close,
-  DragIndicator,
   ContentCopy,
   ReplyAll,
   Download,
-  ExpandCircleDown
+  ExpandCircleDown,
+  FilterAlt,
+  MoreVert,
+  PushPin,
+  PushPinOutlined,
+  ArrowUpward,
+  ArrowDownward,
+  ViewWeek,
+  KeyboardArrowRight,
+  CompareArrows,
+  RestartAlt
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
  
+/**
+ * Custom Loading Overlay Component
+ * Shows a circular progress indicator instead of default "Loading..." text
+ */
+const CustomLoadingOverlay = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      width: '100%'
+    }}
+  >
+    <CircularProgress size={32} />
+  </Box>
+);
+
+/**
+ * Custom No Rows Overlay Component
+ * Shows a friendly message when there is nothing to render
+ */
+const CustomNoRowsOverlay = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      width: '100%'
+    }}
+  >
+    <Typography variant="body2" color="text.secondary">
+      No rows to display
+    </Typography>
+  </Box>
+);
+
 /**
  * HighlightedText Component
  * Highlights matching text in search results
@@ -70,95 +120,284 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
 };
 
 /**
- * CustomColumnMenu Component
- * Custom column menu that extends the default MUI DataGrid column menu
+ * CustomHeader Component
+ * Renders column header with sort, filter, and custom menu
  */
-const CustomColumnMenu = (props) => {
-  const { hideMenu, colDef } = props;
+const CustomHeader = (props) => {
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [pinMenuAnchorEl, setPinMenuAnchorEl] = useState(null);
+  const [sortState, setSortState] = useState(null);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const pinMenuCloseTimeoutRef = useRef(null);
 
-  const handleCopyColumnName = async () => {
-    try {
-      const text = colDef.headerName ?? colDef.field;
-      await navigator.clipboard.writeText(text);
-    } catch (err) {
-      console.error('Failed to copy column name:', err);
-    } finally {
-      hideMenu?.();
+  const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
+
+  useEffect(() => {
+    const onSortChanged = () => {
+      if (column.isSortAscending()) {
+        setSortState('asc');
+      } else if (column.isSortDescending()) {
+        setSortState('desc');
+      } else {
+        setSortState(null);
+      }
+    };
+
+    onSortChanged();
+
+    column.addEventListener('sortChanged', onSortChanged);
+    return () => column.removeEventListener('sortChanged', onSortChanged);
+  }, [column]);
+
+  // Listen for popup menu hidden event to reset filter menu state
+  useEffect(() => {
+    const onPopupMenuHidden = () => {
+      setIsFilterMenuOpen(false);
+    };
+
+    if (api) {
+      api.addEventListener('popupMenuHidden', onPopupMenuHidden);
+      return () => api.removeEventListener('popupMenuHidden', onPopupMenuHidden);
+    }
+  }, [api]);
+
+  const handleMenuClick = (event) => {
+    event.stopPropagation();
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+    setPinMenuAnchorEl(null);
+    // Clear any pending close timeout
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
     }
   };
 
-  return (
-    <GridColumnMenuContainer 
-      {...props}
-      sx={{
-        borderRadius: 1,              
-        boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
-    }}>
-      <GridColumnMenuSortItem colDef={colDef} onClick={hideMenu} />
-      <Divider />
-      <GridColumnMenuFilterItem colDef={colDef} onClick={hideMenu} />
-      <Divider />
-      <GridColumnMenuHideItem colDef={colDef} onClick={hideMenu} />
-      <GridColumnMenuManageItem colDef={colDef} onClick={hideMenu} />
-      <MenuItem onClick={handleCopyColumnName}>
-        <ListItemIcon>
-          <ContentCopy fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Copy column name" />
-      </MenuItem>
-    </GridColumnMenuContainer>
-  );
-};
+  const handlePinMenuOpen = (event) => {
+    // Clear any pending close timeout
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
+    }
+    setPinMenuAnchorEl(event.currentTarget);
+  };
 
-/**
- * DraggableColumnHeader Component
- * Custom column header with drag and drop functionality
- */
-const DraggableColumnHeader = ({ column, onDragStart, onDragOver, onDrop, isDragging, isDragOver }) => {
+  const handlePinMenuClose = () => {
+    // Delay closing to allow mouse to move between main item and submenu
+    pinMenuCloseTimeoutRef.current = setTimeout(() => {
+      setPinMenuAnchorEl(null);
+    }, 150);
+  };
+
+  const handlePinMenuCloseImmediate = () => {
+    // Clear timeout and close immediately
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
+    }
+    setPinMenuAnchorEl(null);
+  };
+
+  const handleSort = (e) => {
+    if (enableSorting) {
+      progressSort(e.shiftKey);
+    }
+  };
+
+  const handleFilterClick = (e) => {
+    e.stopPropagation();
+    if (isFilterMenuOpen) {
+      // Hide the column menu if it's already open
+      if (api?.hidePopupMenu) {
+        api.hidePopupMenu();
+      }
+      setIsFilterMenuOpen(false);
+    } else {
+      // Show the column menu
+      showColumnMenu(e.currentTarget);
+      setIsFilterMenuOpen(true);
+    }
+  };
+
+  const handlePin = (pinned) => {
+    api.setColumnsPinned([column], pinned);
+    handleMenuClose();
+  };
+
+  const handleAutosize = () => {
+    api.autoSizeColumns([column]);
+    handleMenuClose();
+  };
+
+  const handleAutosizeAll = () => {
+    api.autoSizeAllColumns();
+    handleMenuClose();
+  };
+
+  const handleCopyName = async () => {
+    try {
+      const text = displayName ?? column.getColId();
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy column name:', error);
+    }
+    handleMenuClose();
+  };
+
   return (
-    <Box
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        cursor: isDragging ? 'grabbing' : 'grab',
-        userSelect: 'none',
-        opacity: isDragging ? 0.5 : 1,
-        backgroundColor: isDragOver ? 'primary.light' : 'transparent',
-        border: isDragOver ? '2px dashed' : '2px solid transparent',
-        borderColor: isDragOver ? 'primary.main' : 'transparent',
-        borderRadius: 1,
-        transition: 'all 0.2s ease',
-        padding: '8px 12px',
-        minHeight: '40px',
-        width: '100%',
-        '&:hover': {
-          backgroundColor: isDragOver ? 'primary.light' : 'action.hover',
-        },
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        width: '100%', 
+        height: '100%',
+        gap: 0.5
       }}
     >
-      <DragIndicator
+      <Box
+        onClick={handleSort}
         sx={{
-          fontSize: '1rem',
-          color: 'text.secondary',
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
-      />
-      <Typography
-        variant="body2"
-        sx={{
-          fontWeight: 600,
-          fontSize: '0.875rem',
-          color: 'text.primary',
-          flex: 1,
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            cursor: enableSorting ? 'pointer' : 'default',
+            overflow: 'hidden',
+            height: '100%'
         }}
       >
-        {column}
-      </Typography>
+        <Typography 
+            variant="subtitle2" 
+            fontWeight={600} 
+            noWrap 
+            sx={{ 
+                mr: 0.5, 
+                fontSize: '0.75rem', 
+                color: 'text.secondary' 
+            }}
+        >
+            {displayName}
+        </Typography>
+        {sortState === 'asc' && <ArrowUpward fontSize="small" sx={{ fontSize: 14, color: 'text.secondary' }} />}
+        {sortState === 'desc' && <ArrowDownward fontSize="small" sx={{ fontSize: 14, color: 'text.secondary' }} />}
+      </Box>
+
+      {/* Filter Button */}
+      <Tooltip title="Filter">
+         <IconButton 
+            size="small" 
+            onClick={handleFilterClick} 
+            sx={{ 
+                p: 0.5,
+                opacity: 0.7,
+                '&:hover': { opacity: 1 }
+            }}
+         >
+            <FilterAlt fontSize="small" sx={{ fontSize: 16 }} />
+         </IconButton>
+      </Tooltip>
+
+      {/* Column Menu Button */}
+      <Tooltip title="Column Options">
+        <IconButton 
+            size="small" 
+            onClick={handleMenuClick} 
+            sx={{ 
+                p: 0.5,
+                opacity: 0.7,
+                '&:hover': { opacity: 1 }
+            }}
+        >
+            <MoreVert fontSize="small" sx={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+        MenuListProps={{ dense: true }}
+      >
+        <MenuItem
+            onClick={handlePinMenuOpen}
+            onMouseEnter={handlePinMenuOpen}
+            onMouseLeave={handlePinMenuClose}
+            sx={{ display: 'flex', justifyContent: 'space-between' }}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ListItemIcon><PushPin fontSize="small" /></ListItemIcon>
+                <ListItemText>Pin Column</ListItemText>
+            </Box>
+            <KeyboardArrowRight fontSize="small" />
+        </MenuItem>
+
+        <Divider />
+        <MenuItem onClick={handleCopyName}>
+            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy Name</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleAutosize}>
+            <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize This Column</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleAutosizeAll}>
+            <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize All</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => {
+            props.onResetView?.();
+            handleMenuClose();
+        }}>
+            <ListItemIcon><RestartAlt fontSize="small" /></ListItemIcon>
+            <ListItemText>Return to default view</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <Menu
+        anchorEl={pinMenuAnchorEl}
+        open={Boolean(pinMenuAnchorEl)}
+        onClose={handlePinMenuCloseImmediate}
+        anchorOrigin={{
+            vertical: 'top',
+            horizontal: 'right',
+        }}
+        transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+        }}
+        MenuListProps={{
+            dense: true,
+            onMouseEnter: () => {
+              // Clear close timeout when entering submenu
+              if (pinMenuCloseTimeoutRef.current) {
+                clearTimeout(pinMenuCloseTimeoutRef.current);
+                pinMenuCloseTimeoutRef.current = null;
+              }
+            },
+            onMouseLeave: handlePinMenuClose
+        }}
+        sx={{ pointerEvents: 'none' }}
+        PaperProps={{
+             sx: { pointerEvents: 'auto' }
+        }}
+      >
+        <MenuItem onClick={() => handlePin('left')}>
+            <ListItemIcon><PushPin fontSize="small" /></ListItemIcon>
+            <ListItemText>Pin Left</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handlePin('right')}>
+            <ListItemIcon><PushPin sx={{ transform: 'scaleX(-1)' }} fontSize="small" /></ListItemIcon>
+            <ListItemText>Pin Right</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handlePin(null)}>
+            <ListItemIcon><PushPinOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText>Unpin</ListItemText>
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };
@@ -182,8 +421,12 @@ const TableCard = ({
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
-  const [draggedColumn, setDraggedColumn] = useState(null);
-  const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [gridApi, setGridApi] = useState(null);
+  const [selectedCell, setSelectedCell] = useState(null);
+
+  const hasRows = Array.isArray(table?.data) && table.data.length > 0;
+  const expectsRows = (table?.count ?? 0) > 0;
+  const isGridLoading = isLoading || (!hasRows && expectsRows);
 
   // Update column order when table changes
   useEffect(() => {
@@ -192,25 +435,48 @@ const TableCard = ({
     }
   }, [table?.columns]);
 
-  // Global drag end handler
-  useEffect(() => {
-    const handleGlobalDragEnd = () => {
-      setDraggedColumn(null);
-      setDragOverColumn(null);
-    };
-
-    document.addEventListener('dragend', handleGlobalDragEnd);
-    return () => document.removeEventListener('dragend', handleGlobalDragEnd);
+  const onGridReady = useCallback((params) => {
+    setGridApi(params.api);
   }, []);
+
+  // Keep AG Grid overlays in sync with loading state to avoid the "no rows" flash
+  useEffect(() => {
+    if (!gridApi) return;
+
+    if (isGridLoading) {
+      gridApi.showLoadingOverlay();
+      return;
+    }
+
+    if (!hasRows) {
+      gridApi.showNoRowsOverlay();
+      return;
+    }
+
+    gridApi.hideOverlay();
+  }, [gridApi, isGridLoading, hasRows]);
+
+  const handleResetView = useCallback(() => {
+    if (!gridApi) return;
+    
+    // Reset column order to original
+    if (table?.columns) {
+      setColumnOrder(table.columns);
+    }
+
+    // Reset grid state (sort, filter, width, pin)
+    gridApi.setFilterModel(null);
+    gridApi.resetColumnState();
+  }, [gridApi, table?.columns]);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
   };
 
-  const handleRowInfoClick = (row) => {
+  const handleRowInfoClick = useCallback((row) => {
     setSelectedRow(row);
     setIsPopupOpen(true);
-  };
+  }, []);
 
   const handleClosePopup = () => {
     setIsPopupOpen(false);
@@ -258,49 +524,8 @@ const TableCard = ({
     XLSX.writeFile(workbook, `${safeFileName}.xlsx`);
   };
 
-  // Drag and drop handlers for column reordering
-  const handleDragStart = (e, column) => {
-    setDraggedColumn(column);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e, column) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverColumn(column);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedColumn(null);
-    setDragOverColumn(null);
-  };
-
-  const handleDrop = (e, targetColumn) => {
-    e.preventDefault();
-
-    if (!draggedColumn || draggedColumn === targetColumn) {
-      setDraggedColumn(null);
-      setDragOverColumn(null);
-      return;
-    }
-
-    const newOrder = [...columnOrder];
-    const draggedIndex = newOrder.indexOf(draggedColumn);
-    const targetIndex = newOrder.indexOf(targetColumn);
-
-    // Remove dragged column from its current position
-    newOrder.splice(draggedIndex, 1);
-
-    // Insert dragged column at target position
-    newOrder.splice(targetIndex, 0, draggedColumn);
-
-    setColumnOrder(newOrder);
-    setDraggedColumn(null);
-    setDragOverColumn(null);
-  };
-
-  // Transform data for DataGrid (add id field)
-  const dataGridRows = React.useMemo(() => {
+  // Transform data for AG Grid (add id field)
+  const rowData = React.useMemo(() => {
     if (!table?.data) return [];
     return table.data.map((row, index) => ({
       id: index,
@@ -308,31 +533,17 @@ const TableCard = ({
     }));
   }, [table?.data, table?.id]);
 
-  // Create DataGrid columns configuration
-  const dataGridColumns = React.useMemo(() => {
-    const columns = columnOrder.map((column) => ({
-      field: column,
-      headerName: column,
-      flex: 1,
-      minWidth: 120,
-      renderHeader: () => (
-        <DraggableColumnHeader
-          column={column}
-          onDragStart={(e) => handleDragStart(e, column)}
-          onDragOver={(e) => handleDragOver(e, column)}
-          onDrop={(e) => handleDrop(e, column)}
-          isDragging={draggedColumn === column}
-          isDragOver={dragOverColumn === column}
-        />
-      ),
-      renderCell: (params) => (
+  const renderHighlightCell = useCallback(
+    (params) => {
+      return (
         <Box
           sx={{
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'flex',
             alignItems: 'center',
-            height: '100%'
+            height: '100%',
+            width: '100%',
           }}
         >
           <Typography
@@ -344,47 +555,173 @@ const TableCard = ({
               textAlign: 'left',
               flex: 1,
             }}
-            title={params.value || 'N/A'}
+            title={params.value ?? 'N/A'}
           >
-            <HighlightedText text={params.value || 'N/A'} query={query} />
+            <HighlightedText text={params.value ?? 'N/A'} query={query} />
           </Typography>
         </Box>
-      ),
-    }));
+      );
+    },
+    [query]
+  );
 
-    // Add actions column
-    columns.push({
-      field: 'actions',
-      headerName: 'Actions',
-      width: 80,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => (
+  const renderActionCell = useCallback(
+    (params) => {
+      const row = params.data;
+      if (!row) return null;
+
+      return (
         <Tooltip title="View full details">
           <IconButton
             size="small"
+            disableRipple
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              handleRowInfoClick(params.row);
+              handleRowInfoClick(row);
             }}
             sx={{
+              width: 28,
+              height: 28,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: '50%',
               color: 'text.secondary',
-              '&:hover': {
-                color: 'primary.main',
-                backgroundColor: 'primary.light',
-                transform: 'scale(1.1)',
-              },
+              backgroundColor: 'transparent',
+              boxShadow: 'none',
               transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                backgroundColor: 'transparent',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                transform: 'translateY(-2px)',
+                boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+              },
             }}
           >
-            <Info fontSize="small" />
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1,
+                fontSize: '0.85rem',
+                textTransform: 'lowercase',
+              }}
+            >
+              i
+            </Typography>
           </IconButton>
         </Tooltip>
-      ),
-    });
+      );
+    },
+    [handleRowInfoClick]
+  );
 
-    return columns;
-  }, [columnOrder, query, draggedColumn]);
+  const columnDefs = React.useMemo(() => {
+    const rowDetailsColumn = {
+      field: '__rowDetails__',
+      headerName: '',
+      headerComponent: () => null,
+      width: 64,
+      minWidth: 64,
+      maxWidth: 64,
+      pinned: 'left',
+      lockPinned: true,
+      suppressMovable: true,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      cellRenderer: renderActionCell,
+      colId: '__rowDetails__',
+      menuTabs: [],
+    };
+
+    const dataColumns = columnOrder.map((column) => ({
+      field: column,
+      headerName: column,
+      width: 200,
+      minWidth: 140,
+      filter: 'agTextColumnFilter',
+      sortable: true,
+      cellRenderer: renderHighlightCell,
+      wrapText: false,
+      autoHeight: false,
+    }));
+
+    return [rowDetailsColumn, ...dataColumns];
+  }, [columnOrder, renderActionCell, renderHighlightCell]);
+
+  const defaultColDef = React.useMemo(
+    () => ({
+      headerComponent: CustomHeader,
+      headerComponentParams: {
+        onResetView: handleResetView
+      },
+      resizable: true,
+      sortable: true,
+      filter: true,
+      unSortIcon: true,
+      suppressHeaderMenuButton: true,
+    }),
+    [handleResetView]
+  );
+
+  const getMainMenuItems = useCallback((params) => {
+    const defaultItems = params.defaultItems ?? [];
+
+    const copyItem = {
+      name: 'Copy column name',
+      action: async () => {
+        try {
+          const text = params.column.getColDef().headerName ?? params.column.getColId();
+          await navigator.clipboard.writeText(text);
+        } catch (error) {
+          console.error('Failed to copy column name:', error);
+        }
+      },
+    };
+
+    return [...defaultItems, 'separator', copyItem];
+  }, []);
+
+  const handleColumnMoved = useCallback((event) => {
+    if (!event?.finished || !event?.columnApi) return;
+    const ordered = event.columnApi
+      .getAllGridColumns()
+      .map((col) => col.getColId())
+      .filter((field) => field && field !== '__rowDetails__');
+    if (ordered.length) {
+      setColumnOrder(ordered);
+    }
+  }, []);
+
+  const handleCellClicked = useCallback((event) => {
+    // Store the selected cell information
+    setSelectedCell({
+      value: event.value,
+      colId: event.column.getColId(),
+      rowIndex: event.rowIndex
+    });
+  }, []);
+
+  // Handle keyboard events for cell copying
+  useEffect(() => {
+    const handleKeyDown = async (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'c' && selectedCell) {
+        try {
+          const cellValue = selectedCell.value ?? 'N/A';
+          await navigator.clipboard.writeText(cellValue);
+          event.preventDefault(); // Prevent default copy behavior
+        } catch (error) {
+          console.error('Failed to copy cell value:', error);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCell]);
+
 
   return (
     <Card
@@ -546,66 +883,45 @@ const TableCard = ({
       </Box>
 
       {/* Table Data */}
-      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+      <Collapse in={isExpanded} timeout="auto">
         <CardContent sx={{ p: 0, height: 400, position: 'relative' }}>
           {isLoading ? (
-            <Box sx={{ p: 3 }}>
-              <Skeleton variant="rectangular" height={56} sx={{ mb: 2 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} sx={{ mb: 1 }} animation="wave" />
-              <Skeleton variant="rectangular" height={48} animation="wave" />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                minHeight: 200
+              }}
+            >
+              <CircularProgress size={48} />
             </Box>
           ) : (
             <>
-              <DataGrid
-                rows={dataGridRows}
-                columns={dataGridColumns}
-                hideFooter
-                rowHeight={40}
-                slots={{
-                  columnMenu: CustomColumnMenu,
-                }}
-                sx={{
-                  borderRadius: 0,
-                  '& .MuiDataGrid-cell': {
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                  },
-                  '& .MuiDataGrid-columnHeaders': {
-                    backgroundColor: 'grey.50',
-                    minHeight: '56px !important',
-                  },
-                  '& .MuiDataGrid-columnHeader': {
-                    backgroundColor: '#F1F1F1',
-                    padding: 0.5,
-                    borderRight: '0.5px solid',
-                    borderRightColor: 'divider',
-                    '&:last-child': {
-                      borderRight: 'none',
-                    },
-                    '&:focus': {
-                      outline: 'none',
-                    },
-                    '&:focus-within': {
-                      outline: 'none',
-                    },
-                  },
-                  '& .MuiDataGrid-columnHeaderTitle': {
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    color: 'text.primary',
-                    display: 'none', // Hide default title since we use custom header
-                  },
-                  '& .MuiDataGrid-row:hover': {
-                    backgroundColor: 'action.selected',
-                  },
-                  '& .MuiDataGrid-menuIcon': {
-                    marginRight: 0,
-                  },
-                }}
-              />
+              <Box sx={{ height: '100%', width: '100%' }}>
+                <AgGridReact
+                  theme={themeQuartz}
+                  rowData={rowData}
+                  columnDefs={columnDefs}
+                  defaultColDef={defaultColDef}
+                  animateRows
+                  enableCellTextSelection
+                  enableCellCopy
+                  enableRangeSelection
+                  loadingOverlayComponent={CustomLoadingOverlay}
+                  noRowsOverlayComponent={CustomNoRowsOverlay}
+                  getMainMenuItems={getMainMenuItems}
+                  onColumnMoved={handleColumnMoved}
+                  onCellClicked={handleCellClicked}
+                  tooltipShowDelay={200}
+                  suppressDragLeaveHidesColumns
+                  suppressSizeToFit
+                  domLayout="normal"
+                  getRowId={(params) => params?.data?.id}
+                  onGridReady={onGridReady}
+                />
+              </Box>
               {/* Semi-transparent loading overlay for Load More */}
               {isLoadingMore && (
                 <Box
