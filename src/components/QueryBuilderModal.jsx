@@ -72,16 +72,15 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   const parseJSONToTree = (queryJSON) => {
     const children = [];
     let i = 0;
+    let previousOperator = null; // Track operator that comes BEFORE current element
 
     while (i < queryJSON.length) {
       const element = queryJSON[i];
 
       if (element.type === 'clause') {
-        // Get the operator for this clause (from next element or default to 'and')
-        let operator = 'and';
-        if (i + 1 < queryJSON.length && queryJSON[i + 1].type === 'operator') {
-          operator = queryJSON[i + 1].content.operator.toLowerCase();
-        }
+        // Use the operator that came BEFORE this clause (connects to previous element)
+        // First element defaults to 'and' (operator won't be shown anyway)
+        const operator = previousOperator ? previousOperator.toLowerCase() : 'and';
 
         children.push({
           id: generateId(),
@@ -90,13 +89,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           operator: operator
         });
 
+        previousOperator = null; // Reset after using
         i++;
       } else if (element.type === 'subQuery') {
-        // Get the operator for this subquery
-        let operator = 'and';
-        if (i + 1 < queryJSON.length && queryJSON[i + 1].type === 'operator') {
-          operator = queryJSON[i + 1].content.operator.toLowerCase();
-        }
+        // Use the operator that came BEFORE this subquery
+        const operator = previousOperator ? previousOperator.toLowerCase() : 'and';
 
         // Recursively parse the subquery
         const subTree = parseJSONToTree(element.content.elements);
@@ -106,9 +103,11 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           operator: operator
         });
 
+        previousOperator = null; // Reset after using
         i++;
       } else if (element.type === 'operator') {
-        // Skip operators - they're already assigned to the next element
+        // Store the operator for the next element
+        previousOperator = element.content.operator;
         i++;
       } else {
         i++;
