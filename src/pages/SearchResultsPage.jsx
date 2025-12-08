@@ -30,7 +30,7 @@ import {
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
-import { getExpandedQueryInfo } from '../utils/searchUtils';
+import { getExpandedQueryInfo, queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
 
 /**
  * SearchResultsPage Component
@@ -43,6 +43,81 @@ const SearchResultsPage = () => {
   const resultsContainerRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  // Normalize query strings for comparisons (case- and whitespace-insensitive)
+  const normalizeQueryString = (str) =>
+    (str || '').replace(/\s+/g, '').toLowerCase();
+
+  // Merge BDT selections from a previous query into a new parsed query (sequential clause mapping)
+  const mergeBdtIntoQuery = (prevQuery, nextQuery) => {
+    if (!Array.isArray(prevQuery) || !Array.isArray(nextQuery)) return null;
+
+    const normalizeVal = (v) => (v || '').trim().toLowerCase();
+
+    const collectClauses = (elements, bucket) => {
+      if (!elements) return;
+      elements.forEach(el => {
+        if (el.type === 'clause') {
+          bucket.push(el);
+        } else if (el.type === 'subQuery') {
+          collectClauses(el.content?.elements, bucket);
+        }
+      });
+    };
+
+    const prevClauses = [];
+    const nextClauses = [];
+    collectClauses(prevQuery, prevClauses);
+    collectClauses(nextQuery, nextClauses);
+
+    if (prevClauses.length === 0 || nextClauses.length === 0) {
+      return nextQuery;
+    }
+
+    const usedPrev = new Set();
+    const pickBdt = (value, fallbackIdx) => {
+      const norm = normalizeVal(value);
+
+      let matchIdx = prevClauses.findIndex((c, idx) =>
+        !usedPrev.has(idx) && normalizeVal(c.content?.value) === norm
+      );
+
+      if (matchIdx === -1 && typeof fallbackIdx === 'number' && fallbackIdx < prevClauses.length && !usedPrev.has(fallbackIdx)) {
+        matchIdx = fallbackIdx;
+      }
+
+      if (matchIdx === -1) return null;
+      usedPrev.add(matchIdx);
+      return prevClauses[matchIdx]?.content?.bdt ?? null;
+    };
+
+    let idx = 0;
+    const apply = (elements) =>
+      elements.map(el => {
+        if (el.type === 'clause') {
+          const merged = {
+            ...el,
+            content: {
+              ...el.content,
+              bdt: pickBdt(el.content?.value, idx),
+            },
+          };
+          idx += 1;
+          return merged;
+        }
+        if (el.type === 'subQuery') {
+          return {
+            ...el,
+            content: {
+              ...el.content,
+              elements: apply(el.content?.elements || []),
+            },
+          };
+        }
+        return el;
+      });
+
+    return apply(nextQuery);
+  };
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -126,7 +201,7 @@ const SearchResultsPage = () => {
     const params = urlSync.readParamsFromURL();
     searchState.initializeSearchState({
       query: params.query,
-      inputValue: params.query,
+      inputValue: queryJSONToString(params.query), // Convert JSON to string for display
       filters: params.filters,
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
@@ -204,10 +279,46 @@ const SearchResultsPage = () => {
   const handleBackToHome = () => navigate('/');
 
   const handleSearch = (query) => {
-    const searchQuery = query || searchState.inputValue;
+    // Handle both JSON array (from query builder) and string (from simple search)
+    let queryJSON;
+
+    if (Array.isArray(query)) {
+      // Already in JSON format
+      queryJSON = query;
+    } else if (query) {
+      // String input path. If it matches our stored query string, reuse the stored JSON to keep BDTs.
+      if (
+        Array.isArray(searchState.searchQuery) &&
+        normalizeQueryString(query) === normalizeQueryString(searchState.inputValue)
+      ) {
+        queryJSON = searchState.searchQuery;
+      } else if (typeof query === 'string' && query.trim()) {
+        const parsed = queryStringToJSON(query);
+        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+        queryJSON = merged;
+      }
+    } else {
+      // No query provided, use current input value
+      const inputValue = searchState.inputValue;
+      if (Array.isArray(inputValue)) {
+        queryJSON = inputValue;
+      } else if (typeof inputValue === 'string' && inputValue.trim()) {
+        const parsed = queryStringToJSON(inputValue);
+        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+        queryJSON = merged;
+      }
+    }
+
+    // Validate query is not empty
+    if (!queryJSON || queryJSON.length === 0) {
+      return;
+    }
+
+    // Keep local search state in sync (avoids waiting for URL re-read)
+    searchState.setSearchQuery(queryJSON);
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchQuery,
+      query: queryJSON,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
@@ -284,10 +395,30 @@ const SearchResultsPage = () => {
     });
   };
 
-  const handleQueryBuilderApply = (queryString) => {
-    searchState.setInputValue(queryString);
-    handleSearch(queryString);
+  const handleQueryBuilderApply = (queryJSON) => {
+    // Query builder now returns JSON array
+    // Convert to string for display in search input
+    const displayString = queryJSONToString(queryJSON);
+    searchState.setInputValue(displayString);
+    // Store JSON to preserve BDT selections when the user re-submits
+    searchState.setSearchQuery(queryJSON);
+    handleSearch(queryJSON);
     setIsQueryBuilderOpen(false);
+  };
+
+  // Keep BDTs when the search input changes (e.g., transformations) by aligning with existing JSON
+  const handleSearchChange = (value) => {
+    searchState.setInputValue(value);
+
+    if (Array.isArray(searchState.searchQuery)) {
+      const parsed = queryStringToJSON(value);
+      const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+      searchState.setSearchQuery(merged);
+    } else {
+      // No prior JSON; just parse and set
+      const parsed = queryStringToJSON(value);
+      searchState.setSearchQuery(parsed);
+    }
   };
 
   const handleSendToLastPage = useCallback((tableId) => {
@@ -367,7 +498,8 @@ const SearchResultsPage = () => {
       if (Array.isArray(v)) return v.length > 0;
       return v && v !== 'all';
     });
-    const hasSearch = searchState.searchQuery.trim() !== '';
+    // Check if query is a non-empty array (new JSON format)
+    const hasSearch = Array.isArray(searchState.searchQuery) && searchState.searchQuery.length > 0;
     const currentTableCount = matchingTableIds[activeDatabase]?.length || 0;
 
     if (currentTableCount === 0 && !hasFilters && !hasSearch) return 'empty-database';
@@ -408,8 +540,8 @@ const SearchResultsPage = () => {
             <Container maxWidth="xl">
               <Box sx={{ py: 1.5 }}>
                 <SearchSection
-                  searchValue={searchState.inputValue}
-                  onSearchChange={searchState.setInputValue}
+          searchValue={searchState.inputValue}
+          onSearchChange={handleSearchChange}
                   onSearchSubmit={handleSearch}
                   onFilterClick={() => setIsFilterOpen(true)}
                   onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
@@ -510,7 +642,7 @@ const SearchResultsPage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={searchState.inputValue}
+          initialQuery={searchState.searchQuery}
         />
       </Box>
     </motion.div>

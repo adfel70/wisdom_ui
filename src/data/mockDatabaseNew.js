@@ -205,7 +205,7 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
   }));
 
   // If no search query, just apply filters
-  if (!query || !query.trim()) {
+  if (!query || (Array.isArray(query) && query.length === 0)) {
     // Apply only filters (no search)
     const filtered = filters && Object.keys(filters).length > 0
       ? tablesWithoutData.filter(table => {
@@ -236,9 +236,7 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     };
   }
 
-  // For search queries, we need to fetch the data and search through it
-  // NOTE: This is a mock limitation - in the real backend, search happens server-side
-  // and returns only matching table IDs without fetching all records
+  // For search queries, call backend with query (server-side filtering)
   const dbFunctions = { db1, db2, db3, db4 };
   const dbQueryFunc = dbFunctions[dbId];
 
@@ -246,12 +244,12 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     throw new Error(`Database ${dbId} not found`);
   }
 
-  // Fetch all data for this database
-  const allRecords = await dbQueryFunc();
+  // Call backend with query - it will filter records server-side
+  const matchingRecords = await dbQueryFunc(query);
 
-  // Group records by tableKey
+  // Group matching records by tableKey
   const recordsByTable = {};
-  allRecords.forEach(record => {
+  matchingRecords.forEach(record => {
     const { tableKey } = record;
     if (!recordsByTable[tableKey]) {
       recordsByTable[tableKey] = [];
@@ -259,31 +257,39 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     recordsByTable[tableKey].push(record);
   });
 
-  // Create full table objects with data
-  const tablesWithData = tablesMetadata.map(meta => {
-    const records = recordsByTable[meta.id] || [];
-    const data = records.map(record => {
-      const { tableKey: _, ...rowData } = record;
-      return rowData;
-    });
-    return {
-      ...meta,
-      data: data
-    };
-  });
+  // Get table IDs that have matching records
+  let matchingTableIds = Object.keys(recordsByTable);
 
-  // Apply search and filters
-  const matchingTables = applySearchAndFilters(
-    tablesWithData,
-    query,
-    filters,
-    permutationId,
-    permutationParams
-  );
+  // Apply metadata filters if provided
+  if (filters && Object.keys(filters).length > 0) {
+    const { tableName, year, category, country, selectedTables } = filters;
+
+    matchingTableIds = matchingTableIds.filter(tableId => {
+      const meta = tablesMetadata.find(t => t.id === tableId);
+      if (!meta) return false;
+
+      if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(tableId)) {
+        return false;
+      }
+      if (tableName && !meta.name.toLowerCase().includes(tableName.toLowerCase())) {
+        return false;
+      }
+      if (year && year !== 'all' && meta.year !== parseInt(year)) {
+        return false;
+      }
+      if (category && category !== 'all' && !meta.categories.includes(category)) {
+        return false;
+      }
+      if (country && country !== 'all' && meta.country !== country) {
+        return false;
+      }
+      return true;
+    });
+  }
 
   return {
-    tableIds: matchingTables.map(t => t.id),
-    total: matchingTables.length
+    tableIds: matchingTableIds,
+    total: matchingTableIds.length
   };
 }
 
@@ -298,23 +304,25 @@ export async function getTableDataById(tableId) {
 
 /**
  * Get multiple tables data for pagination
+ * NOTE: This function is deprecated. Use getTableDataPaginatedById instead.
  * @param {Array} tableIds - Array of table IDs to fetch
- * @param {string} query - Optional search query to filter results
+ * @param {Array} query - Optional JSON query array to filter results
  * @param {Object} filters - Optional filters to apply
  * @param {string} permutationId - Optional permutation ID
  * @param {Object} permutationParams - Optional permutation parameters
  * @returns {Promise<Array>} Array of table objects with filtered data
  */
-export async function getMultipleTablesData(tableIds, query = '', filters = {}, permutationId = 'none', permutationParams = {}) {
+export async function getMultipleTablesData(tableIds, query = [], filters = {}, permutationId = 'none', permutationParams = {}) {
   const promises = tableIds.map(id => getTableData(id));
   const tables = await Promise.all(promises);
 
   // If no search query, return tables as-is
-  if (!query || !query.trim()) {
+  if (!query || (Array.isArray(query) && query.length === 0)) {
     return tables;
   }
 
-  // Apply search filtering to each table's data
+  // Apply search filtering to each table's data using client-side filtering
+  // NOTE: This is not ideal - prefer using getTableDataPaginatedById which does server-side filtering
   return tables.map(table => {
     const filteredData = applySearchAndFilters(
       [table],
