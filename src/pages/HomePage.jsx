@@ -15,7 +15,8 @@ import { queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
  */
 const HomePage = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');  // Display string for input
+  const [searchQueryJSON, setSearchQueryJSON] = useState(null);  // Actual query JSON from QueryBuilder
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [filters, setFilters] = useState({});
@@ -54,11 +55,17 @@ const HomePage = () => {
       // Already in JSON format from query builder
       queryJSON = query;
     } else {
-      // Simple string input - parse to JSON format
-      if (!query || !query.trim()) return;
+      // Check if we have a stored JSON query from QueryBuilder
+      if (searchQueryJSON && searchQuery === query) {
+        // User clicked search after using QueryBuilder - use the stored JSON to preserve bdt
+        queryJSON = searchQueryJSON;
+      } else {
+        // Simple string input - parse to JSON format
+        if (!query || !query.trim()) return;
 
-      // Use queryStringToJSON to properly parse AND/OR operators
-      queryJSON = queryStringToJSON(query);
+        // Use queryStringToJSON to properly parse AND/OR operators
+        queryJSON = queryStringToJSON(query);
+      }
     }
 
     // Validate query is not empty
@@ -127,11 +134,20 @@ const HomePage = () => {
   };
 
   const handleQueryBuilderApply = (queryJSON) => {
-    // Query builder now returns JSON array
+    // Query builder returns JSON array - store it to preserve bdt values
+    setSearchQueryJSON(queryJSON);
+
     // Convert to string for display in search input
     const displayString = queryJSONToString(queryJSON);
     setSearchQuery(displayString);
+
     setIsQueryBuilderOpen(false);
+  };
+
+  const handleSearchQueryChange = (value) => {
+    setSearchQuery(value);
+    // Clear stored JSON when user types manually (so we don't use stale QueryBuilder data)
+    setSearchQueryJSON(null);
   };
 
   return (
@@ -376,7 +392,7 @@ const HomePage = () => {
             >
               <SearchBar
                 value={searchQuery}
-                onChange={setSearchQuery}
+                onChange={handleSearchQueryChange}
                 onSubmit={handleSearch}
                 onFilterClick={() => setIsFilterOpen(true)}
                 onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
@@ -516,7 +532,7 @@ const HomePage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={queryStringToJSON(searchQuery)}
+          initialQuery={searchQueryJSON || queryStringToJSON(searchQuery)}
         />
       </Box>
     </motion.div>
