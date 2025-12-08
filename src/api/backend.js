@@ -331,7 +331,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   const strategy = getPaginationStrategy(dbKey);
 
   // If no search query, use simple pagination
-  if (!searchQuery || !searchQuery.trim()) {
+  if (!searchQuery || (Array.isArray(searchQuery) && searchQuery.length === 0)) {
     let records = [];
     let nextPaginationState = null;
     let hasMore = false;
@@ -388,7 +388,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   }
 
   // With search query: batch-fetch until we have pageSize matching records
-  const { applySearchAndFilters } = await import('../utils/searchUtils.js');
+  // Use server-side filtering with searchRecords function
 
   let matchingRecords = [];
   let currentPaginationState = paginationState;
@@ -424,33 +424,12 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       break;
     }
 
-    // Create temporary table object for filtering
-    const tempTable = {
-      id: tableKey,
-      name: meta.name,
-      year: meta.year,
-      country: meta.country,
-      categories: meta.categories,
-      count: meta.recordCount,
-      columns: meta.columns.map(col => col.name),
-      data: batchRecords.map(record => {
-        const { tableKey: _, ...rowData } = record;
-        return rowData;
-      })
-    };
+    // Apply server-side search filter to this batch using searchRecords
+    const filteredBatch = searchRecords(batchRecords, searchQuery);
 
-    // Apply search filter to this batch
-    const filtered = applySearchAndFilters(
-      [tempTable],
-      searchQuery,
-      {}, // Don't apply filters, they were applied in searchTablesByQuery
-      permutationId,
-      permutationParams
-    );
-
-    // Extract matching records from this batch
-    if (filtered.length > 0 && filtered[0].data.length > 0) {
-      matchingRecords = [...matchingRecords, ...filtered[0].data];
+    // Add matching records to results
+    if (filteredBatch.length > 0) {
+      matchingRecords = [...matchingRecords, ...filteredBatch];
     }
 
     // Update pagination state for next batch
@@ -463,7 +442,13 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   }
 
   // Limit to pageSize matching records
-  const finalRecords = matchingRecords.slice(0, pageSize);
+  const limitedRecords = matchingRecords.slice(0, pageSize);
+
+  // Remove tableKey field from records before returning
+  const finalRecords = limitedRecords.map(record => {
+    const { tableKey: _, ...rowData } = record;
+    return rowData;
+  });
 
   // Determine if there are more matching records
   // We have more if either:
