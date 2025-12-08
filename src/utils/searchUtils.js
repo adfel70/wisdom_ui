@@ -123,10 +123,16 @@ const extractTermsFromQuery = (elements) => {
 /**
  * Convert JSON query array to a display string
  * For showing in the search input field
- * @param {Array} queryJSON - JSON query array
+ * @param {Array|string} queryJSON - JSON query array or already a string
  * @returns {string} Display string (e.g., "john AND marketing")
  */
 export const queryJSONToString = (queryJSON) => {
+  // If it's already a string, return it as-is
+  if (typeof queryJSON === 'string') {
+    return queryJSON;
+  }
+
+  // If it's not an array or is empty, return empty string
   if (!queryJSON || !Array.isArray(queryJSON) || queryJSON.length === 0) {
     return '';
   }
@@ -156,11 +162,17 @@ export const queryJSONToString = (queryJSON) => {
 /**
  * Convert a query string to JSON query array
  * Simple parser for basic AND/OR queries with parentheses
- * @param {string} queryString - Query string (e.g., "john AND marketing")
+ * @param {string|Array} queryString - Query string (e.g., "john AND marketing") or already a JSON array
  * @returns {Array} JSON query array
  */
 export const queryStringToJSON = (queryString) => {
-  if (!queryString || !queryString.trim()) {
+  // If it's already an array, return it as-is
+  if (Array.isArray(queryString)) {
+    return queryString;
+  }
+
+  // If it's not a string or is empty, return empty array
+  if (!queryString || typeof queryString !== 'string' || !queryString.trim()) {
     return [];
   }
 
