@@ -130,8 +130,8 @@ const SearchActions = ({
                 alignItems: 'center',
                 width: '100%'
               }}>
-                <span>{transform.label}</span>
-                <span style={{ color: '#9e9e9e', fontSize: '0.75rem', fontWeight: 'normal' }}>
+                <span style={{ marginRight: '8px' }}>{transform.label}</span>
+                <span style={{ color: '#9e9e9e', fontSize: '0.75rem', fontWeight: 'normal', marginLeft: '8px' }}>
                   {transform.shortcut}
                 </span>
               </Box>
