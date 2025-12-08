@@ -23,6 +23,7 @@ const SearchBar = ({
   // UI-only state
   const [hoveredTokenIndex, setHoveredTokenIndex] = useState(null);
   const [transformValue, setTransformValue] = useState('');
+  const [shortcutTriggered, setShortcutTriggered] = useState(false);
   const inputRef = useRef(null);
 
   // Token state management from custom hook
@@ -61,6 +62,8 @@ const SearchBar = ({
         if (shortcutMap[key]) {
           e.preventDefault();
           applyTransform(shortcutMap[key]);
+          setShortcutTriggered(true);
+          setTimeout(() => setShortcutTriggered(false), 300);
         }
       }
     };
@@ -141,6 +144,7 @@ const SearchBar = ({
           onRevert={handleRevert}
           transformValue={transformValue}
           onTransformChange={handleTransformChange}
+          shortcutTriggered={shortcutTriggered}
         />
       </Box>
 
