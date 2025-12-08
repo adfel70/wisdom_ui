@@ -205,7 +205,7 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
   }));
 
   // If no search query, just apply filters
-  if (!query || !query.trim()) {
+  if (!query || (Array.isArray(query) && query.length === 0)) {
     // Apply only filters (no search)
     const filtered = filters && Object.keys(filters).length > 0
       ? tablesWithoutData.filter(table => {

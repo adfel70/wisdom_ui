@@ -126,7 +126,7 @@ const SearchResultsPage = () => {
     const params = urlSync.readParamsFromURL();
     searchState.initializeSearchState({
       query: params.query,
-      inputValue: params.query,
+      inputValue: queryJSONToString(params.query), // Convert JSON to string for display
       filters: params.filters,
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
