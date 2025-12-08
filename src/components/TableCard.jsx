@@ -124,48 +124,6 @@ const CustomHeader = (props) => {
     }
   }, [api]);
 
-  // Apply custom animation to AG Grid popups to match Material-UI Menu animation
-  useEffect(() => {
-    // Override AG Grid popup animation to match Material-UI's grow animation
-    const style = document.createElement('style');
-    style.textContent = `
-      .ag-popup {
-        animation: ag-popup-grow 0.2s ease-out !important;
-      }
-
-      @keyframes ag-popup-grow {
-        0% {
-          opacity: 0;
-          transform: scale(0.75);
-        }
-        100% {
-          opacity: 1;
-          transform: scale(1);
-        }
-      }
-
-      .ag-popup.ag-popup-hiding {
-        animation: ag-popup-shrink 0.15s ease-in !important;
-      }
-
-      @keyframes ag-popup-shrink {
-        0% {
-          opacity: 1;
-          transform: scale(1);
-        }
-        100% {
-          opacity: 0;
-          transform: scale(0.75);
-        }
-      }
-    `;
-    document.head.appendChild(style);
-
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
   const handleMenuClick = (event) => {
     event.stopPropagation();
     setMenuAnchorEl(event.currentTarget);
