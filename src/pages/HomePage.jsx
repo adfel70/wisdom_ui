@@ -26,9 +26,81 @@ const HomePage = () => {
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
   const isApplyingQueryBuilderRef = useRef(false);  // Flag to prevent clearing JSON during apply
 
-  // Normalize query strings for comparisons (case and whitespace insensitive)
+  // Normalize query strings for comparisons (case- and whitespace-insensitive)
   const normalizeQueryString = (str) =>
-    (str || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    (str || '').replace(/\s+/g, '').toLowerCase();
+
+  // Merge BDT selections from a previous query into a new parsed query (sequential clause mapping)
+  const mergeBdtIntoQuery = (prevQuery, nextQuery) => {
+    if (!Array.isArray(prevQuery) || !Array.isArray(nextQuery)) return null;
+
+    const normalizeVal = (v) => (v || '').trim().toLowerCase();
+
+    const collectClauses = (elements, bucket) => {
+      if (!elements) return;
+      elements.forEach(el => {
+        if (el.type === 'clause') {
+          bucket.push(el);
+        } else if (el.type === 'subQuery') {
+          collectClauses(el.content?.elements, bucket);
+        }
+      });
+    };
+
+    const prevClauses = [];
+    const nextClauses = [];
+    collectClauses(prevQuery, prevClauses);
+    collectClauses(nextQuery, nextClauses);
+
+    if (prevClauses.length === 0 || nextClauses.length === 0) {
+      return nextQuery;
+    }
+
+    const usedPrev = new Set();
+    const pickBdt = (value, fallbackIdx) => {
+      const norm = normalizeVal(value);
+
+      let matchIdx = prevClauses.findIndex((c, idx) =>
+        !usedPrev.has(idx) && normalizeVal(c.content?.value) === norm
+      );
+
+      if (matchIdx === -1 && typeof fallbackIdx === 'number' && fallbackIdx < prevClauses.length && !usedPrev.has(fallbackIdx)) {
+        matchIdx = fallbackIdx;
+      }
+
+      if (matchIdx === -1) return null;
+      usedPrev.add(matchIdx);
+      return prevClauses[matchIdx]?.content?.bdt ?? null;
+    };
+
+    let idx = 0;
+    const apply = (elements) =>
+      elements.map(el => {
+        if (el.type === 'clause') {
+          const merged = {
+            ...el,
+            content: {
+              ...el.content,
+              bdt: pickBdt(el.content?.value, idx),
+            },
+          };
+          idx += 1;
+          return merged;
+        }
+        if (el.type === 'subQuery') {
+          return {
+            ...el,
+            content: {
+              ...el.content,
+              elements: apply(el.content?.elements || []),
+            },
+          };
+        }
+        return el;
+      });
+
+    return apply(nextQuery);
+  };
 
   // Get selected permutation metadata
   const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
@@ -165,15 +237,12 @@ const HomePage = () => {
       return;
     }
 
-    // Only clear stored JSON if the value actually changed (user typed something new)
-    // If searchQueryJSON exists and value matches its display string, keep it
+    // If we have a stored JSON query, try to carry BDTs forward into the new string form
     if (searchQueryJSON) {
-      const currentDisplayString = queryJSONToString(searchQueryJSON);
-      if (normalizeQueryString(value) !== normalizeQueryString(currentDisplayString)) {
-        // User typed something different - clear stored JSON
-        setSearchQueryJSON(null);
-      }
-      // Otherwise keep searchQueryJSON (value matches, just re-parsing from SearchBar)
+      const parsedNext = queryStringToJSON(value);
+      const merged = mergeBdtIntoQuery(searchQueryJSON, parsedNext) || parsedNext;
+      setSearchQueryJSON(merged);
+      return;
     }
   };
 

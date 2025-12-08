@@ -43,6 +43,81 @@ const SearchResultsPage = () => {
   const resultsContainerRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
+  // Normalize query strings for comparisons (case- and whitespace-insensitive)
+  const normalizeQueryString = (str) =>
+    (str || '').replace(/\s+/g, '').toLowerCase();
+
+  // Merge BDT selections from a previous query into a new parsed query (sequential clause mapping)
+  const mergeBdtIntoQuery = (prevQuery, nextQuery) => {
+    if (!Array.isArray(prevQuery) || !Array.isArray(nextQuery)) return null;
+
+    const normalizeVal = (v) => (v || '').trim().toLowerCase();
+
+    const collectClauses = (elements, bucket) => {
+      if (!elements) return;
+      elements.forEach(el => {
+        if (el.type === 'clause') {
+          bucket.push(el);
+        } else if (el.type === 'subQuery') {
+          collectClauses(el.content?.elements, bucket);
+        }
+      });
+    };
+
+    const prevClauses = [];
+    const nextClauses = [];
+    collectClauses(prevQuery, prevClauses);
+    collectClauses(nextQuery, nextClauses);
+
+    if (prevClauses.length === 0 || nextClauses.length === 0) {
+      return nextQuery;
+    }
+
+    const usedPrev = new Set();
+    const pickBdt = (value, fallbackIdx) => {
+      const norm = normalizeVal(value);
+
+      let matchIdx = prevClauses.findIndex((c, idx) =>
+        !usedPrev.has(idx) && normalizeVal(c.content?.value) === norm
+      );
+
+      if (matchIdx === -1 && typeof fallbackIdx === 'number' && fallbackIdx < prevClauses.length && !usedPrev.has(fallbackIdx)) {
+        matchIdx = fallbackIdx;
+      }
+
+      if (matchIdx === -1) return null;
+      usedPrev.add(matchIdx);
+      return prevClauses[matchIdx]?.content?.bdt ?? null;
+    };
+
+    let idx = 0;
+    const apply = (elements) =>
+      elements.map(el => {
+        if (el.type === 'clause') {
+          const merged = {
+            ...el,
+            content: {
+              ...el.content,
+              bdt: pickBdt(el.content?.value, idx),
+            },
+          };
+          idx += 1;
+          return merged;
+        }
+        if (el.type === 'subQuery') {
+          return {
+            ...el,
+            content: {
+              ...el.content,
+              elements: apply(el.content?.elements || []),
+            },
+          };
+        }
+        return el;
+      });
+
+    return apply(nextQuery);
+  };
 
   // Update header height on mount and resize
   useEffect(() => {
@@ -211,17 +286,16 @@ const SearchResultsPage = () => {
       // Already in JSON format
       queryJSON = query;
     } else if (query) {
-      // Simple string input - parse to JSON format
-      if (typeof query === 'string' && query.trim()) {
-        queryJSON = queryStringToJSON(query);
-      } else {
-        // Use current input value
-        const inputValue = searchState.inputValue;
-        if (Array.isArray(inputValue)) {
-          queryJSON = inputValue;
-        } else if (typeof inputValue === 'string' && inputValue.trim()) {
-          queryJSON = queryStringToJSON(inputValue);
-        }
+      // String input path. If it matches our stored query string, reuse the stored JSON to keep BDTs.
+      if (
+        Array.isArray(searchState.searchQuery) &&
+        normalizeQueryString(query) === normalizeQueryString(searchState.inputValue)
+      ) {
+        queryJSON = searchState.searchQuery;
+      } else if (typeof query === 'string' && query.trim()) {
+        const parsed = queryStringToJSON(query);
+        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+        queryJSON = merged;
       }
     } else {
       // No query provided, use current input value
@@ -229,7 +303,9 @@ const SearchResultsPage = () => {
       if (Array.isArray(inputValue)) {
         queryJSON = inputValue;
       } else if (typeof inputValue === 'string' && inputValue.trim()) {
-        queryJSON = queryStringToJSON(inputValue);
+        const parsed = queryStringToJSON(inputValue);
+        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+        queryJSON = merged;
       }
     }
 
@@ -238,6 +314,8 @@ const SearchResultsPage = () => {
       return;
     }
 
+    // Keep local search state in sync (avoids waiting for URL re-read)
+    searchState.setSearchQuery(queryJSON);
     pagination.resetAllPages();
     urlSync.updateURL({
       query: queryJSON,
@@ -322,8 +400,25 @@ const SearchResultsPage = () => {
     // Convert to string for display in search input
     const displayString = queryJSONToString(queryJSON);
     searchState.setInputValue(displayString);
+    // Store JSON to preserve BDT selections when the user re-submits
+    searchState.setSearchQuery(queryJSON);
     handleSearch(queryJSON);
     setIsQueryBuilderOpen(false);
+  };
+
+  // Keep BDTs when the search input changes (e.g., transformations) by aligning with existing JSON
+  const handleSearchChange = (value) => {
+    searchState.setInputValue(value);
+
+    if (Array.isArray(searchState.searchQuery)) {
+      const parsed = queryStringToJSON(value);
+      const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+      searchState.setSearchQuery(merged);
+    } else {
+      // No prior JSON; just parse and set
+      const parsed = queryStringToJSON(value);
+      searchState.setSearchQuery(parsed);
+    }
   };
 
   const handleSendToLastPage = useCallback((tableId) => {
@@ -445,8 +540,8 @@ const SearchResultsPage = () => {
             <Container maxWidth="xl">
               <Box sx={{ py: 1.5 }}>
                 <SearchSection
-                  searchValue={searchState.inputValue}
-                  onSearchChange={searchState.setInputValue}
+          searchValue={searchState.inputValue}
+          onSearchChange={handleSearchChange}
                   onSearchSubmit={handleSearch}
                   onFilterClick={() => setIsFilterOpen(true)}
                   onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
