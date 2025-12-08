@@ -26,6 +26,10 @@ const HomePage = () => {
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
   const isApplyingQueryBuilderRef = useRef(false);  // Flag to prevent clearing JSON during apply
 
+  // Normalize query strings for comparisons (case and whitespace insensitive)
+  const normalizeQueryString = (str) =>
+    (str || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
   // Get selected permutation metadata
   const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
 
@@ -57,7 +61,7 @@ const HomePage = () => {
       queryJSON = query;
     } else {
       // Check if we have a stored JSON query from QueryBuilder
-      if (searchQueryJSON && searchQuery === query) {
+      if (searchQueryJSON && normalizeQueryString(searchQuery) === normalizeQueryString(query)) {
         // User clicked search after using QueryBuilder - use the stored JSON to preserve bdt
         queryJSON = searchQueryJSON;
       } else {
@@ -165,9 +169,7 @@ const HomePage = () => {
     // If searchQueryJSON exists and value matches its display string, keep it
     if (searchQueryJSON) {
       const currentDisplayString = queryJSONToString(searchQueryJSON);
-      // Normalize whitespace for comparison
-      const normalize = (str) => str.trim().replace(/\s+/g, ' ');
-      if (normalize(value) !== normalize(currentDisplayString)) {
+      if (normalizeQueryString(value) !== normalizeQueryString(currentDisplayString)) {
         // User typed something different - clear stored JSON
         setSearchQueryJSON(null);
       }
