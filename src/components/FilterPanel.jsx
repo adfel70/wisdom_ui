@@ -95,6 +95,15 @@ const FilterPanel = ({
     onApplyFilters(sanitized);
   };
 
+  const handleClearFilters = () => {
+    setCategoriesSelected([]);
+    setRegionsSelected([]);
+    setTableNamesSelected([]);
+    setTableYearsSelected([]);
+    setAppliedFilters({});
+    onApplyFilters({});
+  };
+
   return (
     <Box
       sx={{
@@ -165,15 +174,26 @@ const FilterPanel = ({
         }}
       >
         <Divider sx={{ mb: 1 }} />
-        <Button
-          variant="contained"
-          fullWidth
-          onClick={handleApplyFilters}
-          disabled={loading}
-          sx={{ borderRadius: 2, py: 1.25 }}
-        >
-          Apply Filters
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={handleClearFilters}
+            disabled={loading}
+            sx={{ borderRadius: 2, py: 1.25 }}
+          >
+            Clear Filters
+          </Button>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleApplyFilters}
+            disabled={loading}
+            sx={{ borderRadius: 2, py: 1.25 }}
+          >
+            Apply Filters
+          </Button>
+        </Stack>
       </Box>
     </Box>
   );
