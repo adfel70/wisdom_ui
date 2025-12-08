@@ -385,6 +385,7 @@ const TableCard = ({
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [gridApi, setGridApi] = useState(null);
+  const [selectedCell, setSelectedCell] = useState(null);
 
   // Update column order when table changes
   useEffect(() => {
@@ -636,6 +637,34 @@ const TableCard = ({
     }
   }, []);
 
+  const handleCellClicked = useCallback((event) => {
+    // Store the selected cell information
+    setSelectedCell({
+      value: event.value,
+      colId: event.column.getColId(),
+      rowIndex: event.rowIndex
+    });
+  }, []);
+
+  // Handle keyboard events for cell copying
+  useEffect(() => {
+    const handleKeyDown = async (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'c' && selectedCell) {
+        try {
+          const cellValue = selectedCell.value ?? 'N/A';
+          await navigator.clipboard.writeText(cellValue);
+          event.preventDefault(); // Prevent default copy behavior
+        } catch (error) {
+          console.error('Failed to copy cell value:', error);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCell]);
+
+
   return (
     <Card
       sx={{
@@ -816,10 +845,12 @@ const TableCard = ({
                   columnDefs={columnDefs}
                   defaultColDef={defaultColDef}
                   animateRows
-                  suppressRowClickSelection
                   enableCellTextSelection
+                  enableCellCopy
+                  enableRangeSelection
                   getMainMenuItems={getMainMenuItems}
                   onColumnMoved={handleColumnMoved}
+                  onCellClicked={handleCellClicked}
                   tooltipShowDelay={200}
                   suppressDragLeaveHidesColumns
                   domLayout="normal"
