@@ -14,7 +14,6 @@ import {
   PAGINATION_STRATEGY,
   getPaginationStrategy
 } from '../config/paginationConfig';
-import { inferRegionFromCountry } from '../utils/regionUtils';
 
 // Metadata loaded once on app start (small file, OK to keep in memory)
 const METADATA = metadataFile.metadata;
@@ -475,7 +474,7 @@ export function fetchFacetAggregates(dbKey, filters = {}) {
             categoriesFilter.size === 0 ||
             uniqueCategories.some((category) => categoriesFilter.has(category.toLowerCase()));
 
-          const region = inferRegionFromCountry(meta.country || record.country);
+          const region = meta.country || record.country;
           const regionMatch = regionsFilter.size === 0 || regionsFilter.has(region);
 
           const tableNameLabel = (meta.name || record.tableKey || '').trim();
@@ -508,7 +507,7 @@ export function fetchFacetAggregates(dbKey, filters = {}) {
             : [];
           categories.forEach((category) => increment(aggregates.categories, category));
 
-          const region = inferRegionFromCountry(meta.country || record.country);
+          const region = meta.country || record.country;
           increment(aggregates.regions, region);
 
           const tableName = (meta.name || record.tableKey || '').trim();

@@ -3,7 +3,6 @@
  */
 
 import { applyPermutation } from './permutationUtils';
-import { inferRegionFromCountry } from './regionUtils';
 import { normalizeFacetArray } from './facetUtils';
 
 /**
@@ -481,8 +480,7 @@ export const filterTables = (tables, filters) => {
     }
 
     if (normalizedRegionFilters.length > 0) {
-      const tableRegion = inferRegionFromCountry(table.country);
-      if (!normalizedRegionFilters.includes(tableRegion)) {
+      if (!normalizedRegionFilters.includes(table.country.toUpperCase())) {
         return false;
       }
     }
