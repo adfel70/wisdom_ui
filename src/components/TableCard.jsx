@@ -38,7 +38,10 @@ import {
   PushPinOutlined,
   ArrowUpward,
   ArrowDownward,
-  ViewWeek
+  ViewWeek,
+  KeyboardArrowRight,
+  CompareArrows,
+  RestartAlt
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
@@ -85,6 +88,7 @@ const HighlightedText = ({ text, query, permutationId = 'none', permutationParam
  */
 const CustomHeader = (props) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [pinMenuAnchorEl, setPinMenuAnchorEl] = useState(null);
   const [sortState, setSortState] = useState(null);
 
   const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
@@ -113,6 +117,15 @@ const CustomHeader = (props) => {
 
   const handleMenuClose = () => {
     setMenuAnchorEl(null);
+    setPinMenuAnchorEl(null);
+  };
+
+  const handlePinMenuOpen = (event) => {
+    setPinMenuAnchorEl(event.currentTarget);
+  };
+
+  const handlePinMenuClose = () => {
+    setPinMenuAnchorEl(null);
   };
 
   const handleSort = (e) => {
@@ -224,6 +237,63 @@ const CustomHeader = (props) => {
         onClose={handleMenuClose}
         MenuListProps={{ dense: true }}
       >
+        <MenuItem 
+            onClick={handlePinMenuOpen}
+            onMouseEnter={handlePinMenuOpen}
+            sx={{ display: 'flex', justifyContent: 'space-between' }}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ListItemIcon><PushPin fontSize="small" /></ListItemIcon>
+                <ListItemText>Pin Column</ListItemText>
+            </Box>
+            <KeyboardArrowRight fontSize="small" />
+        </MenuItem>
+
+        <Divider />
+        <MenuItem onClick={handleAutosize}>
+            <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize This Column</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleAutosizeAll}>
+            <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
+            <ListItemText>Autosize All</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleCopyName}>
+            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy Name</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => {
+            props.onResetView?.();
+            handleMenuClose();
+        }}>
+            <ListItemIcon><RestartAlt fontSize="small" /></ListItemIcon>
+            <ListItemText>Return to default view</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <Menu
+        anchorEl={pinMenuAnchorEl}
+        open={Boolean(pinMenuAnchorEl)}
+        onClose={handlePinMenuClose}
+        anchorOrigin={{
+            vertical: 'top',
+            horizontal: 'right',
+        }}
+        transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+        }}
+        MenuListProps={{ 
+            dense: true,
+            onMouseLeave: handlePinMenuClose 
+        }}
+        sx={{ pointerEvents: 'none' }}
+        PaperProps={{
+             sx: { pointerEvents: 'auto' }
+        }}
+      >
         <MenuItem onClick={() => handlePin('left')}>
             <ListItemIcon><PushPin fontSize="small" /></ListItemIcon>
             <ListItemText>Pin Left</ListItemText>
@@ -235,20 +305,6 @@ const CustomHeader = (props) => {
         <MenuItem onClick={() => handlePin(null)}>
             <ListItemIcon><PushPinOutlined fontSize="small" /></ListItemIcon>
             <ListItemText>Unpin</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={handleAutosize}>
-            <ListItemIcon><ViewWeek fontSize="small" /></ListItemIcon>
-            <ListItemText>Autosize This Column</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={handleAutosizeAll}>
-            <ListItemIcon><ViewWeek fontSize="small" /></ListItemIcon>
-            <ListItemText>Autosize All</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={handleCopyName}>
-            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
-            <ListItemText>Copy Name</ListItemText>
         </MenuItem>
       </Menu>
     </Box>
@@ -274,6 +330,7 @@ const TableCard = ({
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
+  const [gridApi, setGridApi] = useState(null);
 
   // Update column order when table changes
   useEffect(() => {
@@ -281,6 +338,23 @@ const TableCard = ({
       setColumnOrder(table.columns);
     }
   }, [table?.columns]);
+
+  const onGridReady = useCallback((params) => {
+    setGridApi(params.api);
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    if (!gridApi) return;
+    
+    // Reset column order to original
+    if (table?.columns) {
+      setColumnOrder(table.columns);
+    }
+
+    // Reset grid state (sort, filter, width, pin)
+    gridApi.setFilterModel(null);
+    gridApi.resetColumnState();
+  }, [gridApi, table?.columns]);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -434,6 +508,7 @@ const TableCard = ({
     const rowDetailsColumn = {
       field: '__rowDetails__',
       headerName: '',
+      headerComponent: () => null,
       width: 64,
       minWidth: 64,
       maxWidth: 64,
@@ -466,13 +541,16 @@ const TableCard = ({
   const defaultColDef = React.useMemo(
     () => ({
       headerComponent: CustomHeader,
+      headerComponentParams: {
+        onResetView: handleResetView
+      },
       resizable: true,
       sortable: true,
       filter: true,
       unSortIcon: true,
       suppressHeaderMenuButton: true,
     }),
-    []
+    [handleResetView]
   );
 
   const getMainMenuItems = useCallback((params) => {
@@ -692,6 +770,7 @@ const TableCard = ({
                   suppressDragLeaveHidesColumns
                   domLayout="normal"
                   getRowId={(params) => params?.data?.id}
+                  onGridReady={onGridReady}
                 />
               </Box>
               {/* Semi-transparent loading overlay for Load More */}
