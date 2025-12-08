@@ -124,7 +124,17 @@ const SearchActions = ({
           </MenuItem>
           {TRANSFORMATIONS.map((transform) => (
             <MenuItem key={transform.id} value={transform.id}>
-              {transform.label}
+              <Box sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%'
+              }}>
+                <span>{transform.label}</span>
+                <span style={{ color: '#9e9e9e', fontSize: '0.75rem', fontWeight: 'normal' }}>
+                  {transform.shortcut}
+                </span>
+              </Box>
             </MenuItem>
           ))}
         </Select>

@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Box, Button } from '@mui/material';
 import { Search as SearchIcon, ArrowForward } from '@mui/icons-material';
 import { useTokenState } from '../hooks/useTokenState';
+import { TRANSFORMATIONS } from '../utils/transformUtils';
 import TokenList from './search/TokenList';
 import SearchActions from './search/SearchActions';
 
@@ -44,6 +45,29 @@ const SearchBar = ({
     setTransformValue(''); // Reset dropdown to empty after selection
     applyTransform(transformId);
   };
+
+  // Keyboard shortcuts for transformations
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only trigger if Ctrl is pressed and we're not in an input field
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+        const shortcutMap = {
+          'a': 'reverse',
+          'b': 'removeEven',
+          'c': 'alternating'
+        };
+
+        if (shortcutMap[key]) {
+          e.preventDefault();
+          applyTransform(shortcutMap[key]);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [applyTransform]);
 
   const isHome = variant === 'home';
 

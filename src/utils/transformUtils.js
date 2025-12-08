@@ -55,19 +55,22 @@ export const TRANSFORMATIONS = [
     id: 'reverse',
     label: 'Reverse Text',
     function: reverseText,
-    description: 'Reverse character order'
+    description: 'Reverse character order',
+    shortcut: 'Ctrl + A'
   },
   {
     id: 'removeEven',
     label: 'Remove Even Characters',
     function: removeEvenChars,
-    description: 'Remove every 2nd character'
+    description: 'Remove every 2nd character',
+    shortcut: 'Ctrl + B'
   },
   {
     id: 'alternating',
     label: 'Alternating Case',
     function: alternatingCase,
-    description: 'aLtErNaTiNg CaSe'
+    description: 'aLtErNaTiNg CaSe',
+    shortcut: 'Ctrl + C'
   }
 ];
 
