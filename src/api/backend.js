@@ -474,7 +474,7 @@ export function fetchFacetAggregates(dbKey, filters = {}) {
             categoriesFilter.size === 0 ||
             uniqueCategories.some((category) => categoriesFilter.has(category.toLowerCase()));
 
-          const region = meta.country || record.country;
+          const region = (meta.country || record.country || '').toUpperCase();
           const regionMatch = regionsFilter.size === 0 || regionsFilter.has(region);
 
           const tableNameLabel = (meta.name || record.tableKey || '').trim();
@@ -507,7 +507,7 @@ export function fetchFacetAggregates(dbKey, filters = {}) {
             : [];
           categories.forEach((category) => increment(aggregates.categories, category));
 
-          const region = meta.country || record.country;
+          const region = (meta.country || record.country || '').toUpperCase();
           increment(aggregates.regions, region);
 
           const tableName = (meta.name || record.tableKey || '').trim();
