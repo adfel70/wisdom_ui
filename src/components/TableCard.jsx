@@ -843,7 +843,7 @@ const TableCard = ({
       </Box>
 
       {/* Table Data */}
-      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+      <Collapse in={isExpanded} timeout="auto">
         <CardContent sx={{ p: 0, height: 400, position: 'relative' }}>
           {isLoading ? (
             <Box
