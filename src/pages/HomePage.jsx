@@ -46,10 +46,32 @@ const HomePage = () => {
   };
 
   const handleSearch = (query) => {
-    if (!query || !query.trim()) return;
+    // Handle both string input (from simple search) and JSON array (from query builder)
+    let queryJSON;
+
+    if (Array.isArray(query)) {
+      // Already in JSON format from query builder
+      queryJSON = query;
+    } else {
+      // Simple string input - convert to JSON format
+      if (!query || !query.trim()) return;
+
+      queryJSON = [{
+        type: 'clause',
+        content: {
+          value: query.trim(),
+          bdt: null
+        }
+      }];
+    }
+
+    // Validate query is not empty
+    if (!queryJSON || queryJSON.length === 0) {
+      return;
+    }
 
     // Navigate to results page with search params
-    const params = new URLSearchParams({ q: query });
+    const params = new URLSearchParams({ q: JSON.stringify(queryJSON) });
 
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
@@ -108,8 +130,9 @@ const HomePage = () => {
     setFilters(clearedFilters);
   };
 
-  const handleQueryBuilderApply = (queryString) => {
-    setSearchQuery(queryString);
+  const handleQueryBuilderApply = (queryJSON) => {
+    // Query builder now returns JSON array
+    setSearchQuery(queryJSON);
     setIsQueryBuilderOpen(false);
   };
 

@@ -45,24 +45,92 @@ async function fetchDatabaseRecords(dbKey) {
 }
 
 /**
- * Search records by query string
- * Simple text search across all field values
+ * Evaluate a JSON query element against a record
+ * @param {Object} element - Query element (clause, operator, or subQuery)
+ * @param {Object} record - Record object
+ * @returns {boolean|null} True if matches, false if doesn't match, null for operators
+ */
+function evaluateElement(element, record) {
+  if (element.type === 'clause') {
+    const { value, bdt } = element.content;
+
+    // For Phase 1, bdt is always null - search all fields
+    // In Phase 2, bdt will filter to specific column types
+
+    const lowerTerm = value.toLowerCase();
+    return Object.values(record).some(fieldValue => {
+      if (fieldValue == null) return false;
+      return String(fieldValue).toLowerCase().includes(lowerTerm);
+    });
+  }
+
+  if (element.type === 'operator') {
+    // Operators don't evaluate - they're handled by evaluateQueryElements
+    return null;
+  }
+
+  if (element.type === 'subQuery') {
+    // Recursively evaluate the subquery
+    return evaluateQueryElements(element.content.elements, record);
+  }
+
+  return false;
+}
+
+/**
+ * Evaluate a JSON query array against a record
+ * @param {Array} elements - Array of query elements
+ * @param {Object} record - Record object
+ * @returns {boolean} True if record matches the query
+ */
+function evaluateQueryElements(elements, record) {
+  if (!elements || elements.length === 0) return true;
+
+  let result = null;
+  let pendingOperator = null;
+
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+
+    if (element.type === 'operator') {
+      pendingOperator = element.content.operator;
+      continue;
+    }
+
+    // Evaluate this element
+    const elementResult = evaluateElement(element, record);
+
+    if (result === null) {
+      // First element - just store the result
+      result = elementResult;
+    } else if (pendingOperator) {
+      // Apply the operator
+      if (pendingOperator === 'AND') {
+        result = result && elementResult;
+      } else if (pendingOperator === 'OR') {
+        result = result || elementResult;
+      }
+      pendingOperator = null;
+    }
+  }
+
+  return result !== null ? result : true;
+}
+
+/**
+ * Search records by JSON query
  * @param {Array} records - Records to search
- * @param {string} query - Search query
+ * @param {Array} query - JSON query array
  * @returns {Array} Filtered records
  */
 function searchRecords(records, query) {
-  if (!query || query.trim() === '') {
+  // Handle empty query
+  if (!query || !Array.isArray(query) || query.length === 0) {
     return records;
   }
 
-  const searchTerm = query.toLowerCase();
-
   return records.filter(record => {
-    return Object.values(record).some(value => {
-      if (value == null) return false;
-      return String(value).toLowerCase().includes(searchTerm);
-    });
+    return evaluateQueryElements(query, record);
   });
 }
 

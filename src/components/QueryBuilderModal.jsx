@@ -38,10 +38,10 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Parse query string into builder tree structure
-  // Simple direct parser: respects parentheses as group boundaries, no flattening
-  const parseQueryToTree = (queryString) => {
-    if (!queryString || !queryString.trim()) {
+  // Parse query (JSON array or empty) into builder tree structure
+  const parseQueryToTree = (query) => {
+    // Handle empty/null query
+    if (!query || (Array.isArray(query) && query.length === 0)) {
       return {
         id: 'root',
         type: 'group',
@@ -52,163 +52,79 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       };
     }
 
-    // Tokenize: split by whitespace/parens, handle quoted strings
-    const tokenize = (str) => {
-      const tokens = [];
-      const quotedRegex = /"([^"]*)"/g;
-      const quotedParts = [];
-      let match;
+    // Handle JSON array format (new format)
+    if (Array.isArray(query)) {
+      return parseJSONToTree(query);
+    }
 
-      // Find all quoted strings
-      while ((match = quotedRegex.exec(str)) !== null) {
-        quotedParts.push({
-          start: match.index,
-          end: match.index + match[0].length,
-          value: match[1]
+    // Fallback for invalid input
+    return {
+      id: 'root',
+      type: 'group',
+      operator: 'and',
+      children: [
+        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+      ]
+    };
+  };
+
+  // Parse JSON query array into builder tree structure
+  const parseJSONToTree = (queryJSON) => {
+    const children = [];
+    let i = 0;
+
+    while (i < queryJSON.length) {
+      const element = queryJSON[i];
+
+      if (element.type === 'clause') {
+        // Get the operator for this clause (from next element or default to 'and')
+        let operator = 'and';
+        if (i + 1 < queryJSON.length && queryJSON[i + 1].type === 'operator') {
+          operator = queryJSON[i + 1].content.operator.toLowerCase();
+        }
+
+        children.push({
+          id: generateId(),
+          type: 'condition',
+          value: element.content.value,
+          operator: operator
         });
+
+        i++;
+      } else if (element.type === 'subQuery') {
+        // Get the operator for this subquery
+        let operator = 'and';
+        if (i + 1 < queryJSON.length && queryJSON[i + 1].type === 'operator') {
+          operator = queryJSON[i + 1].content.operator.toLowerCase();
+        }
+
+        // Recursively parse the subquery
+        const subTree = parseJSONToTree(element.content.elements);
+        children.push({
+          ...subTree,
+          id: generateId(),
+          operator: operator
+        });
+
+        i++;
+      } else if (element.type === 'operator') {
+        // Skip operators - they're already assigned to the next element
+        i++;
+      } else {
+        i++;
       }
-
-      let currentPos = 0;
-
-      // Parse non-quoted portions
-      const parseSegment = (text) => {
-        const result = [];
-        let i = 0;
-        let word = '';
-
-        while (i < text.length) {
-          const char = text[i];
-          if (char === '(' || char === ')') {
-            if (word.trim()) {
-              const lower = word.trim().toLowerCase();
-              result.push({
-                type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
-                value: lower === 'and' || lower === 'or' ? lower : word.trim()
-              });
-              word = '';
-            }
-            result.push({ type: 'parenthesis', value: char });
-            i++;
-          } else if (/\s/.test(char)) {
-            if (word.trim()) {
-              const lower = word.trim().toLowerCase();
-              result.push({
-                type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
-                value: lower === 'and' || lower === 'or' ? lower : word.trim()
-              });
-              word = '';
-            }
-            i++;
-          } else {
-            word += char;
-            i++;
-          }
-        }
-
-        if (word.trim()) {
-          const lower = word.trim().toLowerCase();
-          result.push({
-            type: lower === 'and' || lower === 'or' ? 'keyword' : 'term',
-            value: lower === 'and' || lower === 'or' ? lower : word.trim()
-          });
-        }
-
-        return result;
-      };
-
-      // Process segments between quoted strings
-      quotedParts.forEach(quoted => {
-        if (quoted.start > currentPos) {
-          tokens.push(...parseSegment(str.substring(currentPos, quoted.start)));
-        }
-        tokens.push({ type: 'term', value: quoted.value });
-        currentPos = quoted.end;
-      });
-
-      if (currentPos < str.length) {
-        tokens.push(...parseSegment(str.substring(currentPos)));
-      }
-
-      return tokens;
-    };
-
-    // Simple recursive parser that respects parentheses literally
-    const parseTokens = (tokens) => {
-      let index = 0;
-
-      const createGroup = (operator = 'and') => ({
-        id: generateId(),
-        type: 'group',
-        operator,
-        children: []
-      });
-
-      const parseGroup = (operator = 'and') => {
-        const group = createGroup(operator);
-        let nextOp = 'and';
-
-        while (index < tokens.length) {
-          const token = tokens[index];
-
-          if (token.type === 'term') {
-            group.children.push({
-              id: generateId(),
-              type: 'condition',
-              value: token.value,
-              operator: nextOp
-            });
-            nextOp = 'and'; // Reset to default
-            index++;
-          } else if (token.type === 'keyword') {
-            nextOp = token.value; // 'and' or 'or'
-            index++;
-          } else if (token.type === 'parenthesis' && token.value === '(') {
-            index++; // Skip '('
-            const subGroup = parseGroup(nextOp); // Recurse with operator that applies to this group
-            group.children.push({
-              ...subGroup,
-              operator: nextOp
-            });
-            nextOp = 'and'; // Reset after using
-            // Skip the matching ')'
-            if (index < tokens.length && tokens[index].type === 'parenthesis' && tokens[index].value === ')') {
-              index++;
-            }
-          } else if (token.type === 'parenthesis' && token.value === ')') {
-            // End of this group
-            break;
-          } else {
-            index++;
-          }
-        }
-
-        return group;
-      };
-
-      const tokens_array = tokens;
-      return parseGroup('and');
-    };
-
-    const tokens = tokenize(queryString);
-    const tree = parseTokens(tokens);
-
-    // Ensure we have a valid root
-    if (!tree || !tree.children || tree.children.length === 0) {
-      return {
-        id: 'root',
-        type: 'group',
-        operator: 'and',
-        children: [
-          { id: generateId(), type: 'condition', value: '', operator: 'and' }
-        ]
-      };
     }
 
     return {
-      ...tree,
-      id: 'root'
+      id: 'root',
+      type: 'group',
+      operator: 'and',
+      children: children.length > 0 ? children : [
+        { id: generateId(), type: 'condition', value: '', operator: 'and' }
+      ]
     };
   };
+
 
   // Initialize tree from initialQuery when modal opens
   useEffect(() => {
@@ -299,9 +215,70 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
     return node;
   };
 
-  // Convert query tree to string with parentheses
+  // Convert query tree to JSON array format
+  // Returns array of elements: clause, operator, or subQuery
+  const buildQueryJSON = (node) => {
+    if (node.type === 'condition') {
+      // Single condition - return as clause element
+      const value = node.value.trim();
+      if (!value) return null;
+
+      return {
+        type: 'clause',
+        content: {
+          value: value,
+          bdt: null  // Column type (null for Phase 1)
+        }
+      };
+    }
+
+    if (node.type === 'group') {
+      const children = node.children || [];
+      if (children.length === 0) return null;
+
+      const elements = [];
+
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        const childJSON = buildQueryJSON(child);
+
+        if (!childJSON) continue; // Skip empty nodes
+
+        // Add operator before this child (if not the first)
+        if (elements.length > 0) {
+          elements.push({
+            type: 'operator',
+            content: {
+              operator: child.operator.toUpperCase()
+            }
+          });
+        }
+
+        // Add the child element
+        // If it's a nested group, wrap it in a subQuery
+        if (child.type === 'group') {
+          elements.push({
+            type: 'subQuery',
+            content: {
+              elements: childJSON
+            }
+          });
+        } else {
+          elements.push(childJSON);
+        }
+      }
+
+      // Root group returns the elements array directly
+      // Nested groups return just the elements (caller wraps in subQuery)
+      return elements;
+    }
+
+    return null;
+  };
+
+  // Convert query tree to string for preview display
   // Adds parentheses when operators change to preserve left-to-right evaluation
-  const buildQueryString = (node) => {
+  const buildQueryStringPreview = (node) => {
     if (node.type === 'condition') {
       return node.value.trim();
     }
@@ -310,14 +287,14 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
       if (node.children.length === 0) return '';
 
       // Build expression left-to-right, wrapping when operators change
-      let result = buildQueryString(node.children[0]);
+      let result = buildQueryStringPreview(node.children[0]);
       if (!result) return '';
 
       let prevOp = null;
 
       for (let i = 1; i < node.children.length; i++) {
         const child = node.children[i];
-        const childStr = buildQueryString(child);
+        const childStr = buildQueryStringPreview(child);
         if (!childStr) continue;
 
         const op = child.operator.toLowerCase();
@@ -341,10 +318,40 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Handle Apply button
   const handleApply = () => {
-    const queryString = buildQueryString(queryTree);
-    if (queryString.trim()) {
-      onApply(queryString);
+    const queryJSON = buildQueryJSON(queryTree);
+
+    // Validate: query must not be empty
+    if (!queryJSON || queryJSON.length === 0) {
+      alert('Error: Query cannot be empty. Please add at least one search term.');
+      return;
     }
+
+    // Validate: all clauses must have values
+    const hasEmptyClause = queryJSON.some(element => {
+      if (element.type === 'clause' && !element.content.value.trim()) {
+        return true;
+      }
+      if (element.type === 'subQuery') {
+        // Recursively check subquery elements
+        const checkSubQuery = (elements) => {
+          return elements.some(el => {
+            if (el.type === 'clause' && !el.content.value.trim()) return true;
+            if (el.type === 'subQuery') return checkSubQuery(el.content.elements);
+            return false;
+          });
+        };
+        return checkSubQuery(element.content.elements);
+      }
+      return false;
+    });
+
+    if (hasEmptyClause) {
+      alert('Error: All search terms must have a value. Please fill in or remove empty conditions.');
+      return;
+    }
+
+    // Pass the JSON array to parent
+    onApply(queryJSON);
     onClose();
   };
 
@@ -661,7 +668,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
           fontSize: '0.875rem',
           lineHeight: 1.6,
         }}>
-          {buildQueryString(queryTree) || <span style={{ color: '#cbd5e1' }}>(empty)</span>}
+          {buildQueryStringPreview(queryTree) || <span style={{ color: '#cbd5e1' }}>(empty)</span>}
         </Typography>
       </Box>
 

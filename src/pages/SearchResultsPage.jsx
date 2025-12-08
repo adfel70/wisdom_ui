@@ -204,10 +204,61 @@ const SearchResultsPage = () => {
   const handleBackToHome = () => navigate('/');
 
   const handleSearch = (query) => {
-    const searchQuery = query || searchState.inputValue;
+    // Handle both JSON array (from query builder) and string (from simple search)
+    let queryJSON;
+
+    if (Array.isArray(query)) {
+      // Already in JSON format
+      queryJSON = query;
+    } else if (query) {
+      // Simple string input - convert to JSON format
+      if (typeof query === 'string' && query.trim()) {
+        queryJSON = [{
+          type: 'clause',
+          content: {
+            value: query.trim(),
+            bdt: null
+          }
+        }];
+      } else {
+        // Use current input value
+        const inputValue = searchState.inputValue;
+        if (Array.isArray(inputValue)) {
+          queryJSON = inputValue;
+        } else if (typeof inputValue === 'string' && inputValue.trim()) {
+          queryJSON = [{
+            type: 'clause',
+            content: {
+              value: inputValue.trim(),
+              bdt: null
+            }
+          }];
+        }
+      }
+    } else {
+      // No query provided, use current input value
+      const inputValue = searchState.inputValue;
+      if (Array.isArray(inputValue)) {
+        queryJSON = inputValue;
+      } else if (typeof inputValue === 'string' && inputValue.trim()) {
+        queryJSON = [{
+          type: 'clause',
+          content: {
+            value: inputValue.trim(),
+            bdt: null
+          }
+        }];
+      }
+    }
+
+    // Validate query is not empty
+    if (!queryJSON || queryJSON.length === 0) {
+      return;
+    }
+
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchQuery,
+      query: queryJSON,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
@@ -284,9 +335,10 @@ const SearchResultsPage = () => {
     });
   };
 
-  const handleQueryBuilderApply = (queryString) => {
-    searchState.setInputValue(queryString);
-    handleSearch(queryString);
+  const handleQueryBuilderApply = (queryJSON) => {
+    // Query builder now returns JSON array
+    searchState.setInputValue(queryJSON);
+    handleSearch(queryJSON);
     setIsQueryBuilderOpen(false);
   };
 
