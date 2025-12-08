@@ -280,7 +280,8 @@ const TableCard = ({
     () => ({
       resizable: true,
       sortable: true,
-      filter: 'agTextColumnFilter',
+      filter: true,
+      unSortIcon: true,
       suppressHeaderMenuButton: false,
     }),
     []
