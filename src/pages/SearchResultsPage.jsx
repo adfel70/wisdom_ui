@@ -547,7 +547,7 @@ const SearchResultsPage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={queryStringToJSON(searchState.inputValue)}
+          initialQuery={searchState.searchQuery}
         />
       </Box>
     </motion.div>
