@@ -307,6 +307,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       country: meta.country,
       categories: meta.categories,
       count: meta.recordCount,
+      matchCount: meta.recordCount,
       columns: meta.columns.map(col => col.name),
       data: data,
       paginationInfo: {
@@ -315,12 +316,36 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
         strategy,
         loadedRecords: data.length,
         totalRecords: meta.recordCount,
+        totalMatches: meta.recordCount,
       }
     };
   }
 
   // With search query: batch-fetch until we have pageSize matching records
   const { applySearchAndFilters } = await import('../utils/searchUtils.js');
+
+  // Compute total matches for this table (used for UI badges)
+  const tableForCounting = {
+    id: tableKey,
+    name: meta.name,
+    year: meta.year,
+    country: meta.country,
+    categories: meta.categories,
+    count: meta.recordCount,
+    columns: meta.columns.map(col => col.name),
+    data: allRecords.map(record => {
+      const { tableKey: _, ...rowData } = record;
+      return rowData;
+    })
+  };
+  const countedTables = applySearchAndFilters(
+    [tableForCounting],
+    searchQuery,
+    {}, // filters already applied upstream
+    permutationId,
+    permutationParams
+  );
+  const totalMatches = countedTables?.[0]?.data?.length || 0;
 
   let matchingRecords = [];
   let currentPaginationState = paginationState;
@@ -398,9 +423,6 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   const finalRecords = matchingRecords.slice(0, pageSize);
 
   // Determine if there are more matching records
-  // We have more if either:
-  // 1. We collected more than pageSize matches (we sliced them)
-  // 2. We stopped because we ran out of DB records, but there might be more
   const hasMoreMatches = matchingRecords.length > pageSize || hasMoreRecords;
 
   return {
@@ -410,6 +432,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
     country: meta.country,
     categories: meta.categories,
     count: meta.recordCount,
+    matchCount: totalMatches,
     columns: meta.columns.map(col => col.name),
     data: finalRecords,
     paginationInfo: {
@@ -418,6 +441,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       strategy,
       loadedRecords: finalRecords.length,
       totalRecords: meta.recordCount,
+      totalMatches,
     }
   };
 }
