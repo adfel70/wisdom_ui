@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -90,6 +90,8 @@ const CustomHeader = (props) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [pinMenuAnchorEl, setPinMenuAnchorEl] = useState(null);
   const [sortState, setSortState] = useState(null);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const pinMenuCloseTimeoutRef = useRef(null);
 
   const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
 
@@ -103,12 +105,66 @@ const CustomHeader = (props) => {
         setSortState(null);
       }
     };
-    
+
     onSortChanged();
-    
+
     column.addEventListener('sortChanged', onSortChanged);
     return () => column.removeEventListener('sortChanged', onSortChanged);
   }, [column]);
+
+  // Listen for popup menu hidden event to reset filter menu state
+  useEffect(() => {
+    const onPopupMenuHidden = () => {
+      setIsFilterMenuOpen(false);
+    };
+
+    if (api) {
+      api.addEventListener('popupMenuHidden', onPopupMenuHidden);
+      return () => api.removeEventListener('popupMenuHidden', onPopupMenuHidden);
+    }
+  }, [api]);
+
+  // Apply custom animation to AG Grid popups to match Material-UI Menu animation
+  useEffect(() => {
+    // Override AG Grid popup animation to match Material-UI's grow animation
+    const style = document.createElement('style');
+    style.textContent = `
+      .ag-popup {
+        animation: ag-popup-grow 0.2s ease-out !important;
+      }
+
+      @keyframes ag-popup-grow {
+        0% {
+          opacity: 0;
+          transform: scale(0.75);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .ag-popup.ag-popup-hiding {
+        animation: ag-popup-shrink 0.15s ease-in !important;
+      }
+
+      @keyframes ag-popup-shrink {
+        0% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0.75);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   const handleMenuClick = (event) => {
     event.stopPropagation();
@@ -118,13 +174,35 @@ const CustomHeader = (props) => {
   const handleMenuClose = () => {
     setMenuAnchorEl(null);
     setPinMenuAnchorEl(null);
+    // Clear any pending close timeout
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
+    }
   };
 
   const handlePinMenuOpen = (event) => {
+    // Clear any pending close timeout
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
+    }
     setPinMenuAnchorEl(event.currentTarget);
   };
 
   const handlePinMenuClose = () => {
+    // Delay closing to allow mouse to move between main item and submenu
+    pinMenuCloseTimeoutRef.current = setTimeout(() => {
+      setPinMenuAnchorEl(null);
+    }, 150);
+  };
+
+  const handlePinMenuCloseImmediate = () => {
+    // Clear timeout and close immediately
+    if (pinMenuCloseTimeoutRef.current) {
+      clearTimeout(pinMenuCloseTimeoutRef.current);
+      pinMenuCloseTimeoutRef.current = null;
+    }
     setPinMenuAnchorEl(null);
   };
 
@@ -136,7 +214,17 @@ const CustomHeader = (props) => {
 
   const handleFilterClick = (e) => {
     e.stopPropagation();
-    showColumnMenu(e.currentTarget);
+    if (isFilterMenuOpen) {
+      // Hide the column menu if it's already open
+      if (api?.hidePopupMenu) {
+        api.hidePopupMenu();
+      }
+      setIsFilterMenuOpen(false);
+    } else {
+      // Show the column menu
+      showColumnMenu(e.currentTarget);
+      setIsFilterMenuOpen(true);
+    }
   };
 
   const handlePin = (pinned) => {
@@ -237,9 +325,10 @@ const CustomHeader = (props) => {
         onClose={handleMenuClose}
         MenuListProps={{ dense: true }}
       >
-        <MenuItem 
+        <MenuItem
             onClick={handlePinMenuOpen}
             onMouseEnter={handlePinMenuOpen}
+            onMouseLeave={handlePinMenuClose}
             sx={{ display: 'flex', justifyContent: 'space-between' }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -250,6 +339,11 @@ const CustomHeader = (props) => {
         </MenuItem>
 
         <Divider />
+        <MenuItem onClick={handleCopyName}>
+            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy Name</ListItemText>
+        </MenuItem>
+        <Divider />
         <MenuItem onClick={handleAutosize}>
             <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
             <ListItemText>Autosize This Column</ListItemText>
@@ -257,11 +351,6 @@ const CustomHeader = (props) => {
         <MenuItem onClick={handleAutosizeAll}>
             <ListItemIcon><CompareArrows fontSize="small" /></ListItemIcon>
             <ListItemText>Autosize All</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={handleCopyName}>
-            <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
-            <ListItemText>Copy Name</ListItemText>
         </MenuItem>
         <Divider />
         <MenuItem onClick={() => {
@@ -276,7 +365,7 @@ const CustomHeader = (props) => {
       <Menu
         anchorEl={pinMenuAnchorEl}
         open={Boolean(pinMenuAnchorEl)}
-        onClose={handlePinMenuClose}
+        onClose={handlePinMenuCloseImmediate}
         anchorOrigin={{
             vertical: 'top',
             horizontal: 'right',
@@ -285,9 +374,16 @@ const CustomHeader = (props) => {
             vertical: 'top',
             horizontal: 'left',
         }}
-        MenuListProps={{ 
+        MenuListProps={{
             dense: true,
-            onMouseLeave: handlePinMenuClose 
+            onMouseEnter: () => {
+              // Clear close timeout when entering submenu
+              if (pinMenuCloseTimeoutRef.current) {
+                clearTimeout(pinMenuCloseTimeoutRef.current);
+                pinMenuCloseTimeoutRef.current = null;
+              }
+            },
+            onMouseLeave: handlePinMenuClose
         }}
         sx={{ pointerEvents: 'none' }}
         PaperProps={{
