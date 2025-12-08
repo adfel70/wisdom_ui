@@ -664,7 +664,7 @@ export const filterTables = (tables, filters) => {
 /**
  * Apply both search and filters to tables
  * @param {Array} tables - Array of table objects
- * @param {string} query - Search query
+ * @param {Array} query - JSON query array
  * @param {Object} filters - Filter criteria
  * @param {string} permutationId - Optional permutation to apply to search terms
  * @param {Object} permutationParams - Optional parameters for the permutation function
@@ -679,7 +679,7 @@ export const applySearchAndFilters = (tables, query, filters, permutationId = 'n
   }
 
   // Then apply search with permutations
-  if (query && query.trim()) {
+  if (query && Array.isArray(query) && query.length > 0) {
     result = searchTables(result, query, permutationId, permutationParams);
   }
 
