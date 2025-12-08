@@ -68,6 +68,24 @@ const CustomLoadingOverlay = () => (
 );
 
 /**
+ * Custom No Rows Overlay Component
+ * Shows loading animation when no data is available
+ */
+const CustomNoRowsOverlay = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      width: '100%'
+    }}
+  >
+    <CircularProgress size={32} />
+  </Box>
+);
+
+/**
  * HighlightedText Component
  * Highlights matching text in search results
  */
@@ -404,6 +422,7 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [gridApi, setGridApi] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [isDataLoading, setIsDataLoading] = useState(!table?.data);
 
   // Update column order when table changes
   useEffect(() => {
@@ -411,6 +430,11 @@ const TableCard = ({
       setColumnOrder(table.columns);
     }
   }, [table?.columns]);
+
+  // Track data loading state
+  useEffect(() => {
+    setIsDataLoading(!table?.data);
+  }, [table?.data]);
 
   const onGridReady = useCallback((params) => {
     setGridApi(params.api);
@@ -869,8 +893,9 @@ const TableCard = ({
                   enableCellTextSelection
                   enableCellCopy
                   enableRangeSelection
-                  loading={!table?.data || isLoading}
-                  loadingOverlayComponent={CustomLoadingOverlay}
+                  noRowsOverlayComponent={isDataLoading ? CustomNoRowsOverlay : undefined}
+                  loading={false}
+                  loadingOverlayComponent={undefined}
                   getMainMenuItems={getMainMenuItems}
                   onColumnMoved={handleColumnMoved}
                   onCellClicked={handleCellClicked}
