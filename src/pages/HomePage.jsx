@@ -492,6 +492,7 @@ const HomePage = () => {
                 onSubmit={handleSearch}
                 onFilterClick={() => setIsFilterOpen(true)}
                 onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
+                queryJSON={searchQueryJSON}
                 variant="home"
               />
 

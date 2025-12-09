@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Close, LocalOfferOutlined } from '@mui/icons-material';
 
 /**
  * TokenChip Component
@@ -23,6 +23,7 @@ const TokenChip = ({
 }) => {
   const isTerm = token.type === 'term';
   const isKeywordOrParen = token.type === 'keyword' || token.type === 'parenthesis';
+  const isTagged = isTerm && token.bdt;
 
   return (
     <Box
@@ -36,7 +37,7 @@ const TokenChip = ({
         py: 0.5,
         backgroundColor: isTerm ? '#f0f7ff' : 'transparent',
         border: isTerm ? '1px solid' : 'none',
-        borderColor: isTerm ? '#d0e4f7' : 'transparent',
+        borderColor: isTerm ? '#90caf9' : 'transparent',
         borderRadius: isTerm ? 1 : 0,
         fontSize: isHome ? '0.875rem' : '0.8125rem',
         color: isKeywordOrParen ? 'text.disabled' : 'text.primary',
@@ -50,7 +51,28 @@ const TokenChip = ({
         } : {},
       }}
     >
-      {token.value}
+      {isTagged ? (
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.5,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Box component="span" sx={{ fontWeight: 700 }}>{token.value}</Box>
+          <Box component="span" sx={{ color: 'text.secondary' }}>|</Box>
+          <LocalOfferOutlined sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
+          <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>{token.bdt}</Box>
+        </Box>
+      ) : isTerm ? (
+        <Box component="span" sx={{ fontWeight: 700 }}>
+          {token.value}
+        </Box>
+      ) : (
+        token.value
+      )}
       {isTerm && isHovered && (
         <Close
           onClick={(e) => {

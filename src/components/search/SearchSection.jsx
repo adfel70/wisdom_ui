@@ -16,6 +16,7 @@ const SearchSection = ({
   onSearchSubmit,
   onFilterClick,
   onQueryBuilderClick,
+  queryJSON,
   // Action button props
   permutationId,
   permutationParams,
@@ -35,6 +36,8 @@ const SearchSection = ({
           elevation={3}
           sx={{
             flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
             backgroundColor: 'background.paper',
             borderRadius: 2,
             p: 1.25,
@@ -47,6 +50,7 @@ const SearchSection = ({
             onSubmit={onSearchSubmit}
             onFilterClick={onFilterClick}
             onQueryBuilderClick={onQueryBuilderClick}
+            queryJSON={queryJSON}
             variant="compact"
           />
         </Paper>

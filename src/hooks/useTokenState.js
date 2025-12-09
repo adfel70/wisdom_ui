@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { parseValueToTokens, parseInput, hasUnclosedQuote, isKeyword } from '../utils/tokenParser';
 import { cleanupTokens, removeEmptyParenthesisGroups } from '../utils/tokenValidator';
 import { applyTransformation } from '../utils/transformUtils';
@@ -10,22 +10,75 @@ import { applyTransformation } from '../utils/transformUtils';
  * @param {string} value - External value prop (e.g., from Query Builder)
  * @param {Function} onChange - Callback when tokens/input changes
  * @param {Function} onSubmit - Callback when search is executed
+ * @param {Object} options - Additional options
+ * @param {Array} options.queryJSON - Optional JSON query (with bdt) to hydrate tokens
  * @returns {Object} Token state and handlers
  */
-export const useTokenState = (value, onChange, onSubmit) => {
+export const useTokenState = (value, onChange, onSubmit, options = {}) => {
+  const { queryJSON = null } = options;
   const [tokens, setTokens] = useState([]); // Array of {type: 'term'|'keyword'|'parenthesis', value: string}
   const [currentInput, setCurrentInput] = useState('');
   const [originalText, setOriginalText] = useState('');
   const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const isTransformingRef = useRef(false);
+  const lastUserEditRef = useRef(false);
+  const lastAnchoredTokensRef = useRef(null);
 
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
 
+  // Flatten clauses from JSON query with bdt values preserved
+  const clauseList = useMemo(() => {
+    const clauses = [];
+    const walk = (elements = []) => {
+      elements.forEach((el) => {
+        if (el?.type === 'clause') {
+          clauses.push({
+            value: el.content?.value || '',
+            bdt: el.content?.bdt ?? null,
+          });
+        } else if (el?.type === 'subQuery') {
+          walk(el.content?.elements || []);
+        }
+      });
+    };
+
+    if (Array.isArray(queryJSON)) {
+      walk(queryJSON);
+    }
+    return clauses;
+  }, [queryJSON]);
+
+  // Attach BDT/tag metadata to parsed tokens using sequential/normalized matching
+  const applyBdtToTokens = (baseTokens = []) => {
+    if (!clauseList.length) return baseTokens;
+
+    const used = new Set();
+    const norm = (v = '') => normalize(v.toLowerCase ? v.toLowerCase() : String(v));
+
+    return baseTokens.map((token) => {
+      if (token.type !== 'term') return token;
+
+      const matchIdx = clauseList.findIndex(
+        (clause, idx) => !used.has(idx) && norm(clause.value) === norm(token.value)
+      );
+
+      // Fallback to first unused clause to preserve ordering when values differ
+      const idxToUse = matchIdx !== -1
+        ? matchIdx
+        : clauseList.findIndex((_, idx) => !used.has(idx));
+
+      if (idxToUse === -1) return { ...token, bdt: null };
+
+      used.add(idxToUse);
+      return { ...token, bdt: clauseList[idxToUse].bdt ?? null };
+    });
+  };
+
   // Build query string from tokens
-  const buildQueryFromTokens = () => {
-    const tokenString = tokens.map(token => {
+  const buildQueryFromTokens = (tokenList = tokens, inputValue = currentInput) => {
+    const tokenString = tokenList.map(token => {
       // Wrap quoted terms in quotes to preserve them
       if (token.quoted) {
         return `"${token.value}"`;
@@ -33,45 +86,67 @@ export const useTokenState = (value, onChange, onSubmit) => {
       // Parentheses and keywords
       return token.value;
     }).join(' ');
-    return tokenString + (currentInput ? ' ' + currentInput : '');
+    return tokenString + (inputValue ? ' ' + inputValue : '');
   };
+
+  // Track last hydration to avoid redundant resets when BDT metadata changes
+  const lastHydrationKeyRef = useRef('');
 
   // Update tokens when external value changes (e.g., from Query Builder)
   useEffect(() => {
-    if (value && typeof value === 'string') {
-      const currentQuery = buildQueryFromTokens();
+    const hasValue = value && typeof value === 'string';
+    const clauseKey = JSON.stringify(clauseList);
+    const nextHydrationKey = `${normalize(value || '')}|${clauseKey}`;
 
-      // Only re-parse if value is different from our current state
-      // (normalized to avoid infinite loops from whitespace differences)
-      if (normalize(value) !== normalize(currentQuery)) {
+    if (hasValue) {
+      const currentQuery = buildQueryFromTokens();
+      const valueKey = normalize(value);
+      const currentKey = normalize(currentQuery);
+
+      if (valueKey !== currentKey) {
+        // Realign tokens/input to the incoming value
         const parsedTokens = parseValueToTokens(value);
-        setTokens(cleanupTokens(parsedTokens));
+        const hydratedTokens = applyBdtToTokens(parsedTokens);
+        setTokens(cleanupTokens(hydratedTokens));
         setCurrentInput('');
+        lastHydrationKeyRef.current = nextHydrationKey;
+      } else if (nextHydrationKey !== lastHydrationKeyRef.current) {
+        // Same string, but metadata changed (e.g., BDT updates) - reapply without anchoring input
+        setTokens(prev => applyBdtToTokens(prev));
+        lastHydrationKeyRef.current = nextHydrationKey;
       }
     } else if (!value || value === '') {
       // Value is empty, clear tokens if we have any
       if (tokens.length > 0 || currentInput.trim()) {
         setTokens([]);
         setCurrentInput('');
+        lastHydrationKeyRef.current = '';
       }
     }
-  }, [value]);
+  }, [value, clauseList]);
+
+  const resetTransformState = () => {
+    setOriginalText('');
+    setOriginalTokens([]);
+    setHasTransformed(false);
+    lastUserEditRef.current = false;
+  };
+
+  const markUserEdit = () => {
+    lastUserEditRef.current = true;
+  };
 
   // Reset transform state when search bar becomes completely empty
   useEffect(() => {
     if (tokens.length === 0 && currentInput === '' && hasTransformed) {
-      setOriginalText('');
-      setOriginalTokens([]);
-      setHasTransformed(false);
+      resetTransformState();
     }
   }, [tokens, currentInput, hasTransformed]);
 
   // Reset transform state when input changes at all (user types or modifies search)
   useEffect(() => {
-    if (hasTransformed && !isTransformingRef.current) {
-      setOriginalText('');
-      setOriginalTokens([]);
-      setHasTransformed(false);
+    if (hasTransformed && !isTransformingRef.current && lastUserEditRef.current) {
+      resetTransformState();
     }
   }, [tokens, currentInput, hasTransformed]);
 
@@ -131,7 +206,9 @@ export const useTokenState = (value, onChange, onSubmit) => {
         } else {
           combined = [...prev, ...newTokens];
         }
-        return cleanupTokens(combined);
+        const cleaned = cleanupTokens(combined);
+        lastAnchoredTokensRef.current = cleaned;
+        return cleaned;
       });
       setCurrentInput('');
       return true;
@@ -140,12 +217,15 @@ export const useTokenState = (value, onChange, onSubmit) => {
   };
 
   // Execute search with current tokens
-  const executeSearch = () => {
-    const query = buildQueryFromTokens().trim();
+  const executeSearch = (overrideTokens = null, overrideInput = '') => {
+    const tokenSource = overrideTokens || tokens;
+    const inputSource = overrideInput !== undefined ? overrideInput : currentInput;
+    const query = buildQueryFromTokens(tokenSource, inputSource).trim();
     if (query && onSubmit) {
       // Pass query string for backward compatibility
       onSubmit(query);
     }
+    lastAnchoredTokensRef.current = null;
   };
 
   // Handle input change
@@ -209,6 +289,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
       }
     }
 
+    markUserEdit();
     setCurrentInput(newValue);
   };
 
@@ -232,6 +313,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
     if (e.key === 'Backspace' && currentInput === '' && tokens.length > 0) {
       e.preventDefault();
       // Delete the last token
+      markUserEdit();
       setTokens(prev => cleanupTokens(prev.slice(0, -1)));
       return;
     }
@@ -239,6 +321,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
 
   // Remove a specific token and its adjacent keyword
   const removeToken = (index) => {
+    markUserEdit();
     setTokens(prev => {
       const token = prev[index];
       let filtered;
@@ -272,9 +355,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
     setTokens([]);
     setCurrentInput('');
     // Reset transform state when clearing
-    setOriginalText('');
-    setOriginalTokens([]);
-    setHasTransformed(false);
+    resetTransformState();
   };
 
   // Apply transformation to tokens and current input
@@ -282,6 +363,7 @@ export const useTokenState = (value, onChange, onSubmit) => {
     if (!transformId) return;
 
     isTransformingRef.current = true;
+    lastUserEditRef.current = false;
 
     // Store original text and tokens before first transformation
     if (!hasTransformed) {
@@ -307,18 +389,17 @@ export const useTokenState = (value, onChange, onSubmit) => {
     setCurrentInput(transformed);
 
     // Reset the transforming flag after a short delay to allow state updates to complete
-    setTimeout(() => {
+    // Defer clearing the transforming flag until after effects run
+    requestAnimationFrame(() => {
       isTransformingRef.current = false;
-    }, 0);
+    });
   };
 
   // Revert to original state before transformations
   const handleRevert = () => {
     setCurrentInput(originalText);
     setTokens(cleanupTokens(originalTokens));
-    setOriginalText('');
-    setOriginalTokens([]);
-    setHasTransformed(false);
+    resetTransformState();
   };
 
   // Handle form submit
@@ -326,8 +407,11 @@ export const useTokenState = (value, onChange, onSubmit) => {
     e.preventDefault();
     // Anchor current input and search
     anchorCurrentInput();
-    // Small delay to let state update
-    setTimeout(executeSearch, 0);
+    // Small delay to let state update before executing search (use the most recent anchored tokens if available)
+    setTimeout(() => {
+      const nextTokens = lastAnchoredTokensRef.current || tokens;
+      executeSearch(nextTokens, '');
+    }, 30);
   };
 
   return {
