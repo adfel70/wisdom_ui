@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { parseValueToTokens, parseInput, hasUnclosedQuote, isKeyword } from '../utils/tokenParser';
 import { cleanupTokens, removeEmptyParenthesisGroups } from '../utils/tokenValidator';
 import { applyTransformation } from '../utils/transformUtils';
@@ -10,9 +10,12 @@ import { applyTransformation } from '../utils/transformUtils';
  * @param {string} value - External value prop (e.g., from Query Builder)
  * @param {Function} onChange - Callback when tokens/input changes
  * @param {Function} onSubmit - Callback when search is executed
+ * @param {Object} options - Additional options
+ * @param {Array} options.queryJSON - Optional JSON query (with bdt) to hydrate tokens
  * @returns {Object} Token state and handlers
  */
-export const useTokenState = (value, onChange, onSubmit) => {
+export const useTokenState = (value, onChange, onSubmit, options = {}) => {
+  const { queryJSON = null } = options;
   const [tokens, setTokens] = useState([]); // Array of {type: 'term'|'keyword'|'parenthesis', value: string}
   const [currentInput, setCurrentInput] = useState('');
   const [originalText, setOriginalText] = useState('');
@@ -22,6 +25,54 @@ export const useTokenState = (value, onChange, onSubmit) => {
 
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
+
+  // Flatten clauses from JSON query with bdt values preserved
+  const clauseList = useMemo(() => {
+    const clauses = [];
+    const walk = (elements = []) => {
+      elements.forEach((el) => {
+        if (el?.type === 'clause') {
+          clauses.push({
+            value: el.content?.value || '',
+            bdt: el.content?.bdt ?? null,
+          });
+        } else if (el?.type === 'subQuery') {
+          walk(el.content?.elements || []);
+        }
+      });
+    };
+
+    if (Array.isArray(queryJSON)) {
+      walk(queryJSON);
+    }
+    return clauses;
+  }, [queryJSON]);
+
+  // Attach BDT/tag metadata to parsed tokens using sequential/normalized matching
+  const applyBdtToTokens = (baseTokens = []) => {
+    if (!clauseList.length) return baseTokens;
+
+    const used = new Set();
+    const norm = (v = '') => normalize(v.toLowerCase ? v.toLowerCase() : String(v));
+
+    return baseTokens.map((token) => {
+      if (token.type !== 'term') return token;
+
+      const matchIdx = clauseList.findIndex(
+        (clause, idx) => !used.has(idx) && norm(clause.value) === norm(token.value)
+      );
+
+      // Fallback to first unused clause to preserve ordering when values differ
+      const idxToUse = matchIdx !== -1
+        ? matchIdx
+        : clauseList.findIndex((_, idx) => !used.has(idx));
+
+      if (idxToUse === -1) return { ...token, bdt: null };
+
+      used.add(idxToUse);
+      return { ...token, bdt: clauseList[idxToUse].bdt ?? null };
+    });
+  };
 
   // Build query string from tokens
   const buildQueryFromTokens = () => {
@@ -36,26 +87,41 @@ export const useTokenState = (value, onChange, onSubmit) => {
     return tokenString + (currentInput ? ' ' + currentInput : '');
   };
 
+  // Track last hydration to avoid redundant resets when BDT metadata changes
+  const lastHydrationKeyRef = useRef('');
+
   // Update tokens when external value changes (e.g., from Query Builder)
   useEffect(() => {
-    if (value && typeof value === 'string') {
-      const currentQuery = buildQueryFromTokens();
+    const hasValue = value && typeof value === 'string';
+    const clauseKey = JSON.stringify(clauseList);
+    const nextHydrationKey = `${normalize(value || '')}|${clauseKey}`;
 
-      // Only re-parse if value is different from our current state
-      // (normalized to avoid infinite loops from whitespace differences)
-      if (normalize(value) !== normalize(currentQuery)) {
+    if (hasValue) {
+      const currentQuery = buildQueryFromTokens();
+      const valueKey = normalize(value);
+      const currentKey = normalize(currentQuery);
+
+      if (valueKey !== currentKey) {
+        // Realign tokens/input to the incoming value
         const parsedTokens = parseValueToTokens(value);
-        setTokens(cleanupTokens(parsedTokens));
+        const hydratedTokens = applyBdtToTokens(parsedTokens);
+        setTokens(cleanupTokens(hydratedTokens));
         setCurrentInput('');
+        lastHydrationKeyRef.current = nextHydrationKey;
+      } else if (nextHydrationKey !== lastHydrationKeyRef.current) {
+        // Same string, but metadata changed (e.g., BDT updates) - reapply without anchoring input
+        setTokens(prev => applyBdtToTokens(prev));
+        lastHydrationKeyRef.current = nextHydrationKey;
       }
     } else if (!value || value === '') {
       // Value is empty, clear tokens if we have any
       if (tokens.length > 0 || currentInput.trim()) {
         setTokens([]);
         setCurrentInput('');
+        lastHydrationKeyRef.current = '';
       }
     }
-  }, [value]);
+  }, [value, clauseList]);
 
   // Reset transform state when search bar becomes completely empty
   useEffect(() => {

@@ -17,6 +17,7 @@ const SearchBar = ({
   onSubmit,
   onFilterClick,
   onQueryBuilderClick,
+  queryJSON = null,
   variant = 'home', // 'home' or 'compact'
   placeholder = 'Search by Value (e.g., Name, ID, Location)...'
 }) => {
@@ -38,7 +39,7 @@ const SearchBar = ({
     handleInputChange,
     handleKeyDown,
     handleSubmit,
-  } = useTokenState(value, onChange, onSubmit);
+  } = useTokenState(value, onChange, onSubmit, { queryJSON });
 
   // Wrapper for transform dropdown to handle UI state
   const handleTransformChange = (e) => {
