@@ -36,6 +36,8 @@ const SearchSection = ({
           elevation={3}
           sx={{
             flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
             backgroundColor: 'background.paper',
             borderRadius: 2,
             p: 1.25,
