@@ -17,7 +17,6 @@ export const useURLSync = () => {
     if (queryStr) {
       try {
         query = JSON.parse(queryStr);
-        // Validate it's an array
         if (!Array.isArray(query)) {
           query = [];
         }
@@ -30,22 +29,30 @@ export const useURLSync = () => {
     const permutation = searchParams.get('permutation') || 'none';
     const permParamsStr = searchParams.get('permutationParams') || '';
     const permParams = permParamsStr ? JSON.parse(permParamsStr) : {};
-    const year = searchParams.get('year') || 'all';
-    const category = searchParams.get('category') || 'all';
-    const country = searchParams.get('country') || 'all';
-    const tableName = searchParams.get('tableName') || '';
-    const minDate = searchParams.get('minDate') || '';
-    const maxDate = searchParams.get('maxDate') || '';
-    const selectedTablesParam = searchParams.get('selectedTables') || '';
-    const selectedTables = selectedTablesParam ? selectedTablesParam.split(',') : [];
-    const pageParam = searchParams.get('page');
-    const page = pageParam ? parseInt(pageParam, 10) : 1;
 
-    return {
-      query,
-      permutation,
-      permutationParams: permParams,
-      filters: {
+    // Prefer unified filters param; fall back to legacy individual params for backward compatibility
+    const filtersParam = searchParams.get('filters');
+    let filters = {};
+    if (filtersParam) {
+      try {
+        const parsed = JSON.parse(filtersParam);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          filters = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse filters from URL:', e);
+      }
+    } else {
+      const year = searchParams.get('year') || 'all';
+      const category = searchParams.get('category') || 'all';
+      const country = searchParams.get('country') || 'all';
+      const tableName = searchParams.get('tableName') || '';
+      const minDate = searchParams.get('minDate') || '';
+      const maxDate = searchParams.get('maxDate') || '';
+      const selectedTablesParam = searchParams.get('selectedTables') || '';
+      const selectedTables = selectedTablesParam ? selectedTablesParam.split(',') : [];
+
+      filters = {
         year: year !== 'all' ? year : 'all',
         category: category !== 'all' ? category : 'all',
         country: country !== 'all' ? country : 'all',
@@ -53,7 +60,17 @@ export const useURLSync = () => {
         minDate: minDate || '',
         maxDate: maxDate || '',
         selectedTables: selectedTables,
-      },
+      };
+    }
+
+    const pageParam = searchParams.get('page');
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
+
+    return {
+      query,
+      permutation,
+      permutationParams: permParams,
+      filters,
       page,
     };
   }, [searchParams]);
@@ -82,28 +99,12 @@ export const useURLSync = () => {
       }
     }
 
-    // Add filters
-    if (state.filters) {
-      if (state.filters.year && state.filters.year !== 'all') {
-        params.append('year', state.filters.year);
-      }
-      if (state.filters.category && state.filters.category !== 'all') {
-        params.append('category', state.filters.category);
-      }
-      if (state.filters.country && state.filters.country !== 'all') {
-        params.append('country', state.filters.country);
-      }
-      if (state.filters.tableName) {
-        params.append('tableName', state.filters.tableName);
-      }
-      if (state.filters.minDate) {
-        params.append('minDate', state.filters.minDate);
-      }
-      if (state.filters.maxDate) {
-        params.append('maxDate', state.filters.maxDate);
-      }
-      if (state.filters.selectedTables && state.filters.selectedTables.length > 0) {
-        params.append('selectedTables', state.filters.selectedTables.join(','));
+    // Add filters as a single JSON param to support facet arrays and per-DB shape
+    if (state.filters && Object.keys(state.filters).length > 0) {
+      try {
+        params.append('filters', JSON.stringify(state.filters));
+      } catch (e) {
+        console.error('Failed to stringify filters for URL:', e);
       }
     }
 

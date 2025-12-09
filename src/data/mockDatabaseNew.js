@@ -13,6 +13,31 @@ import { applySearchAndFilters } from '../utils/searchUtils.js';
 const metadata = get_tables_metadata();
 const dbConfig = getDatabaseConfig();
 
+const buildFacetAggregatesFromTables = (tables = []) => {
+  const categories = {};
+  const regions = {};
+  const tableNames = {};
+  const tableYears = {};
+
+  tables.forEach(table => {
+    (table.categories || []).forEach(cat => {
+      categories[cat] = (categories[cat] || 0) + 1;
+    });
+    if (table.country) {
+      regions[table.country] = (regions[table.country] || 0) + 1;
+    }
+    if (table.name) {
+      tableNames[table.name] = (tableNames[table.name] || 0) + 1;
+    }
+    if (table.year !== undefined && table.year !== null) {
+      const yearKey = String(table.year);
+      tableYears[yearKey] = (tableYears[yearKey] || 0) + 1;
+    }
+  });
+
+  return { categories, regions, tableNames, tableYears };
+};
+
 /**
  * Convert backend records to UI table format
  * @param {string} tableKey - Table key
@@ -209,7 +234,17 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     // Apply only filters (no search)
     const filtered = filters && Object.keys(filters).length > 0
       ? tablesWithoutData.filter(table => {
-          const { tableName, year, category, country, selectedTables } = filters;
+          const {
+            tableName,
+            year,
+            category,
+            country,
+            selectedTables,
+            categories,
+            regions,
+            tableNames,
+            tableYears,
+          } = filters;
 
           if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
             return false;
@@ -226,6 +261,20 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
           if (country && country !== 'all' && table.country !== country) {
             return false;
           }
+
+          if (Array.isArray(categories) && categories.length > 0 && !categories.some(cat => table.categories.includes(cat))) {
+            return false;
+          }
+          if (Array.isArray(regions) && regions.length > 0 && (!table.country || !regions.includes(table.country))) {
+            return false;
+          }
+          if (Array.isArray(tableNames) && tableNames.length > 0 && (!table.name || !tableNames.includes(table.name))) {
+            return false;
+          }
+          if (Array.isArray(tableYears) && tableYears.length > 0 && !tableYears.includes(String(table.year))) {
+            return false;
+          }
+
           return true;
         })
       : tablesWithoutData;
@@ -262,7 +311,17 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
 
   // Apply metadata filters if provided
   if (filters && Object.keys(filters).length > 0) {
-    const { tableName, year, category, country, selectedTables } = filters;
+    const {
+      tableName,
+      year,
+      category,
+      country,
+      selectedTables,
+      categories,
+      regions,
+      tableNames,
+      tableYears,
+    } = filters;
 
     matchingTableIds = matchingTableIds.filter(tableId => {
       const meta = tablesMetadata.find(t => t.id === tableId);
@@ -283,6 +342,20 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
       if (country && country !== 'all' && meta.country !== country) {
         return false;
       }
+
+      if (Array.isArray(categories) && categories.length > 0 && !categories.some(cat => meta.categories.includes(cat))) {
+        return false;
+      }
+      if (Array.isArray(regions) && regions.length > 0 && (!meta.country || !regions.includes(meta.country))) {
+        return false;
+      }
+      if (Array.isArray(tableNames) && tableNames.length > 0 && (!meta.name || !tableNames.includes(meta.name))) {
+        return false;
+      }
+      if (Array.isArray(tableYears) && tableYears.length > 0 && !tableYears.includes(String(meta.year))) {
+        return false;
+      }
+
       return true;
     });
   }
@@ -354,4 +427,20 @@ export async function getMultipleTablesData(tableIds, query = [], filters = {}, 
  */
 export async function getTableDataPaginatedById(tableId, paginationState = {}, pageSize, searchQuery = '', permutationId = 'none', permutationParams = {}) {
   return await getTableDataPaginated(tableId, paginationState, pageSize, searchQuery, permutationId, permutationParams);
+}
+
+/**
+ * Get facet aggregates for a specific database, respecting search query and filters.
+ * @param {string} dbId
+ * @param {Array|string} searchQuery
+ * @param {Object} filters
+ * @param {string} permutationId
+ * @param {Object} permutationParams
+ * @returns {Promise<Object>} Facet aggregates scoped to tables in dbId matching the search/filters
+ */
+export async function getFacetAggregatesForDb(dbId, searchQuery = [], filters = {}, permutationId = 'none', permutationParams = {}) {
+  const result = await searchTablesByQuery(dbId, searchQuery, filters, permutationId, permutationParams);
+  const tableIds = result.tableIds || [];
+  const tables = tableIds.map(id => metadata[id]).filter(Boolean);
+  return buildFacetAggregatesFromTables(tables);
 }
