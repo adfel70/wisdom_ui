@@ -14,6 +14,7 @@ import {
   PAGINATION_STRATEGY,
   getPaginationStrategy
 } from '../config/paginationConfig';
+import { applySearchAndFilters } from '../utils/searchUtils.js';
 
 // Metadata loaded once on app start (small file, OK to keep in memory)
 const METADATA = metadataFile.metadata;
@@ -353,7 +354,15 @@ export async function getTableData(tableKey) {
  * @param {Object} permutationParams - Optional permutation parameters
  * @returns {Promise<Object>} Paginated table data with pagination info
  */
-export async function getTableDataPaginated(tableKey, paginationState = {}, pageSize = RECORDS_PER_PAGE, searchQuery = '', permutationId = 'none', permutationParams = {}) {
+export async function getTableDataPaginated(
+  tableKey,
+  paginationState = {},
+  pageSize = RECORDS_PER_PAGE,
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {},
+  filters = {}
+) {
   const meta = METADATA[tableKey];
   if (!meta) {
     throw new Error(`Table ${tableKey} not found`);
@@ -457,7 +466,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   const countedTables = applySearchAndFilters(
     [tableForCounting],
     searchQuery,
-    {}, // filters already applied upstream
+    filters || {},
     permutationId,
     permutationParams
   );
@@ -568,7 +577,6 @@ export async function fetchFacetAggregates(
   }
 
   const records = await fetchDatabaseRecords(dbKey);
-  const { applySearchAndFilters } = await import('../utils/searchUtils.js');
 
   // Group records by table for search + filter alignment with the main results
   const recordsByTable = records.reduce((acc, record) => {

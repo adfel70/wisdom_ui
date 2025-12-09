@@ -327,20 +327,34 @@ const SearchResultsPage = () => {
     });
   };
 
-  const handleApplyFilters = (facetFilters = {}) => {
-    const updatedFilters = { ...searchState.filters };
-    FACET_KEYS.forEach((key) => {
-      if (Array.isArray(facetFilters[key]) && facetFilters[key].length > 0) {
-        updatedFilters[key] = facetFilters[key];
-      } else {
-        delete updatedFilters[key];
-      }
-    });
+  const handleApplyFilters = (incomingFilters = {}) => {
+    // Start from existing filters, then apply incoming
+    const updatedFilters = {
+      ...searchState.filters,
+      ...incomingFilters,
+    };
+
+    // If incoming explicitly clears facets, drop all facet keys
+    if (incomingFilters.__clearFacets) {
+      FACET_KEYS.forEach((key) => delete updatedFilters[key]);
+    } else {
+      // Normalize facet keys: if explicitly provided empty, remove them; if provided with values, set them
+      FACET_KEYS.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(incomingFilters, key)) {
+          if (Array.isArray(incomingFilters[key]) && incomingFilters[key].length > 0) {
+            updatedFilters[key] = incomingFilters[key];
+          } else {
+            delete updatedFilters[key];
+          }
+        }
+      });
+    }
 
     searchState.setFilters(updatedFilters);
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchState.inputValue,
+      // Keep the structured query (JSON) when syncing filters to the URL
+      query: searchState.searchQuery,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
@@ -364,7 +378,8 @@ const SearchResultsPage = () => {
     searchState.setPermutationId(newPermutationId);
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchState.inputValue,
+      // Preserve JSON query structure when switching permutations
+      query: searchState.searchQuery,
       page: 1,
       permutationId: newPermutationId,
       permutationParams: searchState.permutationParams,
@@ -477,7 +492,8 @@ const SearchResultsPage = () => {
         tablePagination.pageSize,
         searchState.searchQuery,
         searchState.permutationId,
-        searchState.permutationParams
+        searchState.permutationParams,
+        searchState.filters
       );
 
       const newRecords = tableData.data;

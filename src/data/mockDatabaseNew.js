@@ -204,31 +204,15 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
     data: [] // Empty data array
   }));
 
-  // If no search query, just apply filters
+  // If no search query, just apply filters (including facet filters)
   if (!query || (Array.isArray(query) && query.length === 0)) {
-    // Apply only filters (no search)
-    const filtered = filters && Object.keys(filters).length > 0
-      ? tablesWithoutData.filter(table => {
-          const { tableName, year, category, country, selectedTables } = filters;
-
-          if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(table.id)) {
-            return false;
-          }
-          if (tableName && !table.name.toLowerCase().includes(tableName.toLowerCase())) {
-            return false;
-          }
-          if (year && year !== 'all' && table.year !== parseInt(year)) {
-            return false;
-          }
-          if (category && category !== 'all' && !table.categories.includes(category)) {
-            return false;
-          }
-          if (country && country !== 'all' && table.country !== country) {
-            return false;
-          }
-          return true;
-        })
-      : tablesWithoutData;
+    const filtered = applySearchAndFilters(
+      tablesWithoutData,
+      [], // no search terms
+      filters || {},
+      permutationId,
+      permutationParams
+    );
 
     return {
       tableIds: filtered.map(t => t.id),
@@ -247,45 +231,27 @@ export async function searchTablesByQuery(dbId, query, filters, permutationId = 
   // Call backend with query - it will filter records server-side
   const matchingRecords = await dbQueryFunc(query);
 
-  // Group matching records by tableKey
-  const recordsByTable = {};
-  matchingRecords.forEach(record => {
-    const { tableKey } = record;
-    if (!recordsByTable[tableKey]) {
-      recordsByTable[tableKey] = [];
-    }
-    recordsByTable[tableKey].push(record);
+  // Group matching records by tableKey and build table objects so filters (including facets) can apply
+  const tablesForFiltering = tablesMetadata.map(meta => {
+    const records = matchingRecords
+      .filter(r => r.tableKey === meta.id)
+      .map(({ tableKey: _, ...row }) => row);
+    return {
+      ...meta,
+      data: records,
+    };
   });
 
-  // Get table IDs that have matching records
-  let matchingTableIds = Object.keys(recordsByTable);
+  // Apply search + filters to determine which tables are eligible
+  const filteredTables = applySearchAndFilters(
+    tablesForFiltering,
+    query,
+    filters || {},
+    permutationId,
+    permutationParams
+  );
 
-  // Apply metadata filters if provided
-  if (filters && Object.keys(filters).length > 0) {
-    const { tableName, year, category, country, selectedTables } = filters;
-
-    matchingTableIds = matchingTableIds.filter(tableId => {
-      const meta = tablesMetadata.find(t => t.id === tableId);
-      if (!meta) return false;
-
-      if (selectedTables && selectedTables.length > 0 && !selectedTables.includes(tableId)) {
-        return false;
-      }
-      if (tableName && !meta.name.toLowerCase().includes(tableName.toLowerCase())) {
-        return false;
-      }
-      if (year && year !== 'all' && meta.year !== parseInt(year)) {
-        return false;
-      }
-      if (category && category !== 'all' && !meta.categories.includes(category)) {
-        return false;
-      }
-      if (country && country !== 'all' && meta.country !== country) {
-        return false;
-      }
-      return true;
-    });
-  }
+  const matchingTableIds = filteredTables.map(t => t.id);
 
   return {
     tableIds: matchingTableIds,
@@ -352,6 +318,22 @@ export async function getMultipleTablesData(tableIds, query = [], filters = {}, 
  * @param {Object} permutationParams - Optional permutation parameters
  * @returns {Promise<Object>} Table object with paginated data and pagination info
  */
-export async function getTableDataPaginatedById(tableId, paginationState = {}, pageSize, searchQuery = '', permutationId = 'none', permutationParams = {}) {
-  return await getTableDataPaginated(tableId, paginationState, pageSize, searchQuery, permutationId, permutationParams);
+export async function getTableDataPaginatedById(
+  tableId,
+  paginationState = {},
+  pageSize,
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {},
+  filters = {}
+) {
+  return await getTableDataPaginated(
+    tableId,
+    paginationState,
+    pageSize,
+    searchQuery,
+    permutationId,
+    permutationParams,
+    filters
+  );
 }

@@ -150,7 +150,8 @@ export const useSearchResults = ({
             RECORDS_PER_PAGE,
             searchQuery,
             permutationId,
-            permutationParams
+            permutationParams,
+            filters
           );
 
           // Initialize pagination state for this table

@@ -85,6 +85,7 @@ const FilterPanel = ({
   );
 
   const handleApplyFilters = () => {
+    // Send all facet keys, even if empty, so callers can clear them explicitly
     const nextFilters = {
       categories: categoriesSelected,
       regions: regionsSelected,
@@ -92,7 +93,7 @@ const FilterPanel = ({
       tableYears: tableYearsSelected
     };
     const sanitized = sanitizeFacetFilters(nextFilters);
-    onApplyFilters(sanitized);
+    onApplyFilters({ ...nextFilters, ...sanitized });
   };
 
   const handleClearFilters = () => {
@@ -101,7 +102,14 @@ const FilterPanel = ({
     setTableNamesSelected([]);
     setTableYearsSelected([]);
     setAppliedFilters({});
-    onApplyFilters({});
+    // Explicitly send empty arrays so upstream can remove facet filters
+    onApplyFilters({
+      categories: [],
+      regions: [],
+      tableNames: [],
+      tableYears: [],
+      __clearFacets: true
+    });
   };
 
   return (

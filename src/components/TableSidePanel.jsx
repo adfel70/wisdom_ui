@@ -153,7 +153,7 @@ const TableSidePanel = ({
 
   const handleTabChange = useCallback((_, value) => {
     setActiveTab(value);
-    setSearchQuery(''); // Clear search when switching tabs
+    setPanelSearchQuery(''); // Clear panel search when switching tabs
   }, []);
 
   const filteredItems = useMemo(() => {
