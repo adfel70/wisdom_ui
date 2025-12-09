@@ -61,10 +61,10 @@ const TokenChip = ({
             whiteSpace: 'nowrap',
           }}
         >
+          <Box component="span" sx={{ fontWeight: 700 }}>{token.value}</Box>
+          <Box component="span" sx={{ color: 'text.secondary' }}>|</Box>
           <LocalOfferOutlined sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
           <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>{token.bdt}</Box>
-          <Box component="span" sx={{ color: 'text.secondary' }}>|</Box>
-          <Box component="span" sx={{ fontWeight: 700 }}>{token.value}</Box>
         </Box>
       ) : isTerm ? (
         <Box component="span" sx={{ fontWeight: 700 }}>
