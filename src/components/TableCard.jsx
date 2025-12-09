@@ -425,7 +425,20 @@ const TableCard = ({
   const [selectedCell, setSelectedCell] = useState(null);
   const gridContainerRef = useRef(null);
 
-  const hasRows = Array.isArray(table?.data) && table.data.length > 0;
+  const dedupedData = React.useMemo(() => {
+    if (!Array.isArray(table?.data)) return [];
+
+    // Drop duplicate records that share the same id (can happen when pagination overlaps)
+    const seen = new Set();
+    return table.data.filter((row, index) => {
+      const key = row?.id ?? `idx-${index}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [table?.data]);
+
+  const hasRows = dedupedData.length > 0;
   const expectsRows = (table?.count ?? 0) > 0;
   const isGridLoading = isLoading || (!hasRows && expectsRows);
 
@@ -500,11 +513,11 @@ const TableCard = ({
   };
 
   const handleDownloadExcel = () => {
-    if (!table?.data || table.data.length === 0) {
+    if (!dedupedData.length) {
       return;
     }
 
-    const formattedRows = table.data.map((row) => {
+    const formattedRows = dedupedData.map((row) => {
       const formattedRow = {};
       columnOrder.forEach((column) => {
         formattedRow[column] = row?.[column] ?? 'N/A';
@@ -527,12 +540,12 @@ const TableCard = ({
 
   // Transform data for AG Grid (add id field)
   const rowData = React.useMemo(() => {
-    if (!table?.data) return [];
-    return table.data.map((row, index) => ({
-      id: index,
+    if (!dedupedData) return [];
+    return dedupedData.map((row, index) => ({
+      id: row?.id ?? index,
       ...row,
     }));
-  }, [table?.data, table?.id]);
+  }, [dedupedData, table?.id]);
 
   const renderHighlightCell = useCallback(
     (params) => {
@@ -788,7 +801,7 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                label={`${table.data?.length || 0} Records`}
+                label={`${dedupedData.length} Records`}
                 size="small"
                 color="primary"
                 variant="outlined"
