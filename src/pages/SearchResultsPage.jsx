@@ -144,6 +144,12 @@ const SearchResultsPage = () => {
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
+  const [filtersByDb, setFiltersByDb] = useState({
+    db1: {},
+    db2: {},
+    db3: {},
+    db4: {},
+  });
 
   // Global context
   const {
@@ -168,6 +174,7 @@ const SearchResultsPage = () => {
 
   // Calculate current page and visible table IDs
   const currentPage = pagination.getCurrentPage(activeDatabase);
+  const activeFilters = filtersByDb[activeDatabase] || {};
 
   // Update visible table IDs when dependencies change
   useEffect(() => {
@@ -181,7 +188,8 @@ const SearchResultsPage = () => {
   // Search results hook
   const { isSearching, isLoadingTableData, tableDataCache } = useSearchResults({
     searchQuery: searchState.searchQuery,
-    filters: searchState.filters,
+    filters: activeFilters,
+    perDbFilters: filtersByDb,
     permutationId: searchState.permutationId,
     permutationParams: searchState.permutationParams,
     activeDatabase,
@@ -198,7 +206,9 @@ const SearchResultsPage = () => {
   // Convert searchParams to string to ensure effect re-runs on URL changes
   const searchParamsString = urlSync.searchParams.toString();
 
+  const hasHydratedFromUrl = useRef(false);
   useEffect(() => {
+    if (hasHydratedFromUrl.current) return;
     const params = urlSync.readParamsFromURL();
     searchState.initializeSearchState({
       query: params.query,
@@ -207,9 +217,14 @@ const SearchResultsPage = () => {
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
     });
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: params.filters || {},
+    }));
     pagination.setPage(activeDatabase, params.page);
+    hasHydratedFromUrl.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParamsString, activeDatabase]); // Re-run when URL or database changes
+  }, [searchParamsString]);
 
   // Keep draft query JSON aligned with committed search query (used for token hydration)
   useEffect(() => {
@@ -219,6 +234,18 @@ const SearchResultsPage = () => {
       setDraftQueryJSON([]);
     }
   }, [searchState.searchQuery]);
+
+  // Keep filters map in sync with the active database filter state
+  useEffect(() => {
+    setFiltersByDb(prev => {
+      const existing = prev[activeDatabase] || {};
+      const next = searchState.filters || {};
+      if (JSON.stringify(existing) === JSON.stringify(next)) {
+        return prev;
+      }
+      return { ...prev, [activeDatabase]: next };
+    });
+  }, [activeDatabase, searchState.filters]);
 
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
@@ -329,19 +356,31 @@ const SearchResultsPage = () => {
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: activeFilters,
     });
   };
 
   const handleApplyFilters = (newFilters) => {
-    searchState.setFilters(newFilters);
+    const cleanedFilters = { ...(newFilters || {}) };
+    ['categories', 'regions', 'tableNames', 'tableYears'].forEach((key) => {
+      if (Array.isArray(cleanedFilters[key]) && cleanedFilters[key].length === 0) {
+        delete cleanedFilters[key];
+      }
+    });
+
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: cleanedFilters,
+    }));
+    searchState.setFilters(cleanedFilters);
     pagination.resetAllPages();
+    const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
     urlSync.updateURL({
-      query: searchState.inputValue,
+      query: currentQueryForUrl,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: newFilters,
+      filters: cleanedFilters,
     });
   };
 
@@ -365,7 +404,7 @@ const SearchResultsPage = () => {
       page: 1,
       permutationId: newPermutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: activeFilters,
     });
   };
 
@@ -380,7 +419,7 @@ const SearchResultsPage = () => {
       page: newPage,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: activeFilters,
     });
 
     if (resultsContainerRef.current) {
@@ -388,17 +427,19 @@ const SearchResultsPage = () => {
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [activeDatabase, pagination, urlSync, searchState, resultsContainerRef]);
+  }, [activeDatabase, pagination, urlSync, searchState, resultsContainerRef, activeFilters]);
 
   const handleDatabaseChange = (newDbId) => {
     setActiveDatabase(newDbId);
     const newDbPage = pagination.getCurrentPage(newDbId);
+    const newDbFilters = filtersByDb[newDbId] || {};
+    searchState.setFilters(newDbFilters);
     urlSync.updateURL({
       query: searchState.searchQuery,
       page: newDbPage,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: newDbFilters,
     });
   };
 
@@ -579,6 +620,9 @@ const SearchResultsPage = () => {
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
           topOffset={headerHeight}
+          appliedFilters={filtersByDb[activeDatabase] || {}}
+          onApplyFilters={handleApplyFilters}
+          facetSearchQuery={searchState.searchQuery}
         />
 
         {/* Results Content */}

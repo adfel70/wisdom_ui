@@ -10,6 +10,7 @@ import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 export const useSearchResults = ({
   searchQuery,
   filters,
+  perDbFilters = {},
   permutationId,
   permutationParams,
   activeDatabase,
@@ -48,6 +49,7 @@ export const useSearchResults = ({
     const currentSignature = JSON.stringify({
       query: searchQuery,
       filters,
+      perDbFilters,
       permutationId,
       permutationParams, // Don't double-stringify
     });
@@ -64,7 +66,13 @@ export const useSearchResults = ({
       try {
         // Search all databases in parallel
         const searchPromises = ['db1', 'db2', 'db3', 'db4'].map(dbId =>
-          searchTablesByQuery(dbId, searchQuery, filters, permutationId, permutationParams)
+          searchTablesByQuery(
+            dbId,
+            searchQuery,
+            perDbFilters[dbId] || {},
+            permutationId,
+            permutationParams
+          )
         );
 
         const results = await Promise.all(searchPromises);
@@ -106,6 +114,7 @@ export const useSearchResults = ({
   }, [
     searchQuery,
     JSON.stringify(filters), // Stringify to avoid object reference changes
+    JSON.stringify(perDbFilters),
     permutationId,
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);

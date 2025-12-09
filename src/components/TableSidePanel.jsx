@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { getTablesMetadataForDatabase } from '../api/backend';
+import FilterPanel from './FilterPanel';
 
 // Panel width constants
 const PANEL_EXPANDED_WIDTH = 320;
@@ -111,7 +112,10 @@ const TableSidePanel = ({
   onSelectTable,
   isCollapsed = false,
   onToggleCollapse,
-  topOffset = 280
+  topOffset = 280,
+  appliedFilters = {},
+  onApplyFilters,
+  facetSearchQuery,
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
@@ -386,23 +390,12 @@ const TableSidePanel = ({
             </LayoutGroup>
           )
         ) : (
-          // Filters tab placeholder
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: 4,
-              px: 2,
-              color: 'text.secondary'
-            }}
-          >
-            <FilterList sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
-            <Typography variant="body2" fontWeight={600} gutterBottom>
-              Filters
-            </Typography>
-            <Typography variant="caption">
-              Advanced filtering options will appear here.
-            </Typography>
-          </Box>
+          <FilterPanel
+            appliedFilters={appliedFilters}
+            onApplyFilters={onApplyFilters}
+            activeDatabase={databaseId}
+            searchQuery={facetSearchQuery}
+          />
         )}
       </Box>
       )}

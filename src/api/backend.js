@@ -306,6 +306,88 @@ export function getTablesMetadataForDatabase(dbKey) {
   });
 }
 
+// Normalize filter arrays
+const normalizeFacetArray = (value) => (Array.isArray(value) ? value.filter(Boolean) : []);
+
+// Apply facet filters to tables
+function filterTablesByFacets(tables, filters) {
+  const {
+    categories = [],
+    regions = [],
+    tableNames = [],
+    tableYears = [],
+  } = filters;
+
+  return tables.filter(table => {
+    if (categories.length > 0 && !(table.categories || []).some(cat => categories.includes(cat))) {
+      return false;
+    }
+    if (regions.length > 0 && table.country && !regions.includes(table.country)) {
+      return false;
+    }
+    if (tableNames.length > 0 && table.name && !tableNames.includes(table.name)) {
+      return false;
+    }
+    if (tableYears.length > 0 && table.year !== undefined && table.year !== null && !tableYears.includes(String(table.year))) {
+      return false;
+    }
+    return true;
+  });
+}
+
+// Build facet aggregates from a set of tables
+function buildFacetAggregates(tables) {
+  const categories = {};
+  const regions = {};
+  const tableNames = {};
+  const tableYears = {};
+
+  tables.forEach(table => {
+    (table.categories || []).forEach(cat => {
+      categories[cat] = (categories[cat] || 0) + 1;
+    });
+
+    if (table.country) {
+      regions[table.country] = (regions[table.country] || 0) + 1;
+    }
+
+    if (table.name) {
+      tableNames[table.name] = (tableNames[table.name] || 0) + 1;
+    }
+
+    if (table.year !== undefined && table.year !== null) {
+      const yearKey = String(table.year);
+      tableYears[yearKey] = (tableYears[yearKey] || 0) + 1;
+    }
+  });
+
+  return { categories, regions, tableNames, tableYears };
+}
+
+/**
+ * Fetch facet aggregates based on a filter query.
+ * Simulates asynchronous backend facet aggregation.
+ * @param {Object} filterQuery
+ * @returns {Promise<Object>} Facet aggregates for categories, regions, tableNames, tableYears
+ */
+export async function getFacetAggregates(filterQuery = {}, dbKey = null) {
+  const filters = {
+    categories: normalizeFacetArray(filterQuery.categories),
+    regions: normalizeFacetArray(filterQuery.regions),
+    tableNames: normalizeFacetArray(filterQuery.tableNames),
+    tableYears: normalizeFacetArray(filterQuery.tableYears).map(String),
+  };
+
+  const tablesInScope = dbKey
+    ? (DATABASE_ASSIGNMENTS[dbKey] || []).map(key => METADATA[key]).filter(Boolean)
+    : Object.values(METADATA);
+
+  const filteredTables = filterTablesByFacets(tablesInScope, filters);
+  const aggregates = buildFacetAggregates(filteredTables);
+
+  return new Promise(resolve => setTimeout(() => resolve(aggregates), 120));
+}
+
 /**
  * Get data for a specific table (lazy loading)
  * Fetches only the records for one table
