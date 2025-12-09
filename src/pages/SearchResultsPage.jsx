@@ -292,36 +292,26 @@ const SearchResultsPage = () => {
     // Handle both JSON array (from query builder) and string (from simple search)
     let queryJSON;
 
+    const baseDraft = Array.isArray(draftQueryJSON) && draftQueryJSON.length
+      ? draftQueryJSON
+      : searchState.searchQuery;
+
     if (Array.isArray(query)) {
       // Already in JSON format
       queryJSON = query;
-    } else if (query) {
-      // String input path. If it matches our stored query string, reuse the stored JSON to keep BDTs.
-      if (
-        Array.isArray(searchState.searchQuery) &&
-        normalizeQueryString(query) === normalizeQueryString(searchState.inputValue)
-      ) {
-        queryJSON = searchState.searchQuery;
-      } else if (typeof query === 'string' && query.trim()) {
-        const parsed = queryStringToJSON(query);
-        const base = Array.isArray(draftQueryJSON) && draftQueryJSON.length
-          ? draftQueryJSON
-          : searchState.searchQuery;
-        const merged = mergeBdtIntoQuery(base, parsed) || parsed;
-        queryJSON = merged;
-      }
+    } else if (typeof query === 'string' && query.trim()) {
+      const parsed = queryStringToJSON(query);
+      const merged = mergeBdtIntoQuery(baseDraft, parsed) || parsed;
+      queryJSON = merged;
     } else {
-      // No query provided, use current input value
+      // No query string provided, use current input value
       const inputValue = searchState.inputValue;
-      if (Array.isArray(inputValue)) {
-        queryJSON = inputValue;
-      } else if (typeof inputValue === 'string' && inputValue.trim()) {
+      if (typeof inputValue === 'string' && inputValue.trim()) {
         const parsed = queryStringToJSON(inputValue);
-        const base = Array.isArray(draftQueryJSON) && draftQueryJSON.length
-          ? draftQueryJSON
-          : searchState.searchQuery;
-        const merged = mergeBdtIntoQuery(base, parsed) || parsed;
+        const merged = mergeBdtIntoQuery(baseDraft, parsed) || parsed;
         queryJSON = merged;
+      } else if (Array.isArray(baseDraft) && baseDraft.length) {
+        queryJSON = baseDraft;
       }
     }
 

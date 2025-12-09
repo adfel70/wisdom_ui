@@ -22,6 +22,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const isTransformingRef = useRef(false);
+  const lastAnchoredTokensRef = useRef(null);
 
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
@@ -75,8 +76,8 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   };
 
   // Build query string from tokens
-  const buildQueryFromTokens = () => {
-    const tokenString = tokens.map(token => {
+  const buildQueryFromTokens = (tokenList = tokens, inputValue = currentInput) => {
+    const tokenString = tokenList.map(token => {
       // Wrap quoted terms in quotes to preserve them
       if (token.quoted) {
         return `"${token.value}"`;
@@ -84,7 +85,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
       // Parentheses and keywords
       return token.value;
     }).join(' ');
-    return tokenString + (currentInput ? ' ' + currentInput : '');
+    return tokenString + (inputValue ? ' ' + inputValue : '');
   };
 
   // Track last hydration to avoid redundant resets when BDT metadata changes
@@ -197,7 +198,9 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
         } else {
           combined = [...prev, ...newTokens];
         }
-        return cleanupTokens(combined);
+        const cleaned = cleanupTokens(combined);
+        lastAnchoredTokensRef.current = cleaned;
+        return cleaned;
       });
       setCurrentInput('');
       return true;
@@ -206,12 +209,15 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   };
 
   // Execute search with current tokens
-  const executeSearch = () => {
-    const query = buildQueryFromTokens().trim();
+  const executeSearch = (overrideTokens = null, overrideInput = '') => {
+    const tokenSource = overrideTokens || tokens;
+    const inputSource = overrideInput !== undefined ? overrideInput : currentInput;
+    const query = buildQueryFromTokens(tokenSource, inputSource).trim();
     if (query && onSubmit) {
       // Pass query string for backward compatibility
       onSubmit(query);
     }
+    lastAnchoredTokensRef.current = null;
   };
 
   // Handle input change
@@ -392,8 +398,11 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     e.preventDefault();
     // Anchor current input and search
     anchorCurrentInput();
-    // Small delay to let state update
-    setTimeout(executeSearch, 0);
+    // Small delay to let state update before executing search (use the most recent anchored tokens if available)
+    setTimeout(() => {
+      const nextTokens = lastAnchoredTokensRef.current || tokens;
+      executeSearch(nextTokens, '');
+    }, 30);
   };
 
   return {
