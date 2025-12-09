@@ -22,6 +22,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   const [originalTokens, setOriginalTokens] = useState([]);
   const [hasTransformed, setHasTransformed] = useState(false);
   const isTransformingRef = useRef(false);
+  const lastUserEditRef = useRef(false);
   const lastAnchoredTokensRef = useRef(null);
 
   // Normalize whitespace for comparison to avoid infinite loops
@@ -124,21 +125,28 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     }
   }, [value, clauseList]);
 
+  const resetTransformState = () => {
+    setOriginalText('');
+    setOriginalTokens([]);
+    setHasTransformed(false);
+    lastUserEditRef.current = false;
+  };
+
+  const markUserEdit = () => {
+    lastUserEditRef.current = true;
+  };
+
   // Reset transform state when search bar becomes completely empty
   useEffect(() => {
     if (tokens.length === 0 && currentInput === '' && hasTransformed) {
-      setOriginalText('');
-      setOriginalTokens([]);
-      setHasTransformed(false);
+      resetTransformState();
     }
   }, [tokens, currentInput, hasTransformed]);
 
   // Reset transform state when input changes at all (user types or modifies search)
   useEffect(() => {
-    if (hasTransformed && !isTransformingRef.current) {
-      setOriginalText('');
-      setOriginalTokens([]);
-      setHasTransformed(false);
+    if (hasTransformed && !isTransformingRef.current && lastUserEditRef.current) {
+      resetTransformState();
     }
   }, [tokens, currentInput, hasTransformed]);
 
@@ -281,6 +289,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
       }
     }
 
+    markUserEdit();
     setCurrentInput(newValue);
   };
 
@@ -304,6 +313,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     if (e.key === 'Backspace' && currentInput === '' && tokens.length > 0) {
       e.preventDefault();
       // Delete the last token
+      markUserEdit();
       setTokens(prev => cleanupTokens(prev.slice(0, -1)));
       return;
     }
@@ -311,6 +321,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
 
   // Remove a specific token and its adjacent keyword
   const removeToken = (index) => {
+    markUserEdit();
     setTokens(prev => {
       const token = prev[index];
       let filtered;
@@ -344,9 +355,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     setTokens([]);
     setCurrentInput('');
     // Reset transform state when clearing
-    setOriginalText('');
-    setOriginalTokens([]);
-    setHasTransformed(false);
+    resetTransformState();
   };
 
   // Apply transformation to tokens and current input
@@ -354,6 +363,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     if (!transformId) return;
 
     isTransformingRef.current = true;
+    lastUserEditRef.current = false;
 
     // Store original text and tokens before first transformation
     if (!hasTransformed) {
@@ -379,18 +389,17 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     setCurrentInput(transformed);
 
     // Reset the transforming flag after a short delay to allow state updates to complete
-    setTimeout(() => {
+    // Defer clearing the transforming flag until after effects run
+    requestAnimationFrame(() => {
       isTransformingRef.current = false;
-    }, 0);
+    });
   };
 
   // Revert to original state before transformations
   const handleRevert = () => {
     setCurrentInput(originalText);
     setTokens(cleanupTokens(originalTokens));
-    setOriginalText('');
-    setOriginalTokens([]);
-    setHasTransformed(false);
+    resetTransformState();
   };
 
   // Handle form submit
