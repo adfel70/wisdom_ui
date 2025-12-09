@@ -145,6 +145,7 @@ const SearchResultsPage = () => {
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
+  const [filtersByDb, setFiltersByDb] = useState({});
 
   // Global context
   const {
@@ -208,6 +209,10 @@ const SearchResultsPage = () => {
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
     });
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: params.filters || {}
+    }));
     pagination.setPage(activeDatabase, params.page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsString, activeDatabase]); // Re-run when URL or database changes
@@ -357,6 +362,12 @@ const SearchResultsPage = () => {
       });
     }
 
+    // Persist per-DB filters
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: updatedFilters
+    }));
+
     searchState.setFilters(updatedFilters);
     pagination.resetAllPages();
     urlSync.updateURL({
@@ -417,13 +428,15 @@ const SearchResultsPage = () => {
 
   const handleDatabaseChange = (newDbId) => {
     setActiveDatabase(newDbId);
+    const dbFilters = filtersByDb[newDbId] || {};
+    searchState.setFilters(dbFilters);
     const newDbPage = pagination.getCurrentPage(newDbId);
     urlSync.updateURL({
       query: searchState.searchQuery,
       page: newDbPage,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: dbFilters,
     });
   };
 
