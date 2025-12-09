@@ -143,6 +143,7 @@ const SearchResultsPage = () => {
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
+  const [draftQueryJSON, setDraftQueryJSON] = useState([]);
 
   // Global context
   const {
@@ -209,6 +210,15 @@ const SearchResultsPage = () => {
     pagination.setPage(activeDatabase, params.page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsString, activeDatabase]); // Re-run when URL or database changes
+
+  // Keep draft query JSON aligned with committed search query (used for token hydration)
+  useEffect(() => {
+    if (Array.isArray(searchState.searchQuery)) {
+      setDraftQueryJSON(searchState.searchQuery);
+    } else {
+      setDraftQueryJSON([]);
+    }
+  }, [searchState.searchQuery]);
 
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
@@ -282,30 +292,26 @@ const SearchResultsPage = () => {
     // Handle both JSON array (from query builder) and string (from simple search)
     let queryJSON;
 
+    const baseDraft = Array.isArray(draftQueryJSON) && draftQueryJSON.length
+      ? draftQueryJSON
+      : searchState.searchQuery;
+
     if (Array.isArray(query)) {
       // Already in JSON format
       queryJSON = query;
-    } else if (query) {
-      // String input path. If it matches our stored query string, reuse the stored JSON to keep BDTs.
-      if (
-        Array.isArray(searchState.searchQuery) &&
-        normalizeQueryString(query) === normalizeQueryString(searchState.inputValue)
-      ) {
-        queryJSON = searchState.searchQuery;
-      } else if (typeof query === 'string' && query.trim()) {
-        const parsed = queryStringToJSON(query);
-        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
-        queryJSON = merged;
-      }
+    } else if (typeof query === 'string' && query.trim()) {
+      const parsed = queryStringToJSON(query);
+      const merged = mergeBdtIntoQuery(baseDraft, parsed) || parsed;
+      queryJSON = merged;
     } else {
-      // No query provided, use current input value
+      // No query string provided, use current input value
       const inputValue = searchState.inputValue;
-      if (Array.isArray(inputValue)) {
-        queryJSON = inputValue;
-      } else if (typeof inputValue === 'string' && inputValue.trim()) {
+      if (typeof inputValue === 'string' && inputValue.trim()) {
         const parsed = queryStringToJSON(inputValue);
-        const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
+        const merged = mergeBdtIntoQuery(baseDraft, parsed) || parsed;
         queryJSON = merged;
+      } else if (Array.isArray(baseDraft) && baseDraft.length) {
+        queryJSON = baseDraft;
       }
     }
 
@@ -316,6 +322,7 @@ const SearchResultsPage = () => {
 
     // Keep local search state in sync (avoids waiting for URL re-read)
     searchState.setSearchQuery(queryJSON);
+    setDraftQueryJSON(queryJSON);
     pagination.resetAllPages();
     urlSync.updateURL({
       query: queryJSON,
@@ -410,15 +417,12 @@ const SearchResultsPage = () => {
   const handleSearchChange = (value) => {
     searchState.setInputValue(value);
 
-    if (Array.isArray(searchState.searchQuery)) {
-      const parsed = queryStringToJSON(value);
-      const merged = mergeBdtIntoQuery(searchState.searchQuery, parsed) || parsed;
-      searchState.setSearchQuery(merged);
-    } else {
-      // No prior JSON; just parse and set
-      const parsed = queryStringToJSON(value);
-      searchState.setSearchQuery(parsed);
-    }
+    const parsed = queryStringToJSON(value);
+    const base = Array.isArray(draftQueryJSON) && draftQueryJSON.length
+      ? draftQueryJSON
+      : searchState.searchQuery;
+    const merged = base ? (mergeBdtIntoQuery(base, parsed) || parsed) : parsed;
+    setDraftQueryJSON(merged);
   };
 
   const handleSendToLastPage = useCallback((tableId) => {
@@ -545,6 +549,7 @@ const SearchResultsPage = () => {
                   onSearchSubmit={handleSearch}
                   onFilterClick={() => setIsFilterOpen(true)}
                   onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
+                  queryJSON={draftQueryJSON}
                   permutationId={searchState.permutationId}
                   permutationParams={searchState.permutationParams}
                   onPermutationChange={handlePermutationChange}
@@ -642,7 +647,13 @@ const SearchResultsPage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={searchState.searchQuery}
+          initialQuery={
+            (Array.isArray(draftQueryJSON) && draftQueryJSON.length)
+              ? draftQueryJSON
+              : (Array.isArray(searchState.searchQuery)
+                ? searchState.searchQuery
+                : queryStringToJSON(searchState.inputValue))
+          }
         />
       </Box>
     </motion.div>
