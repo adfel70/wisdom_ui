@@ -12,7 +12,6 @@ import {
   Tabs,
   Tab,
   IconButton,
-  Tooltip,
   TextField,
   InputAdornment,
 } from '@mui/material';
@@ -28,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { getTablesMetadataForDatabase } from '../api/backend';
+import FilterPanel from './FilterPanel';
 
 // Panel width constants
 const PANEL_EXPANDED_WIDTH = 320;
@@ -111,10 +111,15 @@ const TableSidePanel = ({
   onSelectTable,
   isCollapsed = false,
   onToggleCollapse,
-  topOffset = 280
+  onApplyFilters = () => {},
+  activeFilters = {},
+  topOffset = 280,
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {}
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [panelSearchQuery, setPanelSearchQuery] = useState('');
 
   const metadataMap = useMemo(() => {
     if (!databaseId) return new Map();
@@ -148,17 +153,17 @@ const TableSidePanel = ({
 
   const handleTabChange = useCallback((_, value) => {
     setActiveTab(value);
-    setSearchQuery(''); // Clear search when switching tabs
+    setPanelSearchQuery(''); // Clear panel search when switching tabs
   }, []);
 
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return panelItems;
-    const query = searchQuery.toLowerCase();
+    if (!panelSearchQuery.trim()) return panelItems;
+    const query = panelSearchQuery.toLowerCase();
     return panelItems.filter(item => 
       (item.name || '').toLowerCase().includes(query) || 
       (item.subtitle || '').toLowerCase().includes(query)
     );
-  }, [panelItems, searchQuery]);
+  }, [panelItems, panelSearchQuery]);
 
   return (
     <Paper
@@ -276,19 +281,19 @@ const TableSidePanel = ({
                   fullWidth
                   size="small"
                   placeholder="Search tables..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={panelSearchQuery}
+                  onChange={(e) => setPanelSearchQuery(e.target.value)}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
                         <Search fontSize="small" color="action" />
                       </InputAdornment>
                     ),
-                    endAdornment: searchQuery ? (
+                    endAdornment: panelSearchQuery ? (
                       <InputAdornment position="end">
                         <IconButton
                           size="small"
-                          onClick={() => setSearchQuery('')}
+                          onClick={() => setPanelSearchQuery('')}
                           edge="end"
                         >
                           <Clear fontSize="small" />
@@ -360,10 +365,10 @@ const TableSidePanel = ({
               }}
             >
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                {searchQuery ? 'No matching tables' : 'No tables yet'}
+                {panelSearchQuery ? 'No matching tables' : 'No tables yet'}
               </Typography>
               <Typography variant="caption">
-                {searchQuery 
+                {panelSearchQuery 
                   ? 'Try adjusting your search terms.' 
                   : 'Run a search or adjust filters to see tables listed here.'}
               </Typography>
@@ -386,23 +391,14 @@ const TableSidePanel = ({
             </LayoutGroup>
           )
         ) : (
-          // Filters tab placeholder
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: 4,
-              px: 2,
-              color: 'text.secondary'
-            }}
-          >
-            <FilterList sx={{ fontSize: 40, mb: 2, opacity: 0.3 }} />
-            <Typography variant="body2" fontWeight={600} gutterBottom>
-              Filters
-            </Typography>
-            <Typography variant="caption">
-              Advanced filtering options will appear here.
-            </Typography>
-          </Box>
+          <FilterPanel
+            databaseId={databaseId}
+            activeFilters={activeFilters}
+              onApplyFilters={onApplyFilters}
+              searchQuery={searchQuery}
+              permutationId={permutationId}
+              permutationParams={permutationParams}
+          />
         )}
       </Box>
       )}

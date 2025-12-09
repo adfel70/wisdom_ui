@@ -502,7 +502,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             transition: 'opacity 0.2s ease, color 0.2s ease',
             '&:hover': {
               color: 'error.main',
-              backgroundColor: 'error.light',
               backgroundColor: 'rgba(239, 68, 68, 0.08)',
             }
           }}

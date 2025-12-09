@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { normalizeFacetArray, FACET_KEYS } from '../utils/facetUtils';
 
 /**
  * Hook to sync search state with URL parameters
@@ -11,6 +12,9 @@ export const useURLSync = () => {
 
   // Read all search-related params from URL
   const readParamsFromURL = useCallback(() => {
+    const parseList = (value) =>
+      normalizeFacetArray(value ? value.split(',') : []);
+
     // Parse query as JSON array
     const queryStr = searchParams.get('q') || '';
     let query = [];
@@ -38,6 +42,12 @@ export const useURLSync = () => {
     const maxDate = searchParams.get('maxDate') || '';
     const selectedTablesParam = searchParams.get('selectedTables') || '';
     const selectedTables = selectedTablesParam ? selectedTablesParam.split(',') : [];
+    // Facet filters
+    const categoriesParam = searchParams.get('categories') || '';
+    const regionsParam = searchParams.get('regions') || '';
+    const tableNamesParam = searchParams.get('tableNames') || '';
+    const tableYearsParam = searchParams.get('tableYears') || '';
+
     const pageParam = searchParams.get('page');
     const page = pageParam ? parseInt(pageParam, 10) : 1;
 
@@ -53,6 +63,10 @@ export const useURLSync = () => {
         minDate: minDate || '',
         maxDate: maxDate || '',
         selectedTables: selectedTables,
+        categories: parseList(categoriesParam),
+        regions: parseList(regionsParam),
+        tableNames: parseList(tableNamesParam),
+        tableYears: parseList(tableYearsParam),
       },
       page,
     };
@@ -105,6 +119,13 @@ export const useURLSync = () => {
       if (state.filters.selectedTables && state.filters.selectedTables.length > 0) {
         params.append('selectedTables', state.filters.selectedTables.join(','));
       }
+      // Facet filters
+      FACET_KEYS.forEach((key) => {
+        const values = normalizeFacetArray(state.filters[key]);
+        if (values.length > 0) {
+          params.append(key, values.join(','));
+        }
+      });
     }
 
     return params;

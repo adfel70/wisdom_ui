@@ -14,6 +14,7 @@ import {
   PAGINATION_STRATEGY,
   getPaginationStrategy
 } from '../config/paginationConfig';
+import { applySearchAndFilters } from '../utils/searchUtils.js';
 
 // Metadata loaded once on app start (small file, OK to keep in memory)
 const METADATA = metadataFile.metadata;
@@ -353,7 +354,15 @@ export async function getTableData(tableKey) {
  * @param {Object} permutationParams - Optional permutation parameters
  * @returns {Promise<Object>} Paginated table data with pagination info
  */
-export async function getTableDataPaginated(tableKey, paginationState = {}, pageSize = RECORDS_PER_PAGE, searchQuery = '', permutationId = 'none', permutationParams = {}) {
+export async function getTableDataPaginated(
+  tableKey,
+  paginationState = {},
+  pageSize = RECORDS_PER_PAGE,
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {},
+  filters = {}
+) {
   const meta = METADATA[tableKey];
   if (!meta) {
     throw new Error(`Table ${tableKey} not found`);
@@ -423,6 +432,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       country: meta.country,
       categories: meta.categories,
       count: meta.recordCount,
+      matchCount: meta.recordCount,
       columns: meta.columns.map(col => col.name),
       data: data,
       paginationInfo: {
@@ -431,12 +441,36 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
         strategy,
         loadedRecords: data.length,
         totalRecords: meta.recordCount,
+        totalMatches: meta.recordCount,
       }
     };
   }
 
   // With search query: batch-fetch until we have pageSize matching records
   // Use server-side filtering with searchRecords function
+
+  // Compute total matches for this table (used for UI badges)
+  const tableForCounting = {
+    id: tableKey,
+    name: meta.name,
+    year: meta.year,
+    country: meta.country,
+    categories: meta.categories,
+    count: meta.recordCount,
+    columns: meta.columns.map(col => col.name),
+    data: allRecords.map(record => {
+      const { tableKey: _, ...rowData } = record;
+      return rowData;
+    })
+  };
+  const countedTables = applySearchAndFilters(
+    [tableForCounting],
+    searchQuery,
+    filters || {},
+    permutationId,
+    permutationParams
+  );
+  const totalMatches = countedTables?.[0]?.data?.length || 0;
 
   let matchingRecords = [];
   let currentPaginationState = paginationState;
@@ -499,9 +533,6 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   });
 
   // Determine if there are more matching records
-  // We have more if either:
-  // 1. We collected more than pageSize matches (we sliced them)
-  // 2. We stopped because we ran out of DB records, but there might be more
   const hasMoreMatches = matchingRecords.length > pageSize || hasMoreRecords;
 
   return {
@@ -511,6 +542,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
     country: meta.country,
     categories: meta.categories,
     count: meta.recordCount,
+    matchCount: totalMatches,
     columns: meta.columns.map(col => col.name),
     data: finalRecords,
     paginationInfo: {
@@ -519,6 +551,102 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       strategy,
       loadedRecords: finalRecords.length,
       totalRecords: meta.recordCount,
+      totalMatches,
     }
   };
+}
+
+const increment = (bucket, key, amount = 1) => {
+  if (!key) {
+    return;
+  }
+  bucket[key] = (bucket[key] || 0) + amount;
+};
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function fetchFacetAggregates(
+  dbKey,
+  filters = {},
+  searchQuery = '',
+  permutationId = 'none',
+  permutationParams = {}
+) {
+  if (!DATABASE_CONFIG[dbKey]) {
+    throw new Error(`Database ${dbKey} not found`);
+  }
+
+  const records = await fetchDatabaseRecords(dbKey);
+
+  // Group records by table for search + filter alignment with the main results
+  const recordsByTable = records.reduce((acc, record) => {
+    const { tableKey, ...rowData } = record;
+    if (!tableKey) {
+      return acc;
+    }
+    if (!acc[tableKey]) {
+      acc[tableKey] = [];
+    }
+    acc[tableKey].push(rowData);
+    return acc;
+  }, {});
+
+  const tables = (DATABASE_ASSIGNMENTS[dbKey] || [])
+    .map((tableKey) => {
+      const meta = METADATA[tableKey];
+      if (!meta) {
+        return null;
+      }
+      return {
+        id: tableKey,
+        name: meta.name,
+        year: meta.year,
+        country: meta.country,
+        categories: meta.categories,
+        data: recordsByTable[tableKey] || []
+      };
+    })
+    .filter(Boolean);
+
+  // Apply the same search + filters pipeline used for table results
+  const matchingTables = applySearchAndFilters(
+    tables,
+    searchQuery,
+    filters || {},
+    permutationId,
+    permutationParams
+  );
+
+  const aggregates = {
+    categories: {},
+    regions: {},
+    tableNames: {},
+    tableYears: {}
+  };
+
+  matchingTables.forEach((table) => {
+    const meta = METADATA[table.id];
+    if (!meta || !Array.isArray(table.data) || table.data.length === 0) {
+      return;
+    }
+
+    const rowCount = table.data.length;
+
+    const categories = Array.isArray(meta.categories)
+      ? Array.from(new Set(meta.categories.map((category) => category?.toString()?.trim()).filter(Boolean)))
+      : [];
+    categories.forEach((category) => increment(aggregates.categories, category, rowCount));
+
+    const region = (meta.country || '').toUpperCase();
+    increment(aggregates.regions, region, rowCount);
+
+    const tableName = (meta.name || table.id || '').trim();
+    increment(aggregates.tableNames, tableName, rowCount);
+
+    const yearKey = meta.year ? String(meta.year).trim() : 'unknown';
+    increment(aggregates.tableYears, yearKey, rowCount);
+  });
+
+  await delay(150);
+  return aggregates;
 }

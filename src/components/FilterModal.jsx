@@ -369,7 +369,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
             )}
           </Box>
 
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 370  }}>
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>

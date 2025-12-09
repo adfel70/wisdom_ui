@@ -40,7 +40,7 @@ export const useSearchResults = ({
     });
   }, []);
 
-  // Step 1: Search all databases for matching table IDs
+  // Step 1: Search for matching table IDs (current database only)
   useEffect(() => {
     let isCancelled = false;
 
@@ -50,9 +50,10 @@ export const useSearchResults = ({
       filters,
       permutationId,
       permutationParams, // Don't double-stringify
+      activeDatabase,
     });
 
-    const searchAllDatabases = async () => {
+    const searchCurrentDatabase = async () => {
       // If we already have results for this exact search, don't re-run it
       // Use callback to get fresh matchingTableIds without adding to dependencies
       if (lastSearchSignature === currentSignature) {
@@ -62,20 +63,20 @@ export const useSearchResults = ({
 
       setIsSearching(true);
       try {
-        // Search all databases in parallel
-        const searchPromises = ['db1', 'db2', 'db3', 'db4'].map(dbId =>
-          searchTablesByQuery(dbId, searchQuery, filters, permutationId, permutationParams)
+        // Only query the active database
+        const result = await searchTablesByQuery(
+          activeDatabase,
+          searchQuery,
+          filters,
+          permutationId,
+          permutationParams
         );
 
-        const results = await Promise.all(searchPromises);
-
         if (!isCancelled) {
-          setMatchingTableIds({
-            db1: results[0].tableIds,
-            db2: results[1].tableIds,
-            db3: results[2].tableIds,
-            db4: results[3].tableIds,
-          });
+          setMatchingTableIds(prev => ({
+            ...prev,
+            [activeDatabase]: result.tableIds,
+          }));
 
           setLastSearchSignature(currentSignature);
           tableDataCache.current.clear();
@@ -83,12 +84,10 @@ export const useSearchResults = ({
       } catch (error) {
         console.error('Failed to search databases:', error);
         if (!isCancelled) {
-          setMatchingTableIds({
-            db1: [],
-            db2: [],
-            db3: [],
-            db4: [],
-          });
+          setMatchingTableIds(prev => ({
+            ...prev,
+            [activeDatabase]: [],
+          }));
         }
       } finally {
         if (!isCancelled) {
@@ -97,13 +96,14 @@ export const useSearchResults = ({
       }
     };
 
-    searchAllDatabases();
+    searchCurrentDatabase();
 
     return () => {
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    activeDatabase,
     searchQuery,
     JSON.stringify(filters), // Stringify to avoid object reference changes
     permutationId,
@@ -150,7 +150,8 @@ export const useSearchResults = ({
             RECORDS_PER_PAGE,
             searchQuery,
             permutationId,
-            permutationParams
+            permutationParams,
+            filters
           );
 
           // Initialize pagination state for this table

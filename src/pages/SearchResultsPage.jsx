@@ -30,6 +30,7 @@ import {
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
 import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
+import { FACET_KEYS } from '../utils/facetUtils';
 import { getExpandedQueryInfo, queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
 
 /**
@@ -144,6 +145,7 @@ const SearchResultsPage = () => {
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
+  const [filtersByDb, setFiltersByDb] = useState({});
 
   // Global context
   const {
@@ -207,6 +209,10 @@ const SearchResultsPage = () => {
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
     });
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: params.filters || {}
+    }));
     pagination.setPage(activeDatabase, params.page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsString, activeDatabase]); // Re-run when URL or database changes
@@ -333,15 +339,44 @@ const SearchResultsPage = () => {
     });
   };
 
-  const handleApplyFilters = (newFilters) => {
-    searchState.setFilters(newFilters);
+  const handleApplyFilters = (incomingFilters = {}) => {
+    // Start from existing filters, then apply incoming
+    const updatedFilters = {
+      ...searchState.filters,
+      ...incomingFilters,
+    };
+
+    // If incoming explicitly clears facets, drop all facet keys
+    if (incomingFilters.__clearFacets) {
+      FACET_KEYS.forEach((key) => delete updatedFilters[key]);
+    } else {
+      // Normalize facet keys: if explicitly provided empty, remove them; if provided with values, set them
+      FACET_KEYS.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(incomingFilters, key)) {
+          if (Array.isArray(incomingFilters[key]) && incomingFilters[key].length > 0) {
+            updatedFilters[key] = incomingFilters[key];
+          } else {
+            delete updatedFilters[key];
+          }
+        }
+      });
+    }
+
+    // Persist per-DB filters
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: updatedFilters
+    }));
+
+    searchState.setFilters(updatedFilters);
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchState.inputValue,
+      // Keep the structured query (JSON) when syncing filters to the URL
+      query: searchState.searchQuery,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: newFilters,
+      filters: updatedFilters,
     });
   };
 
@@ -361,7 +396,8 @@ const SearchResultsPage = () => {
     searchState.setPermutationId(newPermutationId);
     pagination.resetAllPages();
     urlSync.updateURL({
-      query: searchState.inputValue,
+      // Preserve JSON query structure when switching permutations
+      query: searchState.searchQuery,
       page: 1,
       permutationId: newPermutationId,
       permutationParams: searchState.permutationParams,
@@ -392,13 +428,15 @@ const SearchResultsPage = () => {
 
   const handleDatabaseChange = (newDbId) => {
     setActiveDatabase(newDbId);
+    const dbFilters = filtersByDb[newDbId] || {};
+    searchState.setFilters(dbFilters);
     const newDbPage = pagination.getCurrentPage(newDbId);
     urlSync.updateURL({
       query: searchState.searchQuery,
       page: newDbPage,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: searchState.filters,
+      filters: dbFilters,
     });
   };
 
@@ -471,7 +509,8 @@ const SearchResultsPage = () => {
         tablePagination.pageSize,
         searchState.searchQuery,
         searchState.permutationId,
-        searchState.permutationParams
+        searchState.permutationParams,
+        searchState.filters
       );
 
       const newRecords = tableData.data;
@@ -578,6 +617,11 @@ const SearchResultsPage = () => {
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
+          onApplyFilters={handleApplyFilters}
+          activeFilters={searchState.filters}
+          searchQuery={searchState.searchQuery}
+          permutationId={searchState.permutationId}
+          permutationParams={searchState.permutationParams}
           topOffset={headerHeight}
         />
 
