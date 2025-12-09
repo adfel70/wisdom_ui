@@ -132,23 +132,24 @@ const HomePage = () => {
       // Already in JSON format from query builder
       queryJSON = query;
     } else {
-      // Check if we have a stored JSON query from QueryBuilder
-      if (searchQueryJSON && normalizeQueryString(searchQuery) === normalizeQueryString(query)) {
-        // User clicked search after using QueryBuilder - use the stored JSON to preserve bdt
-        queryJSON = searchQueryJSON;
-      } else {
-        // Simple string input - parse to JSON format
-        if (!query || !query.trim()) return;
+      // Simple string input - parse to JSON format (always use the latest text, then merge BDTs)
+      if (!query || !query.trim()) return;
 
-        // Use queryStringToJSON to properly parse AND/OR operators
-        queryJSON = queryStringToJSON(query);
-      }
+      const parsed = queryStringToJSON(query);
+      // If we have stored JSON (e.g., from QueryBuilder), merge its BDT tags onto the latest terms
+      queryJSON = searchQueryJSON
+        ? (mergeBdtIntoQuery(searchQueryJSON, parsed) || parsed)
+        : parsed;
     }
 
     // Validate query is not empty
     if (!queryJSON || queryJSON.length === 0) {
       return;
     }
+
+    // Persist the latest string + JSON so downstream (and debounced onChange) stay aligned
+    setSearchQuery(query);
+    setSearchQueryJSON(queryJSON);
 
     // Navigate to results page with search params
     const params = new URLSearchParams({ q: JSON.stringify(queryJSON) });
