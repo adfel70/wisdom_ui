@@ -423,6 +423,7 @@ const TableCard = ({
   const [columnOrder, setColumnOrder] = useState(table?.columns || []);
   const [gridApi, setGridApi] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
+  const gridContainerRef = useRef(null);
 
   const hasRows = Array.isArray(table?.data) && table.data.length > 0;
   const expectsRows = (table?.count ?? 0) > 0;
@@ -704,14 +705,35 @@ const TableCard = ({
     });
   }, []);
 
-  // Handle keyboard events for cell copying
+  // Clear the tracked cell when clicking outside the grid to avoid hijacking copy
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!gridContainerRef.current) return;
+      if (!gridContainerRef.current.contains(event.target)) {
+        setSelectedCell(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, []);
+
+  // Handle keyboard events for cell copying, but only when focus is inside the grid
   useEffect(() => {
     const handleKeyDown = async (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'c' && selectedCell) {
+      if (!gridContainerRef.current) return;
+
+      const isInsideGrid =
+        gridContainerRef.current.contains(document.activeElement) ||
+        gridContainerRef.current.contains(event.target);
+
+      if (!isInsideGrid) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedCell) {
         try {
           const cellValue = selectedCell.value ?? 'N/A';
           await navigator.clipboard.writeText(cellValue);
-          event.preventDefault(); // Prevent default copy behavior
+          event.preventDefault(); // Prevent default copy behavior within grid
         } catch (error) {
           console.error('Failed to copy cell value:', error);
         }
@@ -899,7 +921,7 @@ const TableCard = ({
             </Box>
           ) : (
             <>
-              <Box sx={{ height: '100%', width: '100%' }}>
+              <Box sx={{ height: '100%', width: '100%' }} ref={gridContainerRef}>
                 <AgGridReact
                   theme={themeQuartz}
                   rowData={rowData}
