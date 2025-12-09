@@ -1,9 +1,236 @@
 /**
  * Search and filter utilities for database operations
+ * Updated to handle JSON query format:
+ * [
+ *   { type: 'clause', content: { value: string, bdt: string|null } },
+ *   { type: 'operator', content: { operator: 'AND'|'OR' } },
+ *   { type: 'subQuery', content: { elements: [...] } }
+ * ]
  */
 
 import { applyPermutation } from './permutationUtils';
 import { normalizeFacetArray } from './facetUtils';
+
+/**
+ * Evaluate a JSON query element against a row
+ * @param {Object} element - Query element (clause, operator, or subQuery)
+ * @param {Object} row - Table row object
+ * @param {Object} metadata - Table metadata (for bdt filtering)
+ * @param {Object} expandedTerms - Optional expanded terms with permutations {original: [variants]}
+ * @returns {boolean|null} True if matches, false if doesn't match, null for operators
+ */
+const evaluateElement = (element, row, metadata, expandedTerms = {}) => {
+  if (element.type === 'clause') {
+    const { value, bdt } = element.content;
+
+    // For Phase 1, bdt is always null - search all fields
+    // Later, bdt will filter to specific column types
+
+    // Check if we have expanded terms (permutations)
+    if (expandedTerms[value]) {
+      // Check if ANY permutation variant matches
+      return expandedTerms[value].some(variant => {
+        const lowerVariant = variant.toLowerCase();
+        return Object.values(row).some(fieldValue =>
+          String(fieldValue).toLowerCase().includes(lowerVariant)
+        );
+      });
+    }
+
+    // No permutation - check original term
+    const lowerTerm = value.toLowerCase();
+    return Object.values(row).some(fieldValue =>
+      String(fieldValue).toLowerCase().includes(lowerTerm)
+    );
+  }
+
+  if (element.type === 'operator') {
+    // Operators don't evaluate - they're handled by evaluateQueryElements
+    return null;
+  }
+
+  if (element.type === 'subQuery') {
+    // Recursively evaluate the subquery
+    return evaluateQueryElements(element.content.elements, row, metadata, expandedTerms);
+  }
+
+  return false;
+};
+
+/**
+ * Evaluate a JSON query array against a row
+ * Processes clauses, operators, and subQueries in sequence
+ * @param {Array} elements - Array of query elements
+ * @param {Object} row - Table row object
+ * @param {Object} metadata - Table metadata
+ * @param {Object} expandedTerms - Optional expanded terms with permutations
+ * @returns {boolean} True if row matches the query
+ */
+const evaluateQueryElements = (elements, row, metadata, expandedTerms = {}) => {
+  if (!elements || elements.length === 0) return true;
+
+  let result = null;
+  let pendingOperator = null;
+
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+
+    if (element.type === 'operator') {
+      pendingOperator = element.content.operator;
+      continue;
+    }
+
+    // Evaluate this element
+    const elementResult = evaluateElement(element, row, metadata, expandedTerms);
+
+    if (result === null) {
+      // First element - just store the result
+      result = elementResult;
+    } else if (pendingOperator) {
+      // Apply the operator
+      if (pendingOperator === 'AND') {
+        result = result && elementResult;
+      } else if (pendingOperator === 'OR') {
+        result = result || elementResult;
+      }
+      pendingOperator = null;
+    }
+  }
+
+  return result !== null ? result : true;
+};
+
+/**
+ * Extract all search terms from a JSON query
+ * @param {Array} elements - Array of query elements
+ * @returns {Array} Array of term strings
+ */
+const extractTermsFromQuery = (elements) => {
+  const terms = [];
+
+  if (!elements || !Array.isArray(elements)) return terms;
+
+  for (const element of elements) {
+    if (element.type === 'clause') {
+      terms.push(element.content.value);
+    } else if (element.type === 'subQuery') {
+      terms.push(...extractTermsFromQuery(element.content.elements));
+    }
+  }
+
+  return terms;
+};
+
+/**
+ * Convert JSON query array to a display string
+ * For showing in the search input field
+ * @param {Array|string} queryJSON - JSON query array or already a string
+ * @returns {string} Display string (e.g., "john AND marketing")
+ */
+export const queryJSONToString = (queryJSON) => {
+  // If it's already a string, return it as-is
+  if (typeof queryJSON === 'string') {
+    return queryJSON;
+  }
+
+  // If it's not an array or is empty, return empty string
+  if (!queryJSON || !Array.isArray(queryJSON) || queryJSON.length === 0) {
+    return '';
+  }
+
+  const buildString = (elements) => {
+    const parts = [];
+
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+
+      if (element.type === 'clause') {
+        parts.push(element.content.value);
+      } else if (element.type === 'operator') {
+        parts.push(element.content.operator);
+      } else if (element.type === 'subQuery') {
+        const subString = buildString(element.content.elements);
+        parts.push(`(${subString})`);
+      }
+    }
+
+    return parts.join(' ');
+  };
+
+  return buildString(queryJSON);
+};
+
+/**
+ * Convert a query string to JSON query array
+ * Simple parser for basic AND/OR queries with parentheses
+ * @param {string|Array} queryString - Query string (e.g., "john AND marketing") or already a JSON array
+ * @returns {Array} JSON query array
+ */
+export const queryStringToJSON = (queryString) => {
+  // If it's already an array, return it as-is
+  if (Array.isArray(queryString)) {
+    return queryString;
+  }
+
+  // If it's not a string or is empty, return empty array
+  if (!queryString || typeof queryString !== 'string' || !queryString.trim()) {
+    return [];
+  }
+
+  // Use the existing parseQueryString and parseTokensToAST functions
+  const tokens = parseQueryString(queryString);
+
+  // Convert tokens to JSON format
+  const convertTokensToJSON = (tokens) => {
+    const elements = [];
+    let i = 0;
+    const stack = [elements]; // Stack to handle nested groups
+
+    while (i < tokens.length) {
+      const token = tokens[i];
+      const currentElements = stack[stack.length - 1];
+
+      if (token.type === 'term') {
+        currentElements.push({
+          type: 'clause',
+          content: {
+            value: token.value,
+            bdt: null
+          }
+        });
+      } else if (token.type === 'keyword') {
+        currentElements.push({
+          type: 'operator',
+          content: {
+            operator: token.value.toUpperCase()
+          }
+        });
+      } else if (token.type === 'parenthesis' && token.value === '(') {
+        // Start a new subQuery
+        const subElements = [];
+        stack.push(subElements);
+      } else if (token.type === 'parenthesis' && token.value === ')') {
+        // Close the subQuery
+        if (stack.length > 1) {
+          const subElements = stack.pop();
+          const parentElements = stack[stack.length - 1];
+          parentElements.push({
+            type: 'subQuery',
+            content: {
+              elements: subElements
+            }
+          });
+        }
+      }
+
+      i++;
+    }
+
+    return elements;
+  };
+
+  return convertTokensToJSON(tokens);
+};
 
 /**
  * Expand all terms in groups with permutations
@@ -344,50 +571,19 @@ const extractTermsFromAST = (node) => {
 /**
  * Search through table data for matching values
  * @param {Array} tables - Array of table objects
- * @param {string|Object} query - Search query string OR object with {tokens, currentInput}
+ * @param {Array} query - JSON query array format
  * @param {string} permutationId - Optional permutation to apply to search terms
  * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Filtered tables with matching data
  */
 export const searchTables = (tables, query, permutationId = 'none', permutationParams = {}) => {
   // Handle empty query
-  if (!query) return tables;
-
-  let tokens = [];
-  let currentInput = '';
-
-  // Handle string queries (parse for AND/OR keywords and parentheses)
-  if (typeof query === 'string') {
-    if (!query.trim()) return tables;
-    tokens = parseQueryString(query);
-  } else {
-    // Handle token-based queries
-    tokens = query.tokens || [];
-    currentInput = query.currentInput || '';
-  }
-
-  // If no tokens and no input, return all tables
-  if (tokens.length === 0 && !currentInput.trim()) {
+  if (!query || !Array.isArray(query) || query.length === 0) {
     return tables;
   }
 
-  // Parse tokens into AST (supports nested parentheses)
-  const ast = parseTokensToAST(tokens);
-
-  // If there's current input, parse it and combine with main AST using OR
-  let finalAST = ast;
-  if (currentInput.trim()) {
-    const inputTokens = parseQueryString(currentInput);
-    const inputAST = parseTokensToAST(inputTokens);
-    if (inputAST) {
-      finalAST = ast ? { type: 'or', left: ast, right: inputAST } : inputAST;
-    }
-  }
-
-  if (!finalAST) return tables;
-
-  // Extract all terms from AST and apply permutations
-  const allTerms = extractTermsFromAST(finalAST);
+  // Extract all terms from query and apply permutations
+  const allTerms = extractTermsFromQuery(query);
   const expandedTerms = {};
 
   if (permutationId && permutationId !== 'none') {
@@ -396,11 +592,11 @@ export const searchTables = (tables, query, permutationId = 'none', permutationP
     });
   }
 
-  // Filter tables using AST evaluation
+  // Filter tables using query evaluation
   return tables
     .map(table => {
       const filteredData = table.data.filter(row =>
-        evaluateAST(finalAST, row, expandedTerms)
+        evaluateQueryElements(query, row, table, expandedTerms)
       );
 
       return {
@@ -526,7 +722,7 @@ export const filterTables = (tables, filters) => {
 /**
  * Apply both search and filters to tables
  * @param {Array} tables - Array of table objects
- * @param {string} query - Search query
+ * @param {Array} query - JSON query array
  * @param {Object} filters - Filter criteria
  * @param {string} permutationId - Optional permutation to apply to search terms
  * @param {Object} permutationParams - Optional parameters for the permutation function
@@ -541,7 +737,7 @@ export const applySearchAndFilters = (tables, query, filters, permutationId = 'n
   }
 
   // Then apply search with permutations
-  if (query && query.trim()) {
+  if (query && Array.isArray(query) && query.length > 0) {
     result = searchTables(result, query, permutationId, permutationParams);
   }
 
@@ -551,19 +747,17 @@ export const applySearchAndFilters = (tables, query, filters, permutationId = 'n
 /**
  * Get expanded query information for display purposes
  * Returns the original terms and their permuted variants
- * @param {string} query - Search query string
+ * @param {Array} query - JSON query array
  * @param {string} permutationId - The permutation ID to apply
  * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Object} Object with original terms and their variants
  */
 export const getExpandedQueryInfo = (query, permutationId, permutationParams = {}) => {
-  if (!query || !permutationId || permutationId === 'none') {
+  if (!query || !Array.isArray(query) || query.length === 0 || !permutationId || permutationId === 'none') {
     return null;
   }
 
-  const tokens = parseQueryString(query);
-  const ast = parseTokensToAST(tokens);
-  const allTerms = extractTermsFromAST(ast);
+  const allTerms = extractTermsFromQuery(query);
 
   const allVariants = {};
   allTerms.forEach(term => {
@@ -577,37 +771,18 @@ export const getExpandedQueryInfo = (query, permutationId, permutationParams = {
  * Highlight matching text in search results
  * Supports both simple queries and complex AND/OR queries with permutations
  * @param {string} text - Text to highlight
- * @param {string|Object} query - Search query (string or {tokens, currentInput})
+ * @param {Array} query - JSON query array
  * @param {string} permutationId - Optional permutation to apply to search terms
  * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Array of text parts with highlighting info
  */
 export const highlightText = (text, query, permutationId = 'none', permutationParams = {}) => {
-  if (!query || !text) return [{ text, highlight: false }];
-
-  // Extract search terms from query (excluding keywords and parentheses)
-  let searchTerms = [];
-
-  if (typeof query === 'string') {
-    // Parse string query to extract terms
-    const tokens = parseQueryString(query);
-    searchTerms = tokens
-      .filter(token => token.type === 'term')
-      .map(token => token.value);
-  } else {
-    // Extract terms from token-based query
-    const tokens = query.tokens || [];
-    searchTerms = tokens
-      .filter(token => token.type === 'term')
-      .map(token => token.value);
-
-    // Also include current input if present
-    if (query.currentInput && query.currentInput.trim()) {
-      const inputTokens = parseQueryString(query.currentInput.trim());
-      const inputTerms = inputTokens.filter(t => t.type === 'term').map(t => t.value);
-      searchTerms.push(...inputTerms);
-    }
+  if (!query || !Array.isArray(query) || query.length === 0 || !text) {
+    return [{ text, highlight: false }];
   }
+
+  // Extract search terms from JSON query
+  const searchTerms = extractTermsFromQuery(query);
 
   if (searchTerms.length === 0) {
     return [{ text, highlight: false }];
@@ -647,5 +822,7 @@ export default {
   filterTables,
   applySearchAndFilters,
   highlightText,
-  getExpandedQueryInfo
+  getExpandedQueryInfo,
+  queryJSONToString,
+  queryStringToJSON
 };

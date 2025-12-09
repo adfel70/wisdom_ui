@@ -11,7 +11,22 @@ export const useURLSync = () => {
 
   // Read all search-related params from URL
   const readParamsFromURL = useCallback(() => {
-    const query = searchParams.get('q') || '';
+    // Parse query as JSON array
+    const queryStr = searchParams.get('q') || '';
+    let query = [];
+    if (queryStr) {
+      try {
+        query = JSON.parse(queryStr);
+        // Validate it's an array
+        if (!Array.isArray(query)) {
+          query = [];
+        }
+      } catch (e) {
+        console.error('Failed to parse query from URL:', e);
+        query = [];
+      }
+    }
+
     const permutation = searchParams.get('permutation') || 'none';
     const permParamsStr = searchParams.get('permutationParams') || '';
     const permParams = permParamsStr ? JSON.parse(permParamsStr) : {};
@@ -47,9 +62,9 @@ export const useURLSync = () => {
   const buildURLParams = useCallback((state) => {
     const params = new URLSearchParams();
 
-    // Add query
-    if (state.query) {
-      params.append('q', state.query);
+    // Add query (JSON array format)
+    if (state.query && Array.isArray(state.query) && state.query.length > 0) {
+      params.append('q', JSON.stringify(state.query));
     }
 
     // Add page

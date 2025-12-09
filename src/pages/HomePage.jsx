@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Container, Typography, Paper, Button, Chip, Menu, MenuItem } from '@mui/material';
 import { School, FilterList, Shuffle, ChevronRight, AccountTree } from '@mui/icons-material';
@@ -7,6 +7,7 @@ import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
 import QueryBuilderModal from '../components/QueryBuilderModal';
 import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
+import { queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
 
 /**
  * HomePage Component
@@ -14,7 +15,8 @@ import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
  */
 const HomePage = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');  // Display string for input
+  const [searchQueryJSON, setSearchQueryJSON] = useState(null);  // Actual query JSON from QueryBuilder
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [filters, setFilters] = useState({});
@@ -22,6 +24,83 @@ const HomePage = () => {
   const [permutationParams, setPermutationParams] = useState({});
   const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
+  const isApplyingQueryBuilderRef = useRef(false);  // Flag to prevent clearing JSON during apply
+
+  // Normalize query strings for comparisons (case- and whitespace-insensitive)
+  const normalizeQueryString = (str) =>
+    (str || '').replace(/\s+/g, '').toLowerCase();
+
+  // Merge BDT selections from a previous query into a new parsed query (sequential clause mapping)
+  const mergeBdtIntoQuery = (prevQuery, nextQuery) => {
+    if (!Array.isArray(prevQuery) || !Array.isArray(nextQuery)) return null;
+
+    const normalizeVal = (v) => (v || '').trim().toLowerCase();
+
+    const collectClauses = (elements, bucket) => {
+      if (!elements) return;
+      elements.forEach(el => {
+        if (el.type === 'clause') {
+          bucket.push(el);
+        } else if (el.type === 'subQuery') {
+          collectClauses(el.content?.elements, bucket);
+        }
+      });
+    };
+
+    const prevClauses = [];
+    const nextClauses = [];
+    collectClauses(prevQuery, prevClauses);
+    collectClauses(nextQuery, nextClauses);
+
+    if (prevClauses.length === 0 || nextClauses.length === 0) {
+      return nextQuery;
+    }
+
+    const usedPrev = new Set();
+    const pickBdt = (value, fallbackIdx) => {
+      const norm = normalizeVal(value);
+
+      let matchIdx = prevClauses.findIndex((c, idx) =>
+        !usedPrev.has(idx) && normalizeVal(c.content?.value) === norm
+      );
+
+      if (matchIdx === -1 && typeof fallbackIdx === 'number' && fallbackIdx < prevClauses.length && !usedPrev.has(fallbackIdx)) {
+        matchIdx = fallbackIdx;
+      }
+
+      if (matchIdx === -1) return null;
+      usedPrev.add(matchIdx);
+      return prevClauses[matchIdx]?.content?.bdt ?? null;
+    };
+
+    let idx = 0;
+    const apply = (elements) =>
+      elements.map(el => {
+        if (el.type === 'clause') {
+          const merged = {
+            ...el,
+            content: {
+              ...el.content,
+              bdt: pickBdt(el.content?.value, idx),
+            },
+          };
+          idx += 1;
+          return merged;
+        }
+        if (el.type === 'subQuery') {
+          return {
+            ...el,
+            content: {
+              ...el.content,
+              elements: apply(el.content?.elements || []),
+            },
+          };
+        }
+        return el;
+      });
+
+    return apply(nextQuery);
+  };
 
   // Get selected permutation metadata
   const selectedPermutation = PERMUTATION_FUNCTIONS.find(p => p.id === permutationId);
@@ -46,10 +125,33 @@ const HomePage = () => {
   };
 
   const handleSearch = (query) => {
-    if (!query || !query.trim()) return;
+    // Handle both string input (from simple search) and JSON array (from query builder)
+    let queryJSON;
+
+    if (Array.isArray(query)) {
+      // Already in JSON format from query builder
+      queryJSON = query;
+    } else {
+      // Check if we have a stored JSON query from QueryBuilder
+      if (searchQueryJSON && normalizeQueryString(searchQuery) === normalizeQueryString(query)) {
+        // User clicked search after using QueryBuilder - use the stored JSON to preserve bdt
+        queryJSON = searchQueryJSON;
+      } else {
+        // Simple string input - parse to JSON format
+        if (!query || !query.trim()) return;
+
+        // Use queryStringToJSON to properly parse AND/OR operators
+        queryJSON = queryStringToJSON(query);
+      }
+    }
+
+    // Validate query is not empty
+    if (!queryJSON || queryJSON.length === 0) {
+      return;
+    }
 
     // Navigate to results page with search params
-    const params = new URLSearchParams({ q: query });
+    const params = new URLSearchParams({ q: JSON.stringify(queryJSON) });
 
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
@@ -108,9 +210,40 @@ const HomePage = () => {
     setFilters(clearedFilters);
   };
 
-  const handleQueryBuilderApply = (queryString) => {
-    setSearchQuery(queryString);
+  const handleQueryBuilderApply = (queryJSON) => {
+    // Set flag to prevent handleSearchQueryChange from clearing JSON during this update
+    isApplyingQueryBuilderRef.current = true;
+
+    // Query builder returns JSON array - store it to preserve bdt values
+    setSearchQueryJSON(queryJSON);
+
+    // Convert to string for display in search input
+    const displayString = queryJSONToString(queryJSON);
+    setSearchQuery(displayString);
+
     setIsQueryBuilderOpen(false);
+
+    // Reset flag after state updates (use setTimeout to ensure it happens after)
+    setTimeout(() => {
+      isApplyingQueryBuilderRef.current = false;
+    }, 0);
+  };
+
+  const handleSearchQueryChange = (value) => {
+    setSearchQuery(value);
+
+    // Don't clear JSON if we're in the middle of applying from QueryBuilder
+    if (isApplyingQueryBuilderRef.current) {
+      return;
+    }
+
+    // If we have a stored JSON query, try to carry BDTs forward into the new string form
+    if (searchQueryJSON) {
+      const parsedNext = queryStringToJSON(value);
+      const merged = mergeBdtIntoQuery(searchQueryJSON, parsedNext) || parsedNext;
+      setSearchQueryJSON(merged);
+      return;
+    }
   };
 
   return (
@@ -355,7 +488,7 @@ const HomePage = () => {
             >
               <SearchBar
                 value={searchQuery}
-                onChange={setSearchQuery}
+                onChange={handleSearchQueryChange}
                 onSubmit={handleSearch}
                 onFilterClick={() => setIsFilterOpen(true)}
                 onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
@@ -495,7 +628,7 @@ const HomePage = () => {
           open={isQueryBuilderOpen}
           onClose={() => setIsQueryBuilderOpen(false)}
           onApply={handleQueryBuilderApply}
-          initialQuery={searchQuery}
+          initialQuery={searchQueryJSON || queryStringToJSON(searchQuery)}
         />
       </Box>
     </motion.div>

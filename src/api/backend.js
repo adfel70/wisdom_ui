@@ -45,24 +45,122 @@ async function fetchDatabaseRecords(dbKey) {
 }
 
 /**
- * Search records by query string
- * Simple text search across all field values
+ * Evaluate a JSON query element against a record
+ * @param {Object} element - Query element (clause, operator, or subQuery)
+ * @param {Object} record - Record object (must have tableKey field)
+ * @returns {boolean|null} True if matches, false if doesn't match, null for operators
+ */
+function evaluateElement(element, record) {
+  if (element.type === 'clause') {
+    const { value, bdt } = element.content;
+    const lowerTerm = value.toLowerCase();
+
+    // If bdt is null, search all fields (Phase 1 behavior)
+    if (!bdt) {
+      return Object.values(record).some(fieldValue => {
+        if (fieldValue == null) return false;
+        return String(fieldValue).toLowerCase().includes(lowerTerm);
+      });
+    }
+
+    // Phase 2: bdt specified - only search columns with matching type
+    const tableKey = record.tableKey;
+    if (!tableKey) {
+      console.warn('Record missing tableKey, cannot filter by column type');
+      return false;
+    }
+
+    const tableMeta = METADATA[tableKey];
+    if (!tableMeta) {
+      console.warn(`Table metadata not found for ${tableKey}`);
+      return false;
+    }
+
+    // Find columns that match the specified type
+    const matchingColumns = tableMeta.columns
+      .filter(col => col.type === bdt)
+      .map(col => col.name);
+
+    if (matchingColumns.length === 0) {
+      // No columns of this type in this table
+      return false;
+    }
+
+    // Search only in columns of the specified type
+    return matchingColumns.some(columnName => {
+      const fieldValue = record[columnName];
+      if (fieldValue == null) return false;
+      return String(fieldValue).toLowerCase().includes(lowerTerm);
+    });
+  }
+
+  if (element.type === 'operator') {
+    // Operators don't evaluate - they're handled by evaluateQueryElements
+    return null;
+  }
+
+  if (element.type === 'subQuery') {
+    // Recursively evaluate the subquery
+    return evaluateQueryElements(element.content.elements, record);
+  }
+
+  return false;
+}
+
+/**
+ * Evaluate a JSON query array against a record
+ * @param {Array} elements - Array of query elements
+ * @param {Object} record - Record object
+ * @returns {boolean} True if record matches the query
+ */
+function evaluateQueryElements(elements, record) {
+  if (!elements || elements.length === 0) return true;
+
+  let result = null;
+  let pendingOperator = null;
+
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+
+    if (element.type === 'operator') {
+      pendingOperator = element.content.operator;
+      continue;
+    }
+
+    // Evaluate this element
+    const elementResult = evaluateElement(element, record);
+
+    if (result === null) {
+      // First element - just store the result
+      result = elementResult;
+    } else if (pendingOperator) {
+      // Apply the operator
+      if (pendingOperator === 'AND') {
+        result = result && elementResult;
+      } else if (pendingOperator === 'OR') {
+        result = result || elementResult;
+      }
+      pendingOperator = null;
+    }
+  }
+
+  return result !== null ? result : true;
+}
+
+/**
+ * Search records by JSON query
  * @param {Array} records - Records to search
- * @param {string} query - Search query
+ * @param {Array} query - JSON query array
  * @returns {Array} Filtered records
  */
 function searchRecords(records, query) {
-  if (!query || query.trim() === '') {
+  // Handle empty query
+  if (!query || !Array.isArray(query) || query.length === 0) {
     return records;
   }
 
-  const searchTerm = query.toLowerCase();
-
   return records.filter(record => {
-    return Object.values(record).some(value => {
-      if (value == null) return false;
-      return String(value).toLowerCase().includes(searchTerm);
-    });
+    return evaluateQueryElements(query, record);
   });
 }
 
@@ -165,6 +263,24 @@ export function getDataStats() {
 }
 
 /**
+ * Get all unique column types (bdt - business data types) from metadata
+ * @returns {Array} Sorted array of unique column type strings
+ */
+export function getColumnTypes() {
+  const types = new Set();
+
+  Object.values(METADATA).forEach(table => {
+    table.columns.forEach(column => {
+      if (column.type) {
+        types.add(column.type);
+      }
+    });
+  });
+
+  return Array.from(types).sort();
+}
+
+/**
  * Get metadata for tables in a specific database
  * Returns lightweight table information without records
  * @param {string} dbKey - Database key (e.g., 'db1')
@@ -263,7 +379,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   const strategy = getPaginationStrategy(dbKey);
 
   // If no search query, use simple pagination
-  if (!searchQuery || !searchQuery.trim()) {
+  if (!searchQuery || (Array.isArray(searchQuery) && searchQuery.length === 0)) {
     let records = [];
     let nextPaginationState = null;
     let hasMore = false;
@@ -322,7 +438,7 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   }
 
   // With search query: batch-fetch until we have pageSize matching records
-  const { applySearchAndFilters } = await import('../utils/searchUtils.js');
+  // Use server-side filtering with searchRecords function
 
   // Compute total matches for this table (used for UI badges)
   const tableForCounting = {
@@ -381,33 +497,12 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
       break;
     }
 
-    // Create temporary table object for filtering
-    const tempTable = {
-      id: tableKey,
-      name: meta.name,
-      year: meta.year,
-      country: meta.country,
-      categories: meta.categories,
-      count: meta.recordCount,
-      columns: meta.columns.map(col => col.name),
-      data: batchRecords.map(record => {
-        const { tableKey: _, ...rowData } = record;
-        return rowData;
-      })
-    };
+    // Apply server-side search filter to this batch using searchRecords
+    const filteredBatch = searchRecords(batchRecords, searchQuery);
 
-    // Apply search filter to this batch
-    const filtered = applySearchAndFilters(
-      [tempTable],
-      searchQuery,
-      {}, // Don't apply filters, they were applied in searchTablesByQuery
-      permutationId,
-      permutationParams
-    );
-
-    // Extract matching records from this batch
-    if (filtered.length > 0 && filtered[0].data.length > 0) {
-      matchingRecords = [...matchingRecords, ...filtered[0].data];
+    // Add matching records to results
+    if (filteredBatch.length > 0) {
+      matchingRecords = [...matchingRecords, ...filteredBatch];
     }
 
     // Update pagination state for next batch
@@ -420,7 +515,13 @@ export async function getTableDataPaginated(tableKey, paginationState = {}, page
   }
 
   // Limit to pageSize matching records
-  const finalRecords = matchingRecords.slice(0, pageSize);
+  const limitedRecords = matchingRecords.slice(0, pageSize);
+
+  // Remove tableKey field from records before returning
+  const finalRecords = limitedRecords.map(record => {
+    const { tableKey: _, ...rowData } = record;
+    return rowData;
+  });
 
   // Determine if there are more matching records
   const hasMoreMatches = matchingRecords.length > pageSize || hasMoreRecords;

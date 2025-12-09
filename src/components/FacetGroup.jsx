@@ -102,6 +102,7 @@ const FacetGroup = ({
             flex: '1 1 auto',
             overflowY: 'auto',
             overflowX: 'hidden',
+            width: '100%',
             pr: 0.5,
             display: 'flex',
             flexDirection: 'column',
