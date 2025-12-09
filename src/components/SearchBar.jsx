@@ -51,8 +51,8 @@ const SearchBar = ({
   // Keyboard shortcuts for transformations
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only trigger if Ctrl is pressed and we're not in an input field
-      if (e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+      // Only trigger if Alt is pressed and we're not in an input field
+      if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
         const key = e.key.toLowerCase();
         const shortcutMap = {
           'a': 'reverse',

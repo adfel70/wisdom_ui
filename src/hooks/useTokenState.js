@@ -24,6 +24,8 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   const isTransformingRef = useRef(false);
   const lastUserEditRef = useRef(false);
   const lastAnchoredTokensRef = useRef(null);
+  const tokensRef = useRef([]);
+  const currentInputRef = useRef('');
 
   // Normalize whitespace for comparison to avoid infinite loops
   const normalize = (str) => str.trim().replace(/\s+/g, ' ');
@@ -107,17 +109,26 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
         // Realign tokens/input to the incoming value
         const parsedTokens = parseValueToTokens(value);
         const hydratedTokens = applyBdtToTokens(parsedTokens);
-        setTokens(cleanupTokens(hydratedTokens));
+        const cleaned = cleanupTokens(hydratedTokens);
+        tokensRef.current = cleaned; // keep ref in sync immediately
+        setTokens(cleaned);
+        currentInputRef.current = '';
         setCurrentInput('');
         lastHydrationKeyRef.current = nextHydrationKey;
       } else if (nextHydrationKey !== lastHydrationKeyRef.current) {
         // Same string, but metadata changed (e.g., BDT updates) - reapply without anchoring input
-        setTokens(prev => applyBdtToTokens(prev));
+        setTokens(prev => {
+          const next = applyBdtToTokens(prev);
+          tokensRef.current = next; // keep ref in sync immediately
+          return next;
+        });
         lastHydrationKeyRef.current = nextHydrationKey;
       }
     } else if (!value || value === '') {
       // Value is empty, clear tokens if we have any
       if (tokens.length > 0 || currentInput.trim()) {
+        tokensRef.current = [];
+        currentInputRef.current = '';
         setTokens([]);
         setCurrentInput('');
         lastHydrationKeyRef.current = '';
@@ -150,6 +161,15 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     }
   }, [tokens, currentInput, hasTransformed]);
 
+  // Keep refs in sync for up-to-date submits (fallback sync; critical paths update immediately)
+  useEffect(() => {
+    tokensRef.current = tokens;
+  }, [tokens]);
+
+  useEffect(() => {
+    currentInputRef.current = currentInput;
+  }, [currentInput]);
+
   // Notify parent component of changes to keep state synchronized
   // Debounced to prevent excessive re-renders and improve typing performance
   useEffect(() => {
@@ -165,9 +185,10 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
 
   // Anchor current input as a term
   const anchorCurrentInput = () => {
-    if (!currentInput.trim()) return false;
+    const inputValue = currentInputRef.current ?? currentInput;
+    if (!inputValue.trim()) return false;
 
-    const trimmed = currentInput.trim();
+    const trimmed = inputValue.trim();
     const parsed = parseInput(trimmed);
     const newTokens = [];
 
@@ -208,8 +229,10 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
         }
         const cleaned = cleanupTokens(combined);
         lastAnchoredTokensRef.current = cleaned;
+        tokensRef.current = cleaned; // keep ref in sync immediately
         return cleaned;
       });
+      currentInputRef.current = '';
       setCurrentInput('');
       return true;
     }
@@ -231,6 +254,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
   // Handle input change
   const handleInputChange = (e) => {
     const newValue = e.target.value;
+    currentInputRef.current = newValue;
 
     // Check if user just typed a space after a keyword
     if (newValue.endsWith(' ')) {
@@ -277,13 +301,21 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
           } else {
             combined = [...prev, ...newTokens];
           }
-          return cleanupTokens(combined, false); // Don't remove trailing during auto-parse
+          const cleaned = cleanupTokens(combined, false); // Don't remove trailing during auto-parse
+          tokensRef.current = cleaned; // keep ref in sync immediately
+          return cleaned;
         });
+        currentInputRef.current = '';
         setCurrentInput('');
         return;
       } else if (isKeyword(lastWord) && words.length === 1 && tokens.length > 0) {
         // Single keyword after existing tokens (e.g., typing "or " after pressing Enter)
-        setTokens(prev => cleanupTokens([...prev, { type: 'keyword', value: lastWord.toLowerCase() }], false)); // Don't remove trailing during auto-parse
+        setTokens(prev => {
+          const cleaned = cleanupTokens([...prev, { type: 'keyword', value: lastWord.toLowerCase() }], false); // Don't remove trailing during auto-parse
+          tokensRef.current = cleaned; // keep ref in sync immediately
+          return cleaned;
+        });
+        currentInputRef.current = '';
         setCurrentInput('');
         return;
       }
@@ -314,7 +346,11 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
       e.preventDefault();
       // Delete the last token
       markUserEdit();
-      setTokens(prev => cleanupTokens(prev.slice(0, -1)));
+      setTokens(prev => {
+        const cleaned = cleanupTokens(prev.slice(0, -1));
+        tokensRef.current = cleaned; // keep ref in sync immediately
+        return cleaned;
+      });
       return;
     }
   };
@@ -346,12 +382,15 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
 
       // Clean up and check for empty parenthesis groups
       const cleaned = cleanupTokens(filtered);
+      tokensRef.current = cleaned; // keep ref in sync immediately
       return removeEmptyParenthesisGroups(cleaned);
     });
   };
 
   // Clear all tokens and input
   const clearAll = () => {
+    tokensRef.current = [];
+    currentInputRef.current = '';
     setTokens([]);
     setCurrentInput('');
     // Reset transform state when clearing
@@ -364,6 +403,7 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
 
     isTransformingRef.current = true;
     lastUserEditRef.current = false;
+    lastAnchoredTokensRef.current = null; // discard any pre-transform anchor snapshot
 
     // Store original text and tokens before first transformation
     if (!hasTransformed) {
@@ -382,11 +422,20 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
       }
       return token; // Keep keywords unchanged
     });
-    setTokens(cleanupTokens(transformedTokens));
+    const cleanedTokens = cleanupTokens(transformedTokens);
+    tokensRef.current = cleanedTokens; // keep ref in sync immediately
+    setTokens(cleanedTokens);
 
     // Apply transformation to current input text (chainable)
     const transformed = applyTransformation(currentInput, transformId);
+    currentInputRef.current = transformed; // keep ref in sync immediately
     setCurrentInput(transformed);
+
+    // Immediately sync the latest transformed query to parent (avoid waiting for debounce)
+    if (onChange) {
+      const nextQuery = buildQueryFromTokens(cleanedTokens, transformed).trim();
+      onChange(nextQuery);
+    }
 
     // Reset the transforming flag after a short delay to allow state updates to complete
     // Defer clearing the transforming flag until after effects run
@@ -409,8 +458,8 @@ export const useTokenState = (value, onChange, onSubmit, options = {}) => {
     anchorCurrentInput();
     // Small delay to let state update before executing search (use the most recent anchored tokens if available)
     setTimeout(() => {
-      const nextTokens = lastAnchoredTokensRef.current || tokens;
-      executeSearch(nextTokens, '');
+      const nextTokens = lastAnchoredTokensRef.current || tokensRef.current || tokens;
+      executeSearch(nextTokens, currentInputRef.current || '');
     }, 30);
   };
 
