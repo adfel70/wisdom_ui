@@ -64,7 +64,11 @@
     "filters": { "categories": ["Finance"], "year": "all" },
     "permutations": {
       "active": ["active", "ACTIVE"]  // term -> variants; OR’d per clause
-    }
+    },
+    "picked_tables": [
+      { "db": "db1", "table": "t1" },
+      { "db": "db1", "table": "t2" }
+    ]
   }
   ```
 - Returns:
@@ -92,6 +96,9 @@
     "permutations": {
       "active": ["active", "ACTIVE"]
     },
+    "picked_tables": [
+      { "db": "db1", "table": "t1" }
+    ],
     "options": {
       "db": "db1",
       "table": "t1",

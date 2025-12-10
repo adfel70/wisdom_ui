@@ -29,7 +29,7 @@ def bdts():
 
 @router.post("/search/tables")
 def search_tables_route(payload: SearchTablesRequest):
-    return search_tables(payload.db, payload.query, payload.filters, payload.permutations)
+    return search_tables(payload.db, payload.query, payload.filters, payload.permutations, payload.picked_tables)
 
 
 @router.post("/search/rows")
@@ -44,6 +44,7 @@ def search_rows_route(payload: SearchRowsRequest):
         payload.query,
         payload.filters,
         payload.permutations,
+        payload.picked_tables,
         page_number,
         start_row,
         size_limit,

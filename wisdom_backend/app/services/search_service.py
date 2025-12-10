@@ -122,6 +122,7 @@ def _filter_tables_by_filters(tables: List[Dict[str, Any]], filters: Filters) ->
     f = filters
     out = []
     for t in tables:
+        # selectedTables acts as an allow-list if present
         if f.selectedTables and t["id"] not in f.selectedTables:
             continue
         if f.tableName and f.tableName.lower() not in t.get("name", "").lower():
@@ -146,6 +147,15 @@ def _filter_tables_by_filters(tables: List[Dict[str, Any]], filters: Filters) ->
             continue
         out.append(t)
     return out
+
+
+def _apply_picked_tables_constraint(tables: List[Dict[str, Any]], picked_tables: Optional[List[Dict[str, str]]]) -> List[Dict[str, Any]]:
+    if not picked_tables:
+        return tables
+    allowed = {item["table"] for item in picked_tables if "table" in item}
+    if not allowed:
+        return []
+    return [t for t in tables if t["id"] in allowed]
 
 
 def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) -> Dict[str, Dict[str, int]]:
@@ -183,6 +193,7 @@ def search_tables(
     query: Optional[Any],
     filters: Optional[Filters],
     permutations: Optional[Dict[str, List[str]]] = None,
+    picked_tables: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
@@ -210,6 +221,7 @@ def search_tables(
     tables = [_table_meta_from_key(tid, table_meta) for tid in table_ids]
     tables = [t for t in tables if t]
     tables = _filter_tables_by_filters(tables, filters)
+    tables = _apply_picked_tables_constraint(tables, picked_tables)
     facets = _build_facets(tables, table_counts)
 
     return {"tables": tables, "facets": facets, "total": len(tables)}
@@ -221,6 +233,7 @@ def search_rows(
     query: Optional[Any],
     filters: Optional[Filters],
     permutations: Optional[Dict[str, List[str]]],
+    picked_tables: Optional[List[Dict[str, str]]],
     page_number: int,
     start_row: int,
     size_limit: int,
@@ -232,13 +245,21 @@ def search_rows(
     if table_key not in assignments.get(db_key, []):
         raise HTTPException(status_code=404, detail=f"Table {table_key} not in database {db_key}")
 
-    # If filters explicitly exclude the table, return empty
+    # If filters or picked_tables explicitly exclude the table, return empty
     if filters.selectedTables and table_key not in filters.selectedTables:
         return {
             "columns": [],
             "rows": [],
             "pagination": {"hasMore": False, "nextOffset": None, "pageNumber": page_number, "pageSize": size_limit, "totalRecords": 0},
         }
+    if picked_tables:
+        allowed = {item["table"] for item in picked_tables if "table" in item}
+        if allowed and table_key not in allowed:
+            return {
+                "columns": [],
+                "rows": [],
+                "pagination": {"hasMore": False, "nextOffset": None, "pageNumber": page_number, "pageSize": size_limit, "totalRecords": 0},
+            }
 
     records = [r for r in load_records(db_key) if r.get("tableKey") == table_key]
     filtered_records = _apply_query_to_records(records, query, table_meta_all, permutations)

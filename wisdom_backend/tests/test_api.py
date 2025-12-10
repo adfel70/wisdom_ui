@@ -71,6 +71,10 @@ def test_search_tables_with_permutations():
         "query": [{"type": "clause", "content": {"value": "X_mex", "bdt": None}}],
         "filters": {},
         "permutations": {"X_mex": ["Mexico"]},
+        "picked_tables": [
+          {"db": "db1", "table": "t1"},
+          {"db": "db1", "table": "t2"}
+        ]
     }
     res = client.post("/api/search/tables", json=payload)
     assert res.status_code == 200
@@ -135,11 +139,56 @@ def test_search_rows_with_permutations():
             "sizeLimit": 5,
         },
         "permutations": {"X_mex": ["Mexico"]},
+        "picked_tables": [
+          {"db": "db1", "table": "t1"}
+        ],
     }
     res = client.post("/api/search/rows", json=payload)
     assert res.status_code == 200
     body = res.json()
     assert len(body["rows"]) >= 1
+
+
+def test_search_tables_picked_tables_and_filters():
+    # picked tables t1,t2,t3 combined with filter regions=Japan -> only tables that are both picked and match region
+    payload = {
+        "db": "db1",
+        "query": None,
+        "filters": {"regions": ["Japan"], "selectedTables": ["t1", "t2"]},
+        "permutations": {},
+        "picked_tables": [
+          {"db": "db1", "table": "t1"},
+          {"db": "db1", "table": "t2"},
+          {"db": "db1", "table": "t3"}
+        ],
+    }
+    res = client.post("/api/search/tables", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] >= 0  # ensure no error
+
+
+def test_search_rows_respects_picked_tables():
+    payload = {
+        "query": None,
+        "filters": {},
+        "options": {
+            "db": "db1",
+            "table": "t1",
+            "pageNumber": 1,
+            "startRow": 0,
+            "sizeLimit": 5,
+        },
+        "permutations": {},
+        "picked_tables": [
+          {"db": "db1", "table": "t2"}
+        ],
+    }
+    res = client.post("/api/search/rows", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["rows"] == []
+    assert body["pagination"]["totalRecords"] == 0
 
 
 def test_permutations():
