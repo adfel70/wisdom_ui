@@ -104,7 +104,7 @@ const evaluateQueryElements = (elements, row, metadata, expandedTerms = {}) => {
  * @param {Array} elements - Array of query elements
  * @returns {Array} Array of term strings
  */
-const extractTermsFromQuery = (elements) => {
+export const extractTermsFromQuery = (elements) => {
   const terms = [];
 
   if (!elements || !Array.isArray(elements)) return terms;
@@ -718,7 +718,13 @@ export const getExpandedQueryInfo = (query, permutationId, permutationParams = {
  * @param {Object} permutationParams - Optional parameters for the permutation function
  * @returns {Array} Array of text parts with highlighting info
  */
-export const highlightText = (text, query, permutationId = 'none', permutationParams = {}) => {
+export const highlightText = (
+  text,
+  query,
+  permutationId = 'none',
+  permutationParams = {},
+  permutationVariants = null
+) => {
   if (!query || !Array.isArray(query) || query.length === 0 || !text) {
     return [{ text, highlight: false }];
   }
@@ -731,14 +737,30 @@ export const highlightText = (text, query, permutationId = 'none', permutationPa
   }
 
   // Expand search terms with permutations if applicable
-  let allTermsToHighlight = searchTerms;
-  if (permutationId && permutationId !== 'none') {
-    allTermsToHighlight = [];
+  const highlightSet = new Set(searchTerms.map(term => String(term)));
+  if (permutationVariants && typeof permutationVariants === 'object') {
+    searchTerms.forEach(term => {
+      const variants = permutationVariants[term];
+      if (Array.isArray(variants)) {
+        variants.forEach(variant => {
+          if (variant !== undefined && variant !== null) {
+            highlightSet.add(String(variant));
+          }
+        });
+      }
+    });
+  } else if (permutationId && permutationId !== 'none') {
     searchTerms.forEach(term => {
       const variants = applyPermutation(term, permutationId, permutationParams);
-      allTermsToHighlight.push(...variants);
+      variants.forEach(variant => {
+        if (variant !== undefined && variant !== null) {
+          highlightSet.add(String(variant));
+        }
+      });
     });
   }
+
+  const allTermsToHighlight = Array.from(highlightSet);
 
   // Build regex pattern to match any of the search terms (including permutations)
   const escapedTerms = allTermsToHighlight.map(term =>
@@ -766,5 +788,6 @@ export default {
   highlightText,
   getExpandedQueryInfo,
   queryJSONToString,
-  queryStringToJSON
+  queryStringToJSON,
+  extractTermsFromQuery,
 };

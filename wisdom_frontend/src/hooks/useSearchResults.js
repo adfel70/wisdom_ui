@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { searchTablesByQuery, getTableDataPaginatedById } from '../data/mockDatabaseNew';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { searchTables, getTableDataPaginatedById } from '../api/backendClient';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 
 /**
@@ -25,6 +25,8 @@ export const useSearchResults = ({
   const [isSearching, setIsSearching] = useState(true);
   const [isLoadingTableData, setIsLoadingTableData] = useState(false);
   const tableDataCache = useRef(new Map());
+  const pendingTableFetches = useRef(new Set());
+  const inflightControllers = useRef(new Map());
 
   // Prune cache to only keep visible tables
   const pruneCacheToVisibleTables = useCallback((visibleIds) => {
@@ -45,10 +47,22 @@ export const useSearchResults = ({
   useEffect(() => {
     let isCancelled = false;
 
+    const hasSearchQuery =
+      (Array.isArray(searchQuery) && searchQuery.length > 0) ||
+      (typeof searchQuery === 'string' && searchQuery.trim() !== '');
+
+    const hasAnyFilters =
+      Object.values(perDbFilters || {}).some((f) => f && Object.keys(f).length > 0);
+
+    // Skip kicking off searches when there's no query and no filters selected
+    if (!hasSearchQuery && !hasAnyFilters) {
+      setIsSearching(false);
+      return undefined;
+    }
+
     // Create a signature for the current search criteria
     const currentSignature = JSON.stringify({
       query: searchQuery,
-      filters,
       perDbFilters,
       permutationId,
       permutationParams, // Don't double-stringify
@@ -64,25 +78,23 @@ export const useSearchResults = ({
 
       setIsSearching(true);
       try {
-        // Search all databases in parallel
-        const searchPromises = ['db1', 'db2', 'db3', 'db4'].map(dbId =>
-          searchTablesByQuery(
-            dbId,
-            searchQuery,
-            perDbFilters[dbId] || {},
-            permutationId,
-            permutationParams
-          )
+        // Search all databases in parallel against FastAPI backend
+        const searchPromises = ['db1', 'db2', 'db3', 'db4'].map((dbId) =>
+          searchTables({
+            db: dbId,
+            query: searchQuery,
+            filters: perDbFilters[dbId] || {},
+          })
         );
 
         const results = await Promise.all(searchPromises);
 
         if (!isCancelled) {
           setMatchingTableIds({
-            db1: results[0].tableIds,
-            db2: results[1].tableIds,
-            db3: results[2].tableIds,
-            db4: results[3].tableIds,
+            db1: results[0]?.tableIds || [],
+            db2: results[1]?.tableIds || [],
+            db3: results[2]?.tableIds || [],
+            db4: results[3]?.tableIds || [],
           });
 
           setLastSearchSignature(currentSignature);
@@ -113,7 +125,6 @@ export const useSearchResults = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     searchQuery,
-    JSON.stringify(filters), // Stringify to avoid object reference changes
     JSON.stringify(perDbFilters),
     permutationId,
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
@@ -144,7 +155,16 @@ export const useSearchResults = ({
         return;
       }
 
-      tableLoadingHook.addPendingTableIds(idsToFetch);
+      const dedupedIdsToFetch = idsToFetch.filter((id) => !pendingTableFetches.current.has(id));
+      if (dedupedIdsToFetch.length === 0) {
+        if (!isCancelled) {
+          setIsLoadingTableData(false);
+        }
+        return;
+      }
+
+      dedupedIdsToFetch.forEach((id) => pendingTableFetches.current.add(id));
+      tableLoadingHook.addPendingTableIds(dedupedIdsToFetch);
       if (!isCancelled) {
         setIsLoadingTableData(true);
       }
@@ -152,14 +172,17 @@ export const useSearchResults = ({
       try {
         // Fetch paginated data for each table (first page only)
         // Backend handles batch-fetching to return exactly RECORDS_PER_PAGE matching records
-        const tablePromises = idsToFetch.map(async (tableId) => {
+        const tablePromises = dedupedIdsToFetch.map(async (tableId) => {
+          const controller = new AbortController();
+          inflightControllers.current.set(tableId, controller);
+
           const tableData = await getTableDataPaginatedById(
             tableId,
             {}, // Initial pagination state
             RECORDS_PER_PAGE,
             searchQuery,
-            permutationId,
-            permutationParams
+            filters,
+            controller.signal
           );
 
           // Initialize pagination state for this table
@@ -182,7 +205,11 @@ export const useSearchResults = ({
       } catch (error) {
         console.error('Failed to load table data:', error);
       } finally {
-        tableLoadingHook.removePendingTableIds(idsToFetch);
+        dedupedIdsToFetch.forEach((id) => {
+          pendingTableFetches.current.delete(id);
+          inflightControllers.current.delete(id);
+        });
+        tableLoadingHook.removePendingTableIds(dedupedIdsToFetch);
         if (!isCancelled) {
           setIsLoadingTableData(false);
         }
@@ -193,6 +220,14 @@ export const useSearchResults = ({
 
     return () => {
       isCancelled = true;
+      // Abort inflight row requests and clear pending so next effect can re-fetch cleanly
+      inflightControllers.current.forEach((controller) => controller.abort());
+      inflightControllers.current.clear();
+      const pendingIds = Array.from(pendingTableFetches.current);
+      if (pendingIds.length) {
+        tableLoadingHook.removePendingTableIds(pendingIds);
+      }
+      pendingTableFetches.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

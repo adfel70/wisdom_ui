@@ -23,7 +23,7 @@ import { motion } from 'framer-motion';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ClearIcon from '@mui/icons-material/Clear';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import { getMockDatabases } from '../data/mockDatabaseNew';
+import { getDatabasesWithTables } from '../api/backendClient';
 
 /**
  * TableViewPage Component
@@ -38,10 +38,25 @@ const TableViewPage = () => {
 
   // Load all databases on mount
   useEffect(() => {
-    getMockDatabases().then(databases => {
-      setAllDatabases(databases);
-      setIsLoading(false);
-    });
+    let isCancelled = false;
+    getDatabasesWithTables()
+      .then(databases => {
+        if (!isCancelled) {
+          setAllDatabases(databases || []);
+          setIsLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load databases:', error);
+        if (!isCancelled) {
+          setAllDatabases([]);
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // Flatten all tables from all databases

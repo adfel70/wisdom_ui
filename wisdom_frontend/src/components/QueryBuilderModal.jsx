@@ -16,7 +16,7 @@ import {
   InputLabel,
 } from '@mui/material';
 import { Close as CloseIcon, Add, Close as DeleteIcon } from '@mui/icons-material';
-import { getColumnTypes } from '../api/backend';
+import { getColumnTypes } from '../api/backendClient';
 
 /**
  * QueryBuilderModal Component
@@ -133,10 +133,25 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
 
   // Load column types when modal opens
   useEffect(() => {
+    let isCancelled = false;
     if (open) {
-      const types = getColumnTypes();
-      setColumnTypes(types);
+      getColumnTypes()
+        .then((types) => {
+          if (!isCancelled) {
+            setColumnTypes(types || []);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to load column types:', error);
+          if (!isCancelled) {
+            setColumnTypes([]);
+          }
+        });
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [open]);
 
   // Initialize tree from initialQuery when modal opens
@@ -502,7 +517,6 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
             transition: 'opacity 0.2s ease, color 0.2s ease',
             '&:hover': {
               color: 'error.main',
-              backgroundColor: 'error.light',
               backgroundColor: 'rgba(239, 68, 68, 0.08)',
             }
           }}

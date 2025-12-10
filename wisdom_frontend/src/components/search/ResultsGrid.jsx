@@ -17,6 +17,7 @@ const ResultsGrid = ({
   searchQuery,
   permutationId,
   permutationParams,
+  permutationVariants,
   onSendToLastPage,
   emptyStateType,
   tablePaginationHook,
@@ -59,6 +60,7 @@ const ResultsGrid = ({
                 query={searchQuery}
                 permutationId={permutationId}
                 permutationParams={permutationParams}
+                permutationVariants={permutationVariants}
                 isLoading={isPending}
                 onSendToLastPage={onSendToLastPage}
                 hasMore={tablePaginationHook?.hasMoreRecords(tableId) || false}

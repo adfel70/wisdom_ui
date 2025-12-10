@@ -90,10 +90,16 @@ const CustomNoRowsOverlay = () => (
  * HighlightedText Component
  * Highlights matching text in search results
  */
-const HighlightedText = ({ text, query, permutationId = 'none', permutationParams = {} }) => {
+const HighlightedText = ({
+  text,
+  query,
+  permutationId = 'none',
+  permutationParams = {},
+  permutationVariants = null
+}) => {
   if (!query || !text) return <span>{text}</span>;
 
-  const parts = highlightText(text, query, permutationId, permutationParams);
+  const parts = highlightText(text, query, permutationId, permutationParams, permutationVariants);
 
   return (
     <span>
@@ -411,6 +417,7 @@ const TableCard = ({
   query,
   permutationId = 'none',
   permutationParams = {},
+  permutationVariants = null,
   isLoading = false,
   onSendToLastPage,
   hasMore = false,
@@ -571,12 +578,18 @@ const TableCard = ({
             }}
             title={params.value ?? 'N/A'}
           >
-            <HighlightedText text={params.value ?? 'N/A'} query={query} />
+            <HighlightedText
+              text={params.value ?? 'N/A'}
+              query={query}
+              permutationId={permutationId}
+              permutationParams={permutationParams}
+              permutationVariants={permutationVariants}
+            />
           </Typography>
         </Box>
       );
     },
-    [query]
+    [permutationId, permutationParams, permutationVariants, query]
   );
 
   const renderActionCell = useCallback(

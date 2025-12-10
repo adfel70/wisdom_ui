@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button } from '@mui/material';
-import { getFacetAggregatesForDb } from '../data/mockDatabaseNew';
+import { getFacetAggregatesForDb } from '../api/backendClient';
 import FacetGroup from './FacetGroup';
 
 const emptyFacets = {
@@ -50,6 +50,10 @@ const FilterPanel = ({ onApplyFilters, appliedFilters = {}, activeDatabase, sear
     getFacetAggregatesForDb(activeDatabase, searchQuery, payload)
       .then((data) => {
         setFacetData(data);
+      })
+      .catch((error) => {
+        console.error('Failed to load facet aggregates:', error);
+        setFacetData(emptyFacets);
       })
       .finally(() => setLoading(false));
   }, [appliedFilters, activeDatabase, searchQuery]);

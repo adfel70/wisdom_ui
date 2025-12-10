@@ -1,4 +1,4 @@
-import React, { useMemo, memo, useState, useCallback } from 'react';
+import React, { useMemo, memo, useState, useCallback, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -27,7 +27,7 @@ import {
   FilterList,
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { getTablesMetadataForDatabase } from '../api/backend';
+import { getTablesMetadataForDatabase } from '../api/backendClient';
 import FilterPanel from './FilterPanel';
 
 // Panel width constants
@@ -119,11 +119,35 @@ const TableSidePanel = ({
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
+  const [metadataMap, setMetadataMap] = useState(new Map());
 
-  const metadataMap = useMemo(() => {
-    if (!databaseId) return new Map();
-    const metadata = getTablesMetadataForDatabase(databaseId) || [];
-    return new Map(metadata.map(meta => [meta.id, meta]));
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadMetadata = async () => {
+      if (!databaseId) {
+        if (!isCancelled) setMetadataMap(new Map());
+        return;
+      }
+
+      try {
+        const tables = await getTablesMetadataForDatabase(databaseId);
+        if (!isCancelled) {
+          setMetadataMap(new Map((tables || []).map((meta) => [meta.id, meta])));
+        }
+      } catch (error) {
+        console.error('Failed to load table metadata:', error);
+        if (!isCancelled) {
+          setMetadataMap(new Map());
+        }
+      }
+    };
+
+    loadMetadata();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [databaseId]);
 
   const visibleSet = useMemo(() => new Set(visibleTableIds), [visibleTableIds]);

@@ -29,8 +29,15 @@ import {
 
 // Context & Utils
 import { useTableContext, PANEL_EXPANDED_WIDTH, PANEL_COLLAPSED_WIDTH } from '../context/TableContext';
-import { getDatabaseMetadata, getTableDataPaginatedById } from '../data/mockDatabaseNew';
-import { getExpandedQueryInfo, queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
+import { getDatabaseMetadata, getTableDataPaginatedById, getPermutations } from '../api/backendClient';
+import { getExpandedQueryInfo, queryJSONToString, queryStringToJSON, extractTermsFromQuery } from '../utils/searchUtils';
+
+const STATIC_DATABASES = [
+  { id: 'db1', name: 'Sales Database', description: 'Contains sales transactions, inventory, and customer data' },
+  { id: 'db2', name: 'HR & Personnel', description: 'Human resources and employee management data' },
+  { id: 'db3', name: 'Marketing Analytics', description: 'Marketing campaigns, leads, and analytics data' },
+  { id: 'db4', name: 'Legacy Archives', description: 'Historical data and archived records' },
+];
 
 /**
  * SearchResultsPage Component
@@ -143,6 +150,7 @@ const SearchResultsPage = () => {
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
+  const [permutationVariants, setPermutationVariants] = useState(null);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
   const [filtersByDb, setFiltersByDb] = useState({
     db1: {},
@@ -169,8 +177,26 @@ const SearchResultsPage = () => {
   const urlSync = useURLSync();
   const tablePagination = useTablePagination();
 
-  // Get database metadata
-  const databaseMetadata = getDatabaseMetadata();
+  // Get database metadata from backend
+  const [databaseMetadata, setDatabaseMetadata] = useState(STATIC_DATABASES);
+  useEffect(() => {
+    let isMounted = true;
+    getDatabaseMetadata()
+      .then((data) => {
+        if (isMounted) {
+          const next = (data && data.length) ? data : STATIC_DATABASES;
+          setDatabaseMetadata(next);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load database metadata:', error);
+        // Keep static defaults on failure
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Calculate current page and visible table IDs
   const currentPage = pagination.getCurrentPage(activeDatabase);
@@ -235,6 +261,46 @@ const SearchResultsPage = () => {
     }
   }, [searchState.searchQuery]);
 
+  // Load permutation variants from backend for highlighting/indicator
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPermutations = async () => {
+      if (!Array.isArray(searchState.searchQuery) || searchState.searchQuery.length === 0 || searchState.permutationId === 'none') {
+        if (!isCancelled) {
+          setPermutationVariants(null);
+        }
+        return;
+      }
+
+      const terms = extractTermsFromQuery(searchState.searchQuery);
+      if (!terms.length) {
+        if (!isCancelled) {
+          setPermutationVariants(null);
+        }
+        return;
+      }
+
+      try {
+        const variants = await getPermutations(searchState.permutationId, terms, searchState.permutationParams);
+        if (!isCancelled) {
+          setPermutationVariants(variants && Object.keys(variants).length ? variants : null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch permutations:', error);
+        if (!isCancelled) {
+          setPermutationVariants(null);
+        }
+      }
+    };
+
+    loadPermutations();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [searchState.searchQuery, searchState.permutationId, JSON.stringify(searchState.permutationParams)]);
+
   // Keep filters map in sync with the active database filter state
   useEffect(() => {
     setFiltersByDb(prev => {
@@ -259,12 +325,16 @@ const SearchResultsPage = () => {
   }, [appliedPermutationParamsStr]);
 
   const expandedQueryInfo = useMemo(() => {
+    if (permutationVariants && Object.keys(permutationVariants).length) {
+      return permutationVariants;
+    }
+
     return getExpandedQueryInfo(
       searchState.searchQuery,
       appliedPermutationId,
       appliedPermutationParams
     );
-  }, [searchState.searchQuery, appliedPermutationId, appliedPermutationParams]);
+  }, [permutationVariants, searchState.searchQuery, appliedPermutationId, appliedPermutationParams]);
 
   // Calculate table counts and totals
   const tableCounts = useMemo(() => ({
@@ -362,9 +432,28 @@ const SearchResultsPage = () => {
 
   const handleApplyFilters = (newFilters) => {
     const cleanedFilters = { ...(newFilters || {}) };
-    ['categories', 'regions', 'tableNames', 'tableYears'].forEach((key) => {
+
+    // Remove empty arrays
+    ['categories', 'regions', 'tableNames', 'tableYears', 'selectedTables'].forEach((key) => {
       if (Array.isArray(cleanedFilters[key]) && cleanedFilters[key].length === 0) {
         delete cleanedFilters[key];
+      }
+    });
+
+    // Remove empty/neutral scalar values
+    ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
+      const val = cleanedFilters[key];
+      if (val === undefined || val === null) {
+        delete cleanedFilters[key];
+        return;
+      }
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '' || trimmed.toLowerCase() === 'all') {
+          delete cleanedFilters[key];
+          return;
+        }
+        cleanedFilters[key] = trimmed;
       }
     });
 
@@ -510,9 +599,8 @@ const SearchResultsPage = () => {
         tableId,
         paginationState,
         tablePagination.pageSize,
-        searchState.searchQuery,
-        searchState.permutationId,
-        searchState.permutationParams
+          searchState.searchQuery,
+          searchState.filters
       );
 
       const newRecords = tableData.data;
@@ -659,6 +747,7 @@ const SearchResultsPage = () => {
                     searchQuery={searchState.searchQuery}
                     permutationId={appliedPermutationId}
                     permutationParams={appliedPermutationParams}
+                    permutationVariants={expandedQueryInfo}
                     onSendToLastPage={handleSendToLastPage}
                     emptyStateType={getEmptyStateType()}
                     tablePaginationHook={tablePagination}

@@ -31,8 +31,8 @@ import {
   getAvailableYears,
   getAvailableCategories,
   getAvailableCountries,
-  getMockDatabases,
-} from '../data/mockDatabaseNew';
+  getDatabasesWithTables,
+} from '../api/backendClient';
 
 /**
  * FilterModal Component
@@ -50,14 +50,45 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
   });
   const [selectedTables, setSelectedTables] = useState([]);
   const [allDatabases, setAllDatabases] = useState([]);
+  const [yearOptions, setYearOptions] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [countryOptions, setCountryOptions] = useState([]);
 
   // Load all databases when modal opens
   useEffect(() => {
-    if (open) {
-      getMockDatabases().then(databases => {
-        setAllDatabases(databases);
-      });
-    }
+    let isCancelled = false;
+
+    const loadData = async () => {
+      if (!open) return;
+      try {
+        const [databases, years, categories, countries] = await Promise.all([
+          getDatabasesWithTables(),
+          getAvailableYears(),
+          getAvailableCategories(),
+          getAvailableCountries(),
+        ]);
+
+        if (isCancelled) return;
+        setAllDatabases(databases || []);
+        setYearOptions(years || []);
+        setCategoryOptions(categories || []);
+        setCountryOptions(countries || []);
+      } catch (error) {
+        console.error('Failed to load filter metadata:', error);
+        if (!isCancelled) {
+          setAllDatabases([]);
+          setYearOptions([]);
+          setCategoryOptions([]);
+          setCountryOptions([]);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [open]);
 
   // Flatten all tables from all databases
@@ -155,7 +186,30 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
   };
 
   const handleApply = () => {
-    onApply({ ...filters, selectedTables });
+    const cleaned = { ...filters, selectedTables };
+
+    // Drop neutral/empty values before sending
+    ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
+      const val = cleaned[key];
+      if (val === undefined || val === null) {
+        delete cleaned[key];
+        return;
+      }
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '' || trimmed.toLowerCase() === 'all') {
+          delete cleaned[key];
+          return;
+        }
+        cleaned[key] = trimmed;
+      }
+    });
+
+    if (Array.isArray(cleaned.selectedTables) && cleaned.selectedTables.length === 0) {
+      delete cleaned.selectedTables;
+    }
+
+    onApply(cleaned);
     onClose();
   };
 
@@ -181,10 +235,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
       day: 'numeric'
     });
   };
-
-  const years = getAvailableYears();
-  const categories = getAvailableCategories();
-  const countries = getAvailableCountries();
 
   const allSelected = filteredTables.length > 0 && selectedTables.length === filteredTables.length;
   const someSelected = selectedTables.length > 0 && selectedTables.length < filteredTables.length;
@@ -256,7 +306,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                     onChange={(e) => handleChange('year', e.target.value)}
                   >
                     <MenuItem value="all">All Years</MenuItem>
-                    {years.map((year) => (
+                    {yearOptions.map((year) => (
                       <MenuItem key={year} value={year}>
                         {year}
                       </MenuItem>
@@ -275,7 +325,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                     onChange={(e) => handleChange('category', e.target.value)}
                   >
                     <MenuItem value="all">All Categories</MenuItem>
-                    {categories.map((category) => (
+                    {categoryOptions.map((category) => (
                       <MenuItem key={category} value={category}>
                         {category}
                       </MenuItem>
@@ -294,7 +344,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
                     onChange={(e) => handleChange('country', e.target.value)}
                   >
                     <MenuItem value="all">All Regions</MenuItem>
-                    {countries.map((country) => (
+                    {countryOptions.map((country) => (
                       <MenuItem key={country} value={country}>
                         {country}
                       </MenuItem>
