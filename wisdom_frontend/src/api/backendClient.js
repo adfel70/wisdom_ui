@@ -187,12 +187,19 @@ export const getColumnTypes = async () => {
   return Array.from(types).sort();
 };
 
-export const searchTables = async ({ db, query = null, filters = {}, permutations = null }) => {
+export const searchTables = async ({
+  db,
+  query = null,
+  filters = {},
+  permutations = null,
+  pickedTables = [],
+}) => {
   await ensureCatalog();
   const payload = {
     db,
     query: query ?? null,
     filters: filters || {},
+    picked_tables: Array.isArray(pickedTables) ? pickedTables : [],
     ...(permutations ? { permutations } : {}),
   };
 
@@ -230,6 +237,7 @@ export const getTableDataPaginatedById = async (
   filters = {},
   permutations = null,
   signal = undefined,
+  pickedTables = [],
 ) => {
   const catalog = await ensureCatalog();
   const db = catalog.tableToDb.get(tableId);
@@ -245,6 +253,7 @@ export const getTableDataPaginatedById = async (
   const payload = {
     query: query ?? null,
     filters: filters || {},
+    picked_tables: Array.isArray(pickedTables) ? pickedTables : [],
     ...(permutations ? { permutations } : {}),
     options: {
       db,

@@ -20,6 +20,7 @@ const HomePage = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [filters, setFilters] = useState({});
+  const [pickedTables, setPickedTables] = useState([]);
   const [permutationId, setPermutationId] = useState('none');
   const [permutationParams, setPermutationParams] = useState({});
   const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
@@ -183,26 +184,25 @@ const HomePage = () => {
     if (filters.maxDate) {
       params.append('maxDate', filters.maxDate);
     }
-    if (filters.selectedTables && filters.selectedTables.length > 0) {
-      params.append('selectedTables', filters.selectedTables.join(','));
+    // Add picked tables (new table picker)
+    if (pickedTables && pickedTables.length > 0) {
+      params.append('pickedTables', JSON.stringify(pickedTables));
     }
 
     navigate(`/search?${params.toString()}`);
   };
 
-  const handleApplyFilters = (newFilters) => {
-    setFilters(newFilters);
-    // If tables are selected, you could navigate to a results page or handle them here
-    if (newFilters.selectedTables && newFilters.selectedTables.length > 0) {
-      console.log('Selected tables:', newFilters.selectedTables);
-      // You can add navigation or other logic here if needed
-    }
+  const handleApplyFilters = (payload) => {
+    const nextFilters = payload?.filters ?? payload ?? {};
+    const nextPicked = Array.isArray(payload?.pickedTables) ? payload.pickedTables : [];
+    setFilters(nextFilters);
+    setPickedTables(nextPicked);
   };
 
   const handleClearFilter = (filterKey) => {
     const clearedFilters = { ...filters };
-    if (filterKey === 'selectedTables') {
-      clearedFilters.selectedTables = [];
+    if (filterKey === 'pickedTables') {
+      setPickedTables([]);
     } else if (filterKey === 'year' || filterKey === 'category' || filterKey === 'country') {
       clearedFilters[filterKey] = 'all';
     } else {
@@ -498,7 +498,7 @@ const HomePage = () => {
               />
 
               {/* Active Filters Display */}
-              {(Object.values(filters).some(v => v && v !== 'all') || (filters.selectedTables && filters.selectedTables.length > 0)) && (
+              {(Object.values(filters).some(v => v && v !== 'all') || (pickedTables && pickedTables.length > 0)) && (
                 <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                   <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                     Active filters:
@@ -551,11 +551,11 @@ const HomePage = () => {
                       color="primary"
                     />
                   )}
-                  {filters.selectedTables && filters.selectedTables.length > 0 && (
+                  {pickedTables && pickedTables.length > 0 && (
                     <Chip
-                      label={`${filters.selectedTables.length} table${filters.selectedTables.length > 1 ? 's' : ''} selected`}
+                      label={`${pickedTables.length} picked table${pickedTables.length > 1 ? 's' : ''}`}
                       size="small"
-                      onDelete={() => handleClearFilter('selectedTables')}
+                      onDelete={() => handleClearFilter('pickedTables')}
                       color="secondary"
                     />
                   )}
@@ -624,6 +624,7 @@ const HomePage = () => {
           onClose={() => setIsFilterOpen(false)}
           onApply={handleApplyFilters}
           initialFilters={filters}
+          initialPickedTables={pickedTables}
         />
 
         <QueryBuilderModal

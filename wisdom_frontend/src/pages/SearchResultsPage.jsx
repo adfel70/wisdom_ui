@@ -216,6 +216,7 @@ const SearchResultsPage = () => {
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
     perDbFilters: filtersByDb,
+    pickedTables: searchState.pickedTables,
     permutationId: searchState.permutationId,
     permutationParams: searchState.permutationParams,
     activeDatabase,
@@ -240,6 +241,7 @@ const SearchResultsPage = () => {
       query: params.query,
       inputValue: queryJSONToString(params.query), // Convert JSON to string for display
       filters: params.filters,
+      pickedTables: params.pickedTables,
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
     });
@@ -427,14 +429,17 @@ const SearchResultsPage = () => {
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
       filters: activeFilters,
+      pickedTables: searchState.pickedTables,
     });
   };
 
   const handleApplyFilters = (newFilters) => {
-    const cleanedFilters = { ...(newFilters || {}) };
+    const incomingFilters = newFilters?.filters ?? newFilters ?? {};
+    const cleanedFilters = { ...(incomingFilters || {}) };
+    const nextPickedTables = Array.isArray(newFilters?.pickedTables) ? newFilters.pickedTables : searchState.pickedTables;
 
     // Remove empty arrays
-    ['categories', 'regions', 'tableNames', 'tableYears', 'selectedTables'].forEach((key) => {
+    ['categories', 'regions', 'tableNames', 'tableYears'].forEach((key) => {
       if (Array.isArray(cleanedFilters[key]) && cleanedFilters[key].length === 0) {
         delete cleanedFilters[key];
       }
@@ -457,30 +462,12 @@ const SearchResultsPage = () => {
       }
     });
 
-    setFiltersByDb(prev => {
-      const next = { ...prev };
-      const dbIds = ['db1', 'db2', 'db3', 'db4'];
-
-      // Always propagate selectedTables to all DBs so each searchTables call receives it
-      dbIds.forEach((dbId) => {
-        const base = next[dbId] || {};
-        next[dbId] = { ...base };
-        if (cleanedFilters.selectedTables) {
-          next[dbId].selectedTables = cleanedFilters.selectedTables;
-        } else {
-          delete next[dbId].selectedTables;
-        }
-      });
-
-      // Apply the rest of the filters only to the active DB
-      next[activeDatabase] = {
-        ...next[activeDatabase],
-        ...cleanedFilters,
-      };
-
-      return next;
-    });
+    setFiltersByDb(prev => ({
+      ...prev,
+      [activeDatabase]: cleanedFilters,
+    }));
     searchState.setFilters(cleanedFilters);
+    searchState.setPickedTables(nextPickedTables || []);
     pagination.resetAllPages();
     const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
     urlSync.updateURL({
@@ -489,19 +476,23 @@ const SearchResultsPage = () => {
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
       filters: cleanedFilters,
+      pickedTables: nextPickedTables || [],
     });
   };
 
   const handleRemoveFilter = (filterKey) => {
     const newFilters = { ...searchState.filters };
-    if (filterKey === 'selectedTables') {
-      newFilters.selectedTables = [];
+    let nextPickedTables = searchState.pickedTables;
+
+    if (filterKey === 'pickedTables') {
+      nextPickedTables = [];
     } else if (['year', 'category', 'country'].includes(filterKey)) {
       newFilters[filterKey] = 'all';
     } else {
       newFilters[filterKey] = '';
     }
-    handleApplyFilters(newFilters);
+
+    handleApplyFilters({ filters: newFilters, pickedTables: nextPickedTables });
   };
 
   const handlePermutationChange = (newPermutationId) => {
@@ -513,6 +504,7 @@ const SearchResultsPage = () => {
       permutationId: newPermutationId,
       permutationParams: searchState.permutationParams,
       filters: activeFilters,
+      pickedTables: searchState.pickedTables,
     });
   };
 
@@ -528,6 +520,7 @@ const SearchResultsPage = () => {
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
       filters: activeFilters,
+      pickedTables: searchState.pickedTables,
     });
 
     if (resultsContainerRef.current) {
@@ -548,6 +541,7 @@ const SearchResultsPage = () => {
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
       filters: newDbFilters,
+      pickedTables: searchState.pickedTables,
     });
   };
 
@@ -620,7 +614,9 @@ const SearchResultsPage = () => {
         tablePagination.pageSize,
         searchState.searchQuery,
         searchState.filters,
-        permutationMap
+        permutationMap,
+        undefined,
+        searchState.pickedTables
       );
 
       const newRecords = tableData.data;
@@ -650,7 +646,7 @@ const SearchResultsPage = () => {
     const hasFilters = Object.values(searchState.filters).some(v => {
       if (Array.isArray(v)) return v.length > 0;
       return v && v !== 'all';
-    });
+    }) || (Array.isArray(searchState.pickedTables) && searchState.pickedTables.length > 0);
     // Check if query is a non-empty array (new JSON format)
     const hasSearch = Array.isArray(searchState.searchQuery) && searchState.searchQuery.length > 0;
     const currentTableCount = matchingTableIds[activeDatabase]?.length || 0;
@@ -757,6 +753,7 @@ const SearchResultsPage = () => {
 
                   <ActiveFiltersAlert
                     filters={searchState.filters}
+                    pickedTables={searchState.pickedTables}
                     onRemoveFilter={handleRemoveFilter}
                   />
 
@@ -795,6 +792,7 @@ const SearchResultsPage = () => {
           onClose={() => setIsFilterOpen(false)}
           onApply={handleApplyFilters}
           initialFilters={searchState.filters}
+          initialPickedTables={searchState.pickedTables}
         />
 
         <QueryBuilderModal

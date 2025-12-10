@@ -19,6 +19,7 @@ export const useSearchResults = ({
   searchQuery,
   filters,
   perDbFilters = {},
+  pickedTables = [],
   permutationId,
   permutationParams,
   activeDatabase,
@@ -67,17 +68,6 @@ export const useSearchResults = ({
     });
   }, []);
 
-  // Build shared filters (only selectedTables propagated across DBs)
-  const sharedFilters = useMemo(() => {
-    let selectedTables = null;
-    Object.values(perDbFilters || {}).forEach((f) => {
-      if (Array.isArray(f?.selectedTables) && f.selectedTables.length > 0) {
-        selectedTables = f.selectedTables;
-      }
-    });
-    return selectedTables ? { selectedTables } : {};
-  }, [perDbFilters]);
-
   // Step 1: Search all databases for matching table IDs
   useEffect(() => {
     let isCancelled = false;
@@ -87,7 +77,7 @@ export const useSearchResults = ({
       (typeof searchQuery === 'string' && searchQuery.trim() !== '');
 
     const hasAnyFilters =
-      Object.keys(sharedFilters).length > 0 ||
+      (Array.isArray(pickedTables) && pickedTables.length > 0) ||
       Object.values(perDbFilters || {}).some((f) => f && Object.keys(f).length > 0);
 
     // Skip kicking off searches when there's no query and no filters selected
@@ -103,8 +93,8 @@ export const useSearchResults = ({
     // Create a signature for the current search criteria
     const currentSignature = JSON.stringify({
       query: searchQuery,
-      sharedFilters,
       perDbFilters,
+      pickedTables,
       permutationId,
       permutationParams, // Don't double-stringify
     });
@@ -150,7 +140,8 @@ export const useSearchResults = ({
           searchTables({
             db: dbId,
             query: searchQuery,
-            filters: { ...sharedFilters, ...(perDbFilters[dbId] || {}) },
+            filters: { ...(perDbFilters[dbId] || {}) },
+            pickedTables,
             permutations,
           })
         );
@@ -206,7 +197,7 @@ export const useSearchResults = ({
   }, [
     searchQuery,
     JSON.stringify(perDbFilters),
-    JSON.stringify(sharedFilters),
+    JSON.stringify(pickedTables),
     permutationId,
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);
@@ -266,7 +257,8 @@ export const useSearchResults = ({
             searchQuery,
             filters,
             permutationMap,
-            controller.signal
+            controller.signal,
+            pickedTables
           );
 
           // Initialize pagination state for this table
@@ -323,6 +315,7 @@ export const useSearchResults = ({
     JSON.stringify(visibleTableIds), // Array changes trigger re-fetch
     searchQuery,
     JSON.stringify(filters), // Stringify to avoid object reference changes
+    JSON.stringify(pickedTables),
     permutationId,
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);

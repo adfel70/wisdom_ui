@@ -38,7 +38,7 @@ import {
  * FilterModal Component
  * Modal dialog for filtering and selecting tables with metadata view
  */
-const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
+const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPickedTables = [] }) => {
   const [filters, setFilters] = useState({
     tableName: '',
     year: 'all',
@@ -95,10 +95,11 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
   const allTables = useMemo(() => {
     const tables = [];
     allDatabases.forEach(db => {
-      db.tables.forEach(table => {
+      (db.tables || []).forEach(table => {
         tables.push({
           ...table,
-          databaseName: db.name
+          databaseName: db.name,
+          databaseId: db.id,
         });
       });
     });
@@ -158,10 +159,13 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
         maxDate: '',
         ...initialFilters,
       });
-      // Preserve selected tables from initialFilters
-      setSelectedTables(initialFilters.selectedTables || []);
+      // Seed selected tables from provided picked tables
+      const initialSelected = Array.isArray(initialPickedTables)
+        ? initialPickedTables.map((t) => t.table).filter(Boolean)
+        : [];
+      setSelectedTables(initialSelected);
     }
-  }, [open, initialFilters]);
+  }, [open, initialFilters, initialPickedTables]);
 
   const handleChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
@@ -186,7 +190,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
   };
 
   const handleApply = () => {
-    const cleaned = { ...filters, selectedTables };
+    const cleaned = { ...filters };
 
     // Drop neutral/empty values before sending
     ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
@@ -205,11 +209,17 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
       }
     });
 
-    if (Array.isArray(cleaned.selectedTables) && cleaned.selectedTables.length === 0) {
-      delete cleaned.selectedTables;
-    }
+    // Map selected table IDs to { db, table }
+    const tableIndex = new Map(allTables.map((t) => [t.id, t]));
+    const pickedTables = (selectedTables || []).map((tableId) => {
+      const meta = tableIndex.get(tableId) || {};
+      return {
+        db: meta.databaseId || '',
+        table: tableId,
+      };
+    }).filter((t) => t.db && t.table);
 
-    onApply(cleaned);
+    onApply({ filters: cleaned, pickedTables });
     onClose();
   };
 
@@ -539,7 +549,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {} }) => {
         <Button 
           onClick={handleApply} 
           variant="contained"
-          disabled={selectedTables.length === 0}
         >
           Apply ({selectedTables.length} selected)
         </Button>

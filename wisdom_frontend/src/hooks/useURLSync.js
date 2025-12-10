@@ -28,7 +28,35 @@ export const useURLSync = () => {
 
     const permutation = searchParams.get('permutation') || 'none';
     const permParamsStr = searchParams.get('permutationParams') || '';
-    const permParams = permParamsStr ? JSON.parse(permParamsStr) : {};
+    let permParams = {};
+    if (permParamsStr) {
+      try {
+        permParams = JSON.parse(permParamsStr);
+      } catch (e) {
+        console.error('Failed to parse permutationParams from URL:', e);
+        permParams = {};
+      }
+    }
+
+    // Picked tables (new table-picker flow)
+    let pickedTables = [];
+    const pickedTablesParam = searchParams.get('pickedTables');
+    if (pickedTablesParam) {
+      try {
+        const parsed = JSON.parse(pickedTablesParam);
+        if (Array.isArray(parsed)) {
+          pickedTables = parsed.filter(
+            (item) =>
+              item &&
+              typeof item === 'object' &&
+              typeof item.db === 'string' &&
+              typeof item.table === 'string',
+          );
+        }
+      } catch (e) {
+        console.error('Failed to parse pickedTables from URL:', e);
+      }
+    }
 
     // Prefer unified filters param; fall back to legacy individual params for backward compatibility
     const filtersParam = searchParams.get('filters');
@@ -71,6 +99,7 @@ export const useURLSync = () => {
       permutation,
       permutationParams: permParams,
       filters,
+      pickedTables,
       page,
     };
   }, [searchParams]);
@@ -105,6 +134,15 @@ export const useURLSync = () => {
         params.append('filters', JSON.stringify(state.filters));
       } catch (e) {
         console.error('Failed to stringify filters for URL:', e);
+      }
+    }
+
+    // Add picked tables (new table-picker flow)
+    if (state.pickedTables && Array.isArray(state.pickedTables) && state.pickedTables.length > 0) {
+      try {
+        params.append('pickedTables', JSON.stringify(state.pickedTables));
+      } catch (e) {
+        console.error('Failed to stringify pickedTables for URL:', e);
       }
     }
 

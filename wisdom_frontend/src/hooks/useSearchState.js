@@ -8,6 +8,7 @@ export const useSearchState = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [filters, setFilters] = useState({});
+  const [pickedTables, setPickedTables] = useState([]);
   const [permutationId, setPermutationId] = useState('none');
   const [permutationParams, setPermutationParams] = useState({});
 
@@ -16,6 +17,7 @@ export const useSearchState = () => {
     setSearchQuery('');
     setInputValue('');
     setFilters({});
+    setPickedTables([]);
     setPermutationId('none');
     setPermutationParams({});
   }, []);
@@ -25,6 +27,7 @@ export const useSearchState = () => {
     if (values.query !== undefined) setSearchQuery(values.query);
     if (values.inputValue !== undefined) setInputValue(values.inputValue);
     if (values.filters !== undefined) setFilters(values.filters);
+    if (values.pickedTables !== undefined) setPickedTables(values.pickedTables);
     if (values.permutationId !== undefined) setPermutationId(values.permutationId);
     if (values.permutationParams !== undefined) setPermutationParams(values.permutationParams);
   }, []);
@@ -34,6 +37,7 @@ export const useSearchState = () => {
     searchQuery,
     inputValue,
     filters,
+    pickedTables,
     permutationId,
     permutationParams,
 
@@ -41,6 +45,7 @@ export const useSearchState = () => {
     setSearchQuery,
     setInputValue,
     setFilters,
+    setPickedTables,
     setPermutationId,
     setPermutationParams,
 

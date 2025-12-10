@@ -5,7 +5,7 @@ import { Alert, Box, Typography, Chip, Stack } from '@mui/material';
  * ActiveFiltersAlert - Shows active filters with removable chips
  * Displays when any filters are active, allowing users to remove them individually
  */
-const ActiveFiltersAlert = ({ filters, onRemoveFilter }) => {
+const ActiveFiltersAlert = ({ filters, pickedTables = [], onRemoveFilter }) => {
   // Check if any filters are active
   const hasActiveFilters =
     (filters.year && filters.year !== 'all') ||
@@ -14,7 +14,8 @@ const ActiveFiltersAlert = ({ filters, onRemoveFilter }) => {
     filters.tableName ||
     filters.minDate ||
     filters.maxDate ||
-    (filters.selectedTables && filters.selectedTables.length > 0);
+    (filters.selectedTables && filters.selectedTables.length > 0) ||
+    (Array.isArray(pickedTables) && pickedTables.length > 0);
 
   if (!hasActiveFilters) return null;
 
@@ -73,6 +74,14 @@ const ActiveFiltersAlert = ({ filters, onRemoveFilter }) => {
               size="small"
               color="primary"
               onDelete={() => onRemoveFilter('selectedTables')}
+            />
+          )}
+          {Array.isArray(pickedTables) && pickedTables.length > 0 && (
+            <Chip
+              label={`${pickedTables.length} picked table${pickedTables.length !== 1 ? 's' : ''}`}
+              size="small"
+              color="primary"
+              onDelete={() => onRemoveFilter('pickedTables')}
             />
           )}
         </Stack>
