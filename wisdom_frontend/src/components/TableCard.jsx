@@ -956,10 +956,8 @@ const TableCard = ({
                   animateRows
                   enableCellTextSelection
                   enableCellCopy
-                  enableRangeSelection
                   loadingOverlayComponent={CustomLoadingOverlay}
                   noRowsOverlayComponent={CustomNoRowsOverlay}
-                  getMainMenuItems={getMainMenuItems}
                   onColumnMoved={handleColumnMoved}
                   onCellClicked={handleCellClicked}
                   tooltipShowDelay={200}

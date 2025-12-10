@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { searchTables, getTableDataPaginatedById } from '../api/backendClient';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 
+const logInfo = (...args) => {
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.info('[useSearchResults]', ...args);
+  }
+};
+
 /**
  * Hook to manage search execution and table data fetching
  * Handles two-phase loading: search for IDs, then fetch table data
@@ -27,6 +34,15 @@ export const useSearchResults = ({
   const tableDataCache = useRef(new Map());
   const pendingTableFetches = useRef(new Set());
   const inflightControllers = useRef(new Map());
+
+  const clearAllPending = useCallback(() => {
+    // Abort inflight row requests and clear trackers
+    inflightControllers.current.forEach((controller) => controller.abort());
+    inflightControllers.current.clear();
+    pendingTableFetches.current.clear();
+    tableDataCache.current.clear();
+    tableLoadingHook?.clearPending?.();
+  }, [tableLoadingHook]);
 
   // Prune cache to only keep visible tables
   const pruneCacheToVisibleTables = useCallback((visibleIds) => {
@@ -57,8 +73,12 @@ export const useSearchResults = ({
     // Skip kicking off searches when there's no query and no filters selected
     if (!hasSearchQuery && !hasAnyFilters) {
       setIsSearching(false);
+      logInfo('skip search: no query and no filters');
       return undefined;
     }
+
+    // New search: clear pending/inflight/cache so rows refetch cleanly
+    clearAllPending();
 
     // Create a signature for the current search criteria
     const currentSignature = JSON.stringify({
@@ -73,10 +93,12 @@ export const useSearchResults = ({
       // Use callback to get fresh matchingTableIds without adding to dependencies
       if (lastSearchSignature === currentSignature) {
         setIsSearching(false);
+        logInfo('reuse last search results');
         return;
       }
 
       setIsSearching(true);
+      logInfo('search start', { signature: currentSignature });
       try {
         // Search all databases in parallel against FastAPI backend
         const searchPromises = ['db1', 'db2', 'db3', 'db4'].map((dbId) =>
@@ -99,6 +121,12 @@ export const useSearchResults = ({
 
           setLastSearchSignature(currentSignature);
           tableDataCache.current.clear();
+          logInfo('search done', {
+            db1: results[0]?.tableIds?.length ?? 0,
+            db2: results[1]?.tableIds?.length ?? 0,
+            db3: results[2]?.tableIds?.length ?? 0,
+            db4: results[3]?.tableIds?.length ?? 0,
+          });
         }
       } catch (error) {
         console.error('Failed to search databases:', error);
@@ -138,6 +166,7 @@ export const useSearchResults = ({
       if (!visibleTableIds || visibleTableIds.length === 0) {
         tableDataCache.current.clear();
         tableLoadingHook.syncPendingWithVisible([]);
+        tableLoadingHook.clearPending?.();
         if (!isCancelled) {
           setIsLoadingTableData(false);
         }
@@ -175,6 +204,7 @@ export const useSearchResults = ({
         const tablePromises = dedupedIdsToFetch.map(async (tableId) => {
           const controller = new AbortController();
           inflightControllers.current.set(tableId, controller);
+          logInfo('rows fetch start', { tableId, pageSize: RECORDS_PER_PAGE });
 
           const tableData = await getTableDataPaginatedById(
             tableId,
@@ -194,6 +224,7 @@ export const useSearchResults = ({
             );
           }
 
+          logInfo('rows fetch done', { tableId, rows: tableData.data?.length ?? 0 });
           return tableData;
         });
 
@@ -203,7 +234,11 @@ export const useSearchResults = ({
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
         }
       } catch (error) {
-        console.error('Failed to load table data:', error);
+        if (error?.name !== 'AbortError') {
+          console.error('Failed to load table data:', error);
+        } else {
+          logInfo('rows fetch aborted');
+        }
       } finally {
         dedupedIdsToFetch.forEach((id) => {
           pendingTableFetches.current.delete(id);

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import PermutationsRequest, SearchRowsRequest, SearchTablesRequest
 from app.services.permutations import expand_terms
-from app.services.search_service import get_catalog, search_rows, search_tables
+from app.services.search_service import get_bdts, get_catalog, search_rows, search_tables
 
 router = APIRouter(prefix="/api")
 
@@ -20,6 +20,11 @@ def health():
 @router.get("/catalog")
 def catalog():
     return get_catalog()
+
+
+@router.get("/bdts")
+def bdts():
+    return {"bdts": get_bdts()}
 
 
 @router.post("/search/tables")

@@ -32,6 +32,16 @@
 - `GET /api/health`
 - Returns: `{ "status": "ok" }`
 
+### BDTs (column types)
+- `GET /api/bdts`
+- Use: populate the column-type dropdown.
+- Returns:
+  ```json
+  {
+    "bdts": ["amount","boolean","category","company","country","date", "..."]
+  }
+  ```
+
 ### Catalog
 - `GET /api/catalog`
 - Use: initial load of all tables metadata and database descriptors.

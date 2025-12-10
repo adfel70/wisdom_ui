@@ -118,24 +118,28 @@ def _filter_tables_by_filters(tables: List[Dict[str, Any]], filters: Filters) ->
     return out
 
 
-def _build_facets(tables: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) -> Dict[str, Dict[str, int]]:
     categories: Dict[str, int] = {}
     regions: Dict[str, int] = {}
     table_names: Dict[str, int] = {}
     table_years: Dict[str, int] = {}
     for t in tables:
+        weight = table_counts.get(t["id"], 0)
+        if weight == 0:
+            # If we don't have row-level counts (e.g., query is empty), fall back to table presence as 1
+            weight = 1
         for cat in t.get("categories", []):
-            categories[cat] = categories.get(cat, 0) + 1
+            categories[cat] = categories.get(cat, 0) + weight
         country = t.get("country")
         if country:
-            regions[country] = regions.get(country, 0) + 1
+            regions[country] = regions.get(country, 0) + weight
         name = t.get("name")
         if name:
-            table_names[name] = table_names.get(name, 0) + 1
+            table_names[name] = table_names.get(name, 0) + weight
         year = t.get("year")
         if year is not None:
             key = str(year)
-            table_years[key] = table_years.get(key, 0) + 1
+            table_years[key] = table_years.get(key, 0) + weight
     return {
         "categories": categories,
         "regions": regions,
@@ -158,13 +162,20 @@ def search_tables(db_key: str, query: Optional[Any], filters: Optional[Filters])
 
     if query:
         table_ids: Set[str] = {r.get("tableKey") for r in filtered_records if r.get("tableKey")}
+        table_counts: Dict[str, int] = {}
+        for r in filtered_records:
+            tk = r.get("tableKey")
+            if tk:
+                table_counts[tk] = table_counts.get(tk, 0) + 1
     else:
         table_ids = set(all_table_keys)
+        # when no query, use full record counts from metadata
+        table_counts = {tid: table_meta.get(tid, {}).get("recordCount", 0) for tid in table_ids}
 
     tables = [_table_meta_from_key(tid, table_meta) for tid in table_ids]
     tables = [t for t in tables if t]
     tables = _filter_tables_by_filters(tables, filters)
-    facets = _build_facets(tables)
+    facets = _build_facets(tables, table_counts)
 
     return {"tables": tables, "facets": facets, "total": len(tables)}
 
@@ -234,4 +245,15 @@ def get_catalog() -> Dict[str, Any]:
         )
 
     return {"tables": tables, "databases": databases}
+
+
+def get_bdts() -> List[str]:
+    table_meta = get_table_metadata()
+    types = set()
+    for meta in table_meta.values():
+        for col in meta.get("columns", []):
+            ctype = col.get("type")
+            if ctype:
+                types.add(ctype)
+    return sorted(types)
 

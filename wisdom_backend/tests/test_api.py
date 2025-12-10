@@ -18,6 +18,15 @@ def test_health():
     assert res.json() == {"status": "ok"}
 
 
+def test_bdts():
+    res = client.get("/api/bdts")
+    assert res.status_code == 200
+    body = res.json()
+    assert "bdts" in body
+    assert isinstance(body["bdts"], list)
+    assert len(body["bdts"]) > 0
+
+
 def test_catalog_shape():
     res = client.get("/api/catalog")
     assert res.status_code == 200

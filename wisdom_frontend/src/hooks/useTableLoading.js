@@ -84,12 +84,22 @@ export const useTableLoading = () => {
     return Array.from(pendingTableIdsRef.current);
   }, []);
 
+  // Clear all pending table IDs
+  const clearPending = useCallback(() => {
+    if (pendingTableIdsRef.current.size === 0) return;
+    pendingTableIdsRef.current.clear();
+    if (isMountedRef.current) {
+      forcePendingRender(tick => tick + 1);
+    }
+  }, []);
+
   return {
     addPendingTableIds,
     removePendingTableIds,
     syncPendingWithVisible,
     isPending,
     getPendingTableIds,
+    clearPending,
     pendingTableIdsRef, // Expose ref for direct access if needed
   };
 };
