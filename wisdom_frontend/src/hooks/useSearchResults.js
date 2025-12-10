@@ -203,7 +203,12 @@ export const useSearchResults = ({
   ]);
 
   // Step 2: Load table data for visible table IDs (with pagination)
+  // Use a ref to track the current effect instance to prevent race conditions
+  const effectInstanceRef = useRef(0);
+
   useEffect(() => {
+    // Increment instance ID for this effect run
+    const currentInstance = ++effectInstanceRef.current;
     let isCancelled = false;
 
     const loadVisibleTableData = async () => {
@@ -242,6 +247,9 @@ export const useSearchResults = ({
         setIsLoadingTableData(true);
       }
 
+      // Track whether we successfully cached the data
+      let cacheUpdated = false;
+
       try {
         // Fetch paginated data for each table (first page only)
         // Backend handles batch-fetching to return exactly RECORDS_PER_PAGE matching records
@@ -276,8 +284,12 @@ export const useSearchResults = ({
 
         const newTables = await Promise.all(tablePromises);
 
-        if (!isCancelled) {
+        // Only update cache and clear pending if this is still the current effect instance
+        // This prevents race conditions where an old effect's finally block
+        // removes pending IDs that a newer effect just added
+        if (!isCancelled && currentInstance === effectInstanceRef.current) {
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
+          cacheUpdated = true;
         }
       } catch (error) {
         if (error?.name !== 'AbortError') {
@@ -286,11 +298,17 @@ export const useSearchResults = ({
           logInfo('rows fetch aborted');
         }
       } finally {
-        dedupedIdsToFetch.forEach((id) => {
-          pendingTableFetches.current.delete(id);
-          inflightControllers.current.delete(id);
-        });
-        tableLoadingHook.removePendingTableIds(dedupedIdsToFetch);
+        // Only clean up pending state if:
+        // 1. We successfully cached the data, OR
+        // 2. This is still the current effect instance (no newer effect has started)
+        // This prevents old effects from removing pending IDs that newer effects need
+        if (cacheUpdated || currentInstance === effectInstanceRef.current) {
+          dedupedIdsToFetch.forEach((id) => {
+            pendingTableFetches.current.delete(id);
+            inflightControllers.current.delete(id);
+          });
+          tableLoadingHook.removePendingTableIds(dedupedIdsToFetch);
+        }
         if (!isCancelled) {
           setIsLoadingTableData(false);
         }
@@ -301,13 +319,14 @@ export const useSearchResults = ({
 
     return () => {
       isCancelled = true;
-      // Abort inflight row requests and clear pending so next effect can re-fetch cleanly
+      // Abort inflight row requests
       inflightControllers.current.forEach((controller) => controller.abort());
       inflightControllers.current.clear();
-      const pendingIds = Array.from(pendingTableFetches.current);
-      if (pendingIds.length) {
-        tableLoadingHook.removePendingTableIds(pendingIds);
-      }
+      // Note: We intentionally do NOT clear pending IDs here.
+      // The new effect will re-add them if needed, and the finally block
+      // will only clear them if it was the current effect instance.
+      // This prevents race conditions where cleanup removes IDs that
+      // a new effect needs to keep as pending.
       pendingTableFetches.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
