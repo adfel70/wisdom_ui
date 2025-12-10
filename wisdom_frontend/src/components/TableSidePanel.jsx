@@ -122,6 +122,20 @@ const TableSidePanel = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [metadataMap, setMetadataMap] = useState(new Map());
 
+  // Detect if any facet filters are currently applied for this database
+  const hasActiveFacetFilters = useMemo(() => {
+    const filters = appliedFilters || {};
+    return Object.values(filters).some((value) => {
+      if (Array.isArray(value)) {
+        return value.filter(Boolean).length > 0;
+      }
+      if (value && typeof value === 'object') {
+        return Object.keys(value).length > 0;
+      }
+      return Boolean(value);
+    });
+  }, [appliedFilters]);
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -230,6 +244,7 @@ const TableSidePanel = ({
           justifyContent: 'center',
           cursor: 'pointer',
           boxShadow: '4px 0 8px rgba(0,0,0,0.05)',
+          position: 'absolute',
           '&:hover': {
             backgroundColor: 'action.hover',
             width: 28, // slight hover effect
@@ -237,6 +252,20 @@ const TableSidePanel = ({
           transition: 'width 0.2s',
         }}
       >
+        {isCollapsed && hasActiveFacetFilters && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 6,
+              right: 6,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: 'error.main',
+              boxShadow: (theme) => `0 0 0 2px ${theme.palette.background.paper}`,
+            }}
+          />
+        )}
         {isCollapsed ? <ChevronRight fontSize="small" color="action" /> : <ChevronLeft fontSize="small" color="action" />}
       </Box>
 
@@ -289,7 +318,23 @@ const TableSidePanel = ({
               {PANEL_TABS.map(tab => (
                 <Tab
                   key={tab.value}
-                  label={tab.label}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box component="span">{tab.label}</Box>
+                      {tab.value === 'filters' && hasActiveFacetFilters && (
+                        <Box
+                          component="span"
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'error.main',
+                            boxShadow: (theme) => `0 0 0 2px ${theme.palette.background.paper}`,
+                          }}
+                        />
+                      )}
+                    </Box>
+                  }
                   value={tab.value}
                   icon={tab.icon}
                   iconPosition="start"
