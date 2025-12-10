@@ -102,6 +102,22 @@ const AnimatedPanelRow = memo(({ item, onSelect, isCollapsed }) => {
 
 AnimatedPanelRow.displayName = 'AnimatedPanelRow';
 
+const isFacetValueActive = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).length > 0;
+  }
+  if (value && typeof value === 'object') {
+    const objectValues = Object.values(value);
+    if (objectValues.length === 0) return false;
+    return objectValues.some(isFacetValueActive);
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === 'all') return false;
+  }
+  return Boolean(value);
+};
+
 const TableSidePanel = ({
   databaseId,
   databaseName,
@@ -125,15 +141,7 @@ const TableSidePanel = ({
   // Detect if any facet filters are currently applied for this database
   const hasActiveFacetFilters = useMemo(() => {
     const filters = appliedFilters || {};
-    return Object.values(filters).some((value) => {
-      if (Array.isArray(value)) {
-        return value.filter(Boolean).length > 0;
-      }
-      if (value && typeof value === 'object') {
-        return Object.keys(value).length > 0;
-      }
-      return Boolean(value);
-    });
+    return Object.values(filters).some(isFacetValueActive);
   }, [appliedFilters]);
 
   useEffect(() => {
