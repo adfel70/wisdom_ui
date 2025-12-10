@@ -102,6 +102,22 @@ const AnimatedPanelRow = memo(({ item, onSelect, isCollapsed }) => {
 
 AnimatedPanelRow.displayName = 'AnimatedPanelRow';
 
+const isFacetValueActive = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).length > 0;
+  }
+  if (value && typeof value === 'object') {
+    const objectValues = Object.values(value);
+    if (objectValues.length === 0) return false;
+    return objectValues.some(isFacetValueActive);
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === 'all') return false;
+  }
+  return Boolean(value);
+};
+
 const TableSidePanel = ({
   databaseId,
   databaseName,
@@ -121,6 +137,12 @@ const TableSidePanel = ({
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
   const [metadataMap, setMetadataMap] = useState(new Map());
+
+  // Detect if any facet filters are currently applied for this database
+  const hasActiveFacetFilters = useMemo(() => {
+    const filters = appliedFilters || {};
+    return Object.values(filters).some(isFacetValueActive);
+  }, [appliedFilters]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -230,6 +252,7 @@ const TableSidePanel = ({
           justifyContent: 'center',
           cursor: 'pointer',
           boxShadow: '4px 0 8px rgba(0,0,0,0.05)',
+          position: 'absolute',
           '&:hover': {
             backgroundColor: 'action.hover',
             width: 28, // slight hover effect
@@ -237,6 +260,20 @@ const TableSidePanel = ({
           transition: 'width 0.2s',
         }}
       >
+        {isCollapsed && hasActiveFacetFilters && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 6,
+              right: 6,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: 'error.main',
+              boxShadow: (theme) => `0 0 0 2px ${theme.palette.background.paper}`,
+            }}
+          />
+        )}
         {isCollapsed ? <ChevronRight fontSize="small" color="action" /> : <ChevronLeft fontSize="small" color="action" />}
       </Box>
 
@@ -289,7 +326,23 @@ const TableSidePanel = ({
               {PANEL_TABS.map(tab => (
                 <Tab
                   key={tab.value}
-                  label={tab.label}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box component="span">{tab.label}</Box>
+                      {tab.value === 'filters' && hasActiveFacetFilters && (
+                        <Box
+                          component="span"
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'error.main',
+                            boxShadow: (theme) => `0 0 0 2px ${theme.palette.background.paper}`,
+                          }}
+                        />
+                      )}
+                    </Box>
+                  }
                   value={tab.value}
                   icon={tab.icon}
                   iconPosition="start"
