@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button } from '@mui/material';
-import { getFacetAggregatesForDb } from '../api/backendClient';
 import FacetGroup from './FacetGroup';
 
 const emptyFacets = {
@@ -27,7 +26,7 @@ const buildFacetPayload = (filters = {}) => {
   return payload;
 };
 
-const FilterPanel = ({ onApplyFilters, appliedFilters = {}, activeDatabase, searchQuery }) => {
+const FilterPanel = ({ onApplyFilters, appliedFilters = {}, activeDatabase, searchQuery, facetData: incomingFacets = null }) => {
   const [facetData, setFacetData] = useState(emptyFacets);
   const [loading, setLoading] = useState(false);
 
@@ -44,19 +43,16 @@ const FilterPanel = ({ onApplyFilters, appliedFilters = {}, activeDatabase, sear
     setTableYearsSelected(normalizeArray(appliedFilters.tableYears));
   }, [appliedFilters]);
 
+  // Prefer provided facet data from searchTables; fall back to empty and stop loading
   useEffect(() => {
-    setLoading(true);
-    const payload = buildFacetPayload(appliedFilters);
-    getFacetAggregatesForDb(activeDatabase, searchQuery, payload)
-      .then((data) => {
-        setFacetData(data);
-      })
-      .catch((error) => {
-        console.error('Failed to load facet aggregates:', error);
-        setFacetData(emptyFacets);
-      })
-      .finally(() => setLoading(false));
-  }, [appliedFilters, activeDatabase, searchQuery]);
+    if (incomingFacets) {
+      setFacetData(incomingFacets);
+      setLoading(false);
+    } else {
+      setFacetData(emptyFacets);
+      setLoading(false);
+    }
+  }, [incomingFacets]);
 
   const toOptionsWithSelections = (obj, selected) => {
     const map = new Map();

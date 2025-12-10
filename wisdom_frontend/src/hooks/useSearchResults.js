@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { searchTables, getTableDataPaginatedById } from '../api/backendClient';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 
@@ -34,6 +34,12 @@ export const useSearchResults = ({
   const tableDataCache = useRef(new Map());
   const pendingTableFetches = useRef(new Set());
   const inflightControllers = useRef(new Map());
+  const [facetsByDb, setFacetsByDb] = useState({
+    db1: null,
+    db2: null,
+    db3: null,
+    db4: null,
+  });
 
   const clearAllPending = useCallback(() => {
     // Abort inflight row requests and clear trackers
@@ -59,6 +65,17 @@ export const useSearchResults = ({
     });
   }, []);
 
+  // Build shared filters (only selectedTables propagated across DBs)
+  const sharedFilters = useMemo(() => {
+    let selectedTables = null;
+    Object.values(perDbFilters || {}).forEach((f) => {
+      if (Array.isArray(f?.selectedTables) && f.selectedTables.length > 0) {
+        selectedTables = f.selectedTables;
+      }
+    });
+    return selectedTables ? { selectedTables } : {};
+  }, [perDbFilters]);
+
   // Step 1: Search all databases for matching table IDs
   useEffect(() => {
     let isCancelled = false;
@@ -68,6 +85,7 @@ export const useSearchResults = ({
       (typeof searchQuery === 'string' && searchQuery.trim() !== '');
 
     const hasAnyFilters =
+      Object.keys(sharedFilters).length > 0 ||
       Object.values(perDbFilters || {}).some((f) => f && Object.keys(f).length > 0);
 
     // Skip kicking off searches when there's no query and no filters selected
@@ -83,6 +101,7 @@ export const useSearchResults = ({
     // Create a signature for the current search criteria
     const currentSignature = JSON.stringify({
       query: searchQuery,
+      sharedFilters,
       perDbFilters,
       permutationId,
       permutationParams, // Don't double-stringify
@@ -105,7 +124,7 @@ export const useSearchResults = ({
           searchTables({
             db: dbId,
             query: searchQuery,
-            filters: perDbFilters[dbId] || {},
+            filters: { ...sharedFilters, ...(perDbFilters[dbId] || {}) },
           })
         );
 
@@ -121,6 +140,12 @@ export const useSearchResults = ({
 
           setLastSearchSignature(currentSignature);
           tableDataCache.current.clear();
+          setFacetsByDb({
+            db1: results[0]?.facets || null,
+            db2: results[1]?.facets || null,
+            db3: results[2]?.facets || null,
+            db4: results[3]?.facets || null,
+          });
           logInfo('search done', {
             db1: results[0]?.tableIds?.length ?? 0,
             db2: results[1]?.tableIds?.length ?? 0,
@@ -154,6 +179,7 @@ export const useSearchResults = ({
   }, [
     searchQuery,
     JSON.stringify(perDbFilters),
+    JSON.stringify(sharedFilters),
     permutationId,
     JSON.stringify(permutationParams), // Stringify to avoid object reference changes
   ]);
@@ -278,5 +304,6 @@ export const useSearchResults = ({
     isLoadingTableData,
     tableDataCache,
     pruneCacheToVisibleTables,
+    facetsByDb,
   };
 };

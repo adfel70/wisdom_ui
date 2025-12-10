@@ -11,6 +11,8 @@ const emptyFacets = {
 
 let catalogCache = null;
 let catalogPromise = null;
+let bdtsCache = null;
+let bdtsPromise = null;
 
 const withJson = async (response) => {
   const text = await response.text();
@@ -93,6 +95,21 @@ const updateTableMeta = (table, dbId) => {
 export const getCatalog = async () => {
   const catalog = await ensureCatalog();
   return { tables: catalog.tables, databases: catalog.databases };
+};
+
+export const getBdts = async () => {
+  if (bdtsCache) return bdtsCache;
+  if (!bdtsPromise) {
+    bdtsPromise = request('/api/bdts')
+      .then((data) => {
+        bdtsCache = data?.bdts || [];
+        return bdtsCache;
+      })
+      .finally(() => {
+        bdtsPromise = null;
+      });
+  }
+  return bdtsPromise;
 };
 
 export const getDatabaseMetadata = async () => {
@@ -269,11 +286,6 @@ export const getTableDataPaginatedById = async (
     data: rows,
     paginationInfo,
   };
-};
-
-export const getFacetAggregatesForDb = async (dbId, query = null, filters = {}) => {
-  const result = await searchTables({ db: dbId, query, filters });
-  return result.facets || emptyFacets;
 };
 
 export const getPermutations = async (permutationId, terms = [], params = {}) => {

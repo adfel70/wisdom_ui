@@ -212,7 +212,7 @@ const SearchResultsPage = () => {
   }, [matchingTableIds, activeDatabase, currentPage]);
 
   // Search results hook
-  const { isSearching, isLoadingTableData, tableDataCache } = useSearchResults({
+  const { isSearching, isLoadingTableData, tableDataCache, facetsByDb } = useSearchResults({
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
     perDbFilters: filtersByDb,
@@ -457,10 +457,29 @@ const SearchResultsPage = () => {
       }
     });
 
-    setFiltersByDb(prev => ({
-      ...prev,
-      [activeDatabase]: cleanedFilters,
-    }));
+    setFiltersByDb(prev => {
+      const next = { ...prev };
+      const dbIds = ['db1', 'db2', 'db3', 'db4'];
+
+      // Always propagate selectedTables to all DBs so each searchTables call receives it
+      dbIds.forEach((dbId) => {
+        const base = next[dbId] || {};
+        next[dbId] = { ...base };
+        if (cleanedFilters.selectedTables) {
+          next[dbId].selectedTables = cleanedFilters.selectedTables;
+        } else {
+          delete next[dbId].selectedTables;
+        }
+      });
+
+      // Apply the rest of the filters only to the active DB
+      next[activeDatabase] = {
+        ...next[activeDatabase],
+        ...cleanedFilters,
+      };
+
+      return next;
+    });
     searchState.setFilters(cleanedFilters);
     pagination.resetAllPages();
     const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
@@ -711,6 +730,7 @@ const SearchResultsPage = () => {
           appliedFilters={filtersByDb[activeDatabase] || {}}
           onApplyFilters={handleApplyFilters}
           facetSearchQuery={searchState.searchQuery}
+          facetData={facetsByDb?.[activeDatabase] || null}
         />
 
         {/* Results Content */}

@@ -16,7 +16,7 @@ import {
   InputLabel,
 } from '@mui/material';
 import { Close as CloseIcon, Add, Close as DeleteIcon } from '@mui/icons-material';
-import { getColumnTypes } from '../api/backendClient';
+import { useBdts } from '../context/BdtsContext';
 
 /**
  * QueryBuilderModal Component
@@ -36,6 +36,7 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   });
 
   // Column types (business data types) for dropdown
+  const { bdts } = useBdts();
   const [columnTypes, setColumnTypes] = useState([]);
 
   // Generate unique IDs for conditions and groups
@@ -131,28 +132,12 @@ const QueryBuilderModal = ({ open, onClose, onApply, initialQuery = '' }) => {
   };
 
 
-  // Load column types when modal opens
+  // Load column types from context when modal opens
   useEffect(() => {
-    let isCancelled = false;
     if (open) {
-      getColumnTypes()
-        .then((types) => {
-          if (!isCancelled) {
-            setColumnTypes(types || []);
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to load column types:', error);
-          if (!isCancelled) {
-            setColumnTypes([]);
-          }
-        });
+      setColumnTypes(bdts || []);
     }
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [open]);
+  }, [open, bdts]);
 
   // Initialize tree from initialQuery when modal opens
   useEffect(() => {

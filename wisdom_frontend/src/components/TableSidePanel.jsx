@@ -116,6 +116,7 @@ const TableSidePanel = ({
   appliedFilters = {},
   onApplyFilters,
   facetSearchQuery,
+  facetData = null,
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
@@ -419,6 +420,7 @@ const TableSidePanel = ({
             onApplyFilters={onApplyFilters}
             activeDatabase={databaseId}
             searchQuery={facetSearchQuery}
+            facetData={facetData}
           />
         )}
       </Box>
