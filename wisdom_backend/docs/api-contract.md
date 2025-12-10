@@ -84,6 +84,7 @@
     "total": 3
   }
   ```
+  - Note: each table’s `count` reflects the number of rows matching the query/filters/permutations and picked_tables.
 
 ### searchRows
 - `POST /api/search/rows`

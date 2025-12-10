@@ -16,7 +16,7 @@ def _normalize_filters(filters: Optional[Filters]) -> Filters:
     return filters or Filters()
 
 
-def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_override: Optional[int] = None) -> Optional[Dict[str, Any]]:
     meta = table_meta.get(table_key)
     if not meta:
         return None
@@ -26,7 +26,7 @@ def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any]) -> Optional
         "year": meta.get("year"),
         "country": meta.get("country"),
         "categories": meta.get("categories", []),
-        "count": meta.get("recordCount"),
+        "count": count_override if count_override is not None else meta.get("recordCount"),
         "columns": [c.get("name") for c in meta.get("columns", [])],
     }
 
@@ -218,7 +218,7 @@ def search_tables(
         # when no query, use full record counts from metadata
         table_counts = {tid: table_meta.get(tid, {}).get("recordCount", 0) for tid in table_ids}
 
-    tables = [_table_meta_from_key(tid, table_meta) for tid in table_ids]
+    tables = [_table_meta_from_key(tid, table_meta, table_counts.get(tid)) for tid in table_ids]
     tables = [t for t in tables if t]
     tables = _filter_tables_by_filters(tables, filters)
     tables = _apply_picked_tables_constraint(tables, picked_tables)

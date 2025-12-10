@@ -445,6 +445,8 @@ const TableCard = ({
     });
   }, [table?.data]);
 
+  const totalRecords = table?.count ?? dedupedData.length;
+
   const hasRows = dedupedData.length > 0;
   const expectsRows = (table?.count ?? 0) > 0;
   const isGridLoading = isLoading || (!hasRows && expectsRows);
@@ -814,7 +816,7 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                label={`${dedupedData.length} Records`}
+                label={`Records: ${dedupedData.length}/${totalRecords}`}
                 size="small"
                 color="primary"
                 variant="outlined"
