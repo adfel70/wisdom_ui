@@ -43,30 +43,23 @@ export const useSearchResults = ({
     db4: null,
   });
   const [permutationMap, setPermutationMap] = useState(null);
+  const [, setTableCacheVersion] = useState(0);
+
+  const bumpTableCacheVersion = useCallback(() => {
+    setTableCacheVersion((prev) => prev + 1);
+  }, []);
 
   const clearAllPending = useCallback(() => {
     // Abort inflight row requests and clear trackers
     inflightControllers.current.forEach((controller) => controller.abort());
     inflightControllers.current.clear();
     pendingTableFetches.current.clear();
-    tableDataCache.current.clear();
-    tableLoadingHook?.clearPending?.();
-  }, [tableLoadingHook]);
-
-  // Prune cache to only keep visible tables
-  const pruneCacheToVisibleTables = useCallback((visibleIds) => {
-    if (!visibleIds || visibleIds.length === 0) {
+    if (tableDataCache.current.size) {
       tableDataCache.current.clear();
-      return;
+      bumpTableCacheVersion();
     }
-
-    const visibleSet = new Set(visibleIds);
-    tableDataCache.current.forEach((_, id) => {
-      if (!visibleSet.has(id)) {
-        tableDataCache.current.delete(id);
-      }
-    });
-  }, []);
+    tableLoadingHook?.clearPending?.();
+  }, [tableLoadingHook, bumpTableCacheVersion]);
 
   // Step 1: Search all databases for matching table IDs
   useEffect(() => {
@@ -157,7 +150,10 @@ export const useSearchResults = ({
           });
 
           setLastSearchSignature(currentSignature);
-          tableDataCache.current.clear();
+          if (tableDataCache.current.size) {
+            tableDataCache.current.clear();
+            bumpTableCacheVersion();
+          }
           setFacetsByDb({
             db1: results[0]?.facets || null,
             db2: results[1]?.facets || null,
@@ -208,7 +204,10 @@ export const useSearchResults = ({
 
     const loadVisibleTableData = async () => {
       if (!visibleTableIds || visibleTableIds.length === 0) {
-        tableDataCache.current.clear();
+        if (tableDataCache.current.size) {
+          tableDataCache.current.clear();
+          bumpTableCacheVersion();
+        }
         tableLoadingHook.syncPendingWithVisible([]);
         tableLoadingHook.clearPending?.();
         if (!isCancelled) {
@@ -217,7 +216,6 @@ export const useSearchResults = ({
         return;
       }
 
-      pruneCacheToVisibleTables(visibleTableIds);
       tableLoadingHook.syncPendingWithVisible(visibleTableIds);
 
       const idsToFetch = visibleTableIds.filter(id => !tableDataCache.current.has(id));
@@ -278,6 +276,9 @@ export const useSearchResults = ({
 
         if (!isCancelled) {
           newTables.forEach(t => tableDataCache.current.set(t.id, t));
+          if (newTables.length) {
+            bumpTableCacheVersion();
+          }
         }
       } catch (error) {
         if (error?.name !== 'AbortError') {
@@ -324,8 +325,8 @@ export const useSearchResults = ({
     isSearching,
     isLoadingTableData,
     tableDataCache,
-    pruneCacheToVisibleTables,
     facetsByDb,
     permutationMap,
+    notifyTableCacheChange: bumpTableCacheVersion,
   };
 };

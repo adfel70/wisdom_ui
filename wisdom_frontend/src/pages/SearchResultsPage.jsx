@@ -149,7 +149,6 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
-  const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
   const [permutationVariants, setPermutationVariants] = useState(null);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
   const [filtersByDb, setFiltersByDb] = useState({
@@ -212,7 +211,14 @@ const SearchResultsPage = () => {
   }, [matchingTableIds, activeDatabase, currentPage]);
 
   // Search results hook
-  const { isSearching, isLoadingTableData, tableDataCache, facetsByDb, permutationMap } = useSearchResults({
+  const {
+    isSearching,
+    isLoadingTableData,
+    tableDataCache,
+    facetsByDb,
+    permutationMap,
+    notifyTableCacheChange,
+  } = useSearchResults({
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
     perDbFilters: filtersByDb,
@@ -629,17 +635,15 @@ const SearchResultsPage = () => {
           data: [...cachedTable.data, ...newRecords],
         };
         tableDataCache.current.set(tableId, updatedTable);
+        notifyTableCacheChange();
       }
 
       // Update pagination state (this also triggers re-render)
       tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
-
-      // Force re-render by updating counter
-      setCacheUpdateCounter(prev => prev + 1);
     } catch (error) {
       console.error('Failed to load more records:', error);
     }
-  }, [tablePagination, tableDataCache, searchState]);
+  }, [tablePagination, tableDataCache, searchState, notifyTableCacheChange]);
 
   // Determine empty state type
   const getEmptyStateType = () => {
