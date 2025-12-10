@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 **/__pycache__/
-*.pyc
+*.py[cod]
 
 # Python virtual environments
 .venv/
@@ -30,3 +30,16 @@ venv/
 *.njsproj
 *.sln
 *.sw?
+
+# Python tooling artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+.ipynb_checkpoints
+.python-version
+.env
+.env.*
