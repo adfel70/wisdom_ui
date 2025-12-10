@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { searchTables, getTableDataPaginatedById } from '../api/backendClient';
 import { RECORDS_PER_PAGE } from '../config/paginationConfig';
+import { extractTermsFromQuery } from '../utils/searchUtils';
 
 const logInfo = (...args) => {
   if (import.meta.env?.DEV) {
@@ -40,6 +41,7 @@ export const useSearchResults = ({
     db3: null,
     db4: null,
   });
+  const [permutationMap, setPermutationMap] = useState(null);
 
   const clearAllPending = useCallback(() => {
     // Abort inflight row requests and clear trackers
@@ -107,6 +109,28 @@ export const useSearchResults = ({
       permutationParams, // Don't double-stringify
     });
 
+    const buildPermutationMap = async () => {
+      if (!permutationId || permutationId === 'none') return null;
+
+      let terms = [];
+      if (Array.isArray(searchQuery)) {
+        terms = extractTermsFromQuery(searchQuery);
+      } else if (typeof searchQuery === 'string') {
+        const trimmed = searchQuery.trim();
+        if (trimmed) terms = [trimmed];
+      }
+      if (!terms.length) return null;
+      try {
+        const variants = await import('../api/backendClient').then((m) =>
+          m.getPermutations(permutationId, terms, permutationParams || {}),
+        );
+        return variants && Object.keys(variants).length ? variants : null;
+      } catch (error) {
+        console.error('Failed to fetch permutations:', error);
+        return null;
+      }
+    };
+
     const searchAllDatabases = async () => {
       // If we already have results for this exact search, don't re-run it
       // Use callback to get fresh matchingTableIds without adding to dependencies
@@ -118,6 +142,8 @@ export const useSearchResults = ({
 
       setIsSearching(true);
       logInfo('search start', { signature: currentSignature });
+      const permutations = await buildPermutationMap();
+      setPermutationMap(permutations);
       try {
         // Search all databases in parallel against FastAPI backend
         const searchPromises = ['db1', 'db2', 'db3', 'db4'].map((dbId) =>
@@ -125,6 +151,7 @@ export const useSearchResults = ({
             db: dbId,
             query: searchQuery,
             filters: { ...sharedFilters, ...(perDbFilters[dbId] || {}) },
+            permutations,
           })
         );
 
@@ -238,6 +265,7 @@ export const useSearchResults = ({
             RECORDS_PER_PAGE,
             searchQuery,
             filters,
+            permutationMap,
             controller.signal
           );
 
@@ -305,5 +333,6 @@ export const useSearchResults = ({
     tableDataCache,
     pruneCacheToVisibleTables,
     facetsByDb,
+    permutationMap,
   };
 };

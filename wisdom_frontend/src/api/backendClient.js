@@ -187,12 +187,13 @@ export const getColumnTypes = async () => {
   return Array.from(types).sort();
 };
 
-export const searchTables = async ({ db, query = null, filters = {} }) => {
+export const searchTables = async ({ db, query = null, filters = {}, permutations = null }) => {
   await ensureCatalog();
   const payload = {
     db,
     query: query ?? null,
     filters: filters || {},
+    ...(permutations ? { permutations } : {}),
   };
 
   const result = await request('/api/search/tables', {
@@ -227,6 +228,7 @@ export const getTableDataPaginatedById = async (
   pageSize = 20,
   query = null,
   filters = {},
+  permutations = null,
   signal = undefined,
 ) => {
   const catalog = await ensureCatalog();
@@ -243,6 +245,7 @@ export const getTableDataPaginatedById = async (
   const payload = {
     query: query ?? null,
     filters: filters || {},
+    ...(permutations ? { permutations } : {}),
     options: {
       db,
       table: tableId,

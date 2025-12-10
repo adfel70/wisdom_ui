@@ -31,16 +31,32 @@ def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any]) -> Optional
     }
 
 
-def _evaluate_clause(element: Dict[str, Any], record: Dict[str, Any], table_meta: Dict[str, Any]) -> bool:
+def _evaluate_clause(
+    element: Dict[str, Any],
+    record: Dict[str, Any],
+    table_meta: Dict[str, Any],
+    permutations: Optional[Dict[str, List[str]]] = None,
+) -> bool:
     content = element.get("content", {})
     value = content.get("value")
     if value is None:
         return False
     bdt = content.get("bdt")
-    term = str(value).lower()
+    term = str(value)
+
+    # Build variants from permutations map (inclusive of original)
+    variants = [term]
+    if permutations and term in permutations:
+        variants.extend(permutations.get(term, []))
+    variants = list({v for v in variants if v is not None})
+    lower_variants = [v.lower() for v in variants]
 
     if not bdt:
-        return any(str(v).lower().find(term) != -1 for v in record.values() if v is not None)
+        return any(
+            any(lv in str(field_val).lower() for lv in lower_variants)
+            for field_val in record.values()
+            if field_val is not None
+        )
 
     table_key = record.get("tableKey")
     meta = table_meta.get(table_key) if table_key else None
@@ -49,10 +65,17 @@ def _evaluate_clause(element: Dict[str, Any], record: Dict[str, Any], table_meta
     matching_cols = [col["name"] for col in meta.get("columns", []) if col.get("type") == bdt]
     if not matching_cols:
         return False
-    return any(str(record.get(col, "")).lower().find(term) != -1 for col in matching_cols)
+    return any(
+        any(lv in str(record.get(col, "")).lower() for lv in lower_variants) for col in matching_cols
+    )
 
 
-def _evaluate_query_elements(elements: List[Dict[str, Any]], record: Dict[str, Any], table_meta: Dict[str, Any]) -> bool:
+def _evaluate_query_elements(
+    elements: List[Dict[str, Any]],
+    record: Dict[str, Any],
+    table_meta: Dict[str, Any],
+    permutations: Optional[Dict[str, List[str]]] = None,
+) -> bool:
     if not elements:
         return True
     result = None
@@ -63,9 +86,11 @@ def _evaluate_query_elements(elements: List[Dict[str, Any]], record: Dict[str, A
             pending_op = element.get("content", {}).get("operator")
             continue
         if etype == "subQuery":
-            res = _evaluate_query_elements(element.get("content", {}).get("elements", []), record, table_meta)
+            res = _evaluate_query_elements(
+                element.get("content", {}).get("elements", []), record, table_meta, permutations
+            )
         else:
-            res = _evaluate_clause(element, record, table_meta)
+            res = _evaluate_clause(element, record, table_meta, permutations)
         if result is None:
             result = res
         elif pending_op:
@@ -77,14 +102,19 @@ def _evaluate_query_elements(elements: List[Dict[str, Any]], record: Dict[str, A
     return bool(result) if result is not None else True
 
 
-def _apply_query_to_records(records: List[Dict[str, Any]], query: Optional[Any], table_meta: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _apply_query_to_records(
+    records: List[Dict[str, Any]],
+    query: Optional[Any],
+    table_meta: Dict[str, Any],
+    permutations: Optional[Dict[str, List[str]]] = None,
+) -> List[Dict[str, Any]]:
     if not query:
         return records
     if isinstance(query, str):
         term = query.lower()
         return [r for r in records if any(term in str(v).lower() for v in r.values() if v is not None)]
     if isinstance(query, list):
-        return [r for r in records if _evaluate_query_elements(query, r, table_meta)]
+        return [r for r in records if _evaluate_query_elements(query, r, table_meta, permutations)]
     return records
 
 
@@ -148,7 +178,12 @@ def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) ->
     }
 
 
-def search_tables(db_key: str, query: Optional[Any], filters: Optional[Filters]) -> Dict[str, Any]:
+def search_tables(
+    db_key: str,
+    query: Optional[Any],
+    filters: Optional[Filters],
+    permutations: Optional[Dict[str, List[str]]] = None,
+) -> Dict[str, Any]:
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
     table_meta = get_table_metadata()
@@ -158,7 +193,7 @@ def search_tables(db_key: str, query: Optional[Any], filters: Optional[Filters])
 
     all_table_keys: List[str] = assignments.get(db_key, [])
     records = load_records(db_key)
-    filtered_records = _apply_query_to_records(records, query, table_meta)
+    filtered_records = _apply_query_to_records(records, query, table_meta, permutations)
 
     if query:
         table_ids: Set[str] = {r.get("tableKey") for r in filtered_records if r.get("tableKey")}
@@ -185,6 +220,7 @@ def search_rows(
     table_key: str,
     query: Optional[Any],
     filters: Optional[Filters],
+    permutations: Optional[Dict[str, List[str]]],
     page_number: int,
     start_row: int,
     size_limit: int,
@@ -205,7 +241,7 @@ def search_rows(
         }
 
     records = [r for r in load_records(db_key) if r.get("tableKey") == table_key]
-    filtered_records = _apply_query_to_records(records, query, table_meta_all)
+    filtered_records = _apply_query_to_records(records, query, table_meta_all, permutations)
 
     meta = _table_meta_from_key(table_key, table_meta_all)
     if not meta:

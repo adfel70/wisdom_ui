@@ -55,12 +55,27 @@ def test_search_tables_with_query_and_filter():
         "db": "db1",
         "query": [{"type": "clause", "content": {"value": "Mexico", "bdt": None}}],
         "filters": {"regions": ["Mexico"]},
+        "permutations": {},
     }
     res = client.post("/api/search/tables", json=payload)
     assert res.status_code == 200
     body = res.json()
     assert body["total"] >= 1
     assert "facets" in body
+
+
+def test_search_tables_with_permutations():
+    # query value "X_mex" is not in data; permutation maps it to "Mexico" which is present
+    payload = {
+        "db": "db1",
+        "query": [{"type": "clause", "content": {"value": "X_mex", "bdt": None}}],
+        "filters": {},
+        "permutations": {"X_mex": ["Mexico"]},
+    }
+    res = client.post("/api/search/tables", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] >= 1
 
 
 def test_search_rows_basic_paging():
@@ -74,6 +89,7 @@ def test_search_rows_basic_paging():
             "startRow": 0,
             "sizeLimit": 10,
         },
+        "permutations": {},
     }
     res = client.post("/api/search/rows", json=payload)
     assert res.status_code == 200
@@ -96,6 +112,7 @@ def test_search_rows_with_query_filters_down():
             "startRow": 0,
             "sizeLimit": 5,
         },
+        "permutations": {},
     }
     res = client.post("/api/search/rows", json=payload)
     assert res.status_code == 200
@@ -103,6 +120,26 @@ def test_search_rows_with_query_filters_down():
     # rows should respect size and not be empty if data exists
     assert len(body["rows"]) <= 5
     assert "columns" in body
+
+
+def test_search_rows_with_permutations():
+    # query value "X_mex" is not in data; permutation maps it to "Mexico" which is present in t1 rows
+    payload = {
+        "query": [{"type": "clause", "content": {"value": "X_mex", "bdt": None}}],
+        "filters": {},
+        "options": {
+            "db": "db1",
+            "table": "t1",
+            "pageNumber": 1,
+            "startRow": 0,
+            "sizeLimit": 5,
+        },
+        "permutations": {"X_mex": ["Mexico"]},
+    }
+    res = client.post("/api/search/rows", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["rows"]) >= 1
 
 
 def test_permutations():

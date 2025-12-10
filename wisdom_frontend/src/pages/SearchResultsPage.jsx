@@ -212,7 +212,7 @@ const SearchResultsPage = () => {
   }, [matchingTableIds, activeDatabase, currentPage]);
 
   // Search results hook
-  const { isSearching, isLoadingTableData, tableDataCache, facetsByDb } = useSearchResults({
+  const { isSearching, isLoadingTableData, tableDataCache, facetsByDb, permutationMap } = useSearchResults({
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
     perDbFilters: filtersByDb,
@@ -618,8 +618,9 @@ const SearchResultsPage = () => {
         tableId,
         paginationState,
         tablePagination.pageSize,
-          searchState.searchQuery,
-          searchState.filters
+        searchState.searchQuery,
+        searchState.filters,
+        permutationMap
       );
 
       const newRecords = tableData.data;

@@ -19,6 +19,7 @@ class SearchTablesRequest(BaseModel):
     db: str
     query: Optional[Any] = None
     filters: Filters = Field(default_factory=Filters)
+    permutations: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
 
 
 class SearchRowsOptions(BaseModel):
@@ -33,6 +34,7 @@ class SearchRowsRequest(BaseModel):
     query: Optional[Any] = None
     filters: Filters = Field(default_factory=Filters)
     options: SearchRowsOptions
+    permutations: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
 
 
 class PermutationsRequest(BaseModel):

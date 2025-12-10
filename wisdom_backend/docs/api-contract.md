@@ -61,7 +61,10 @@
   {
     "db": "db1",
     "query": [ { "type": "clause", "content": { "value": "active", "bdt": null } } ],
-    "filters": { "categories": ["Finance"], "year": "all" }
+    "filters": { "categories": ["Finance"], "year": "all" },
+    "permutations": {
+      "active": ["active", "ACTIVE"]  // term -> variants; OR’d per clause
+    }
   }
   ```
 - Returns:
@@ -86,6 +89,9 @@
   {
     "query": [ { "type": "clause", "content": { "value": "active", "bdt": null } } ],
     "filters": {},
+    "permutations": {
+      "active": ["active", "ACTIVE"]
+    },
     "options": {
       "db": "db1",
       "table": "t1",
