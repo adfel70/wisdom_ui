@@ -699,6 +699,8 @@ const SearchResultsPage = () => {
                   permutationParams={searchState.permutationParams}
                   onPermutationChange={handlePermutationChange}
                   onPermutationParamsChange={handlePermutationParamsChange}
+                  pickedTables={searchState.pickedTables}
+                  onClearPickedTables={() => handleRemoveFilter('pickedTables')}
                 />
 
                 <DatabaseTabs

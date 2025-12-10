@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Button, Paper } from '@mui/material';
-import { FilterList, AccountTree } from '@mui/icons-material';
+import { Box, Button, Paper, IconButton } from '@mui/material';
+import { FilterList, AccountTree, Close } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../SearchBar';
 import PermutationMenu from './PermutationMenu';
@@ -22,7 +22,12 @@ const SearchSection = ({
   permutationParams,
   onPermutationChange,
   onPermutationParamsChange,
+  pickedTables = [],
+  onClearPickedTables,
 }) => {
+  const pickedCount = Array.isArray(pickedTables) ? pickedTables.length : 0;
+  const hasPicked = pickedCount > 0;
+
   return (
     <motion.div
       initial={{ opacity: 1, y: 200 }}
@@ -90,7 +95,7 @@ const SearchSection = ({
           </Button>
 
           <Button
-            variant="outlined"
+            variant={hasPicked ? 'contained' : 'outlined'}
             startIcon={<FilterList />}
             onClick={onFilterClick}
             sx={{
@@ -99,13 +104,35 @@ const SearchSection = ({
               fontSize: '0.75rem',
               transition: 'all 0.2s',
               whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
               '&:hover': {
                 transform: 'translateY(-1px)',
                 boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
               },
             }}
           >
-            Filter Tables
+            {hasPicked
+              ? `${pickedCount} table${pickedCount === 1 ? '' : 's'} picked`
+              : 'Filter Tables'}
+            {hasPicked && (
+              <IconButton
+                size="small"
+                color="inherit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearPickedTables?.();
+                }}
+                sx={{
+                  ml: 0.5,
+                  p: 0.2,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.25)' },
+                }}
+              >
+                <Close sx={{ fontSize: '0.9rem' }} />
+              </IconButton>
+            )}
           </Button>
         </Box>
       </Box>

@@ -14,8 +14,7 @@ const ActiveFiltersAlert = ({ filters, pickedTables = [], onRemoveFilter }) => {
     filters.tableName ||
     filters.minDate ||
     filters.maxDate ||
-    (filters.selectedTables && filters.selectedTables.length > 0) ||
-    (Array.isArray(pickedTables) && pickedTables.length > 0);
+    (filters.selectedTables && filters.selectedTables.length > 0);
 
   if (!hasActiveFilters) return null;
 
@@ -74,14 +73,6 @@ const ActiveFiltersAlert = ({ filters, pickedTables = [], onRemoveFilter }) => {
               size="small"
               color="primary"
               onDelete={() => onRemoveFilter('selectedTables')}
-            />
-          )}
-          {Array.isArray(pickedTables) && pickedTables.length > 0 && (
-            <Chip
-              label={`${pickedTables.length} picked table${pickedTables.length !== 1 ? 's' : ''}`}
-              size="small"
-              color="primary"
-              onDelete={() => onRemoveFilter('pickedTables')}
             />
           )}
         </Stack>

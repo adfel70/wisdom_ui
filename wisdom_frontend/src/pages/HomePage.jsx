@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper, Button, Chip, Menu, MenuItem } from '@mui/material';
-import { School, FilterList, Shuffle, ChevronRight, AccountTree } from '@mui/icons-material';
+import { Box, Container, Typography, Paper, Button, Menu, MenuItem, IconButton } from '@mui/material';
+import { School, FilterList, Shuffle, ChevronRight, AccountTree, Close } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
 import FilterModal from '../components/FilterModal';
@@ -453,7 +453,7 @@ const HomePage = () => {
                   Query Builder
                 </Button>
                 <Button
-                  variant="outlined"
+                  variant={pickedTables.length > 0 ? 'contained' : 'outlined'}
                   startIcon={<FilterList />}
                   onClick={() => setIsFilterOpen(true)}
                   sx={{
@@ -461,13 +461,36 @@ const HomePage = () => {
                     px: 1.5,
                     fontSize: '0.75rem',
                     transition: 'all 0.2s',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
                     '&:hover': {
                       transform: 'translateY(-1px)',
                       boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
                     },
                   }}
                 >
-                  Filter Tables
+                  {pickedTables.length > 0
+                    ? `${pickedTables.length} table${pickedTables.length === 1 ? '' : 's'} picked`
+                    : 'Filter Tables'}
+                  {pickedTables.length > 0 && (
+                    <IconButton
+                      size="small"
+                      color="inherit"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearFilter('pickedTables');
+                      }}
+                      sx={{
+                        ml: 0.5,
+                        p: 0.2,
+                        backgroundColor: 'rgba(255,255,255,0.15)',
+                        '&:hover': { backgroundColor: 'rgba(255,255,255,0.25)' },
+                      }}
+                    >
+                      <Close sx={{ fontSize: '0.9rem' }} />
+                    </IconButton>
+                  )}
                 </Button>
               </Box>
             </motion.div>
@@ -497,70 +520,6 @@ const HomePage = () => {
                 variant="home"
               />
 
-              {/* Active Filters Display */}
-              {(Object.values(filters).some(v => v && v !== 'all') || (pickedTables && pickedTables.length > 0)) && (
-                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                    Active filters:
-                  </Typography>
-                  {filters.year && filters.year !== 'all' && (
-                    <Chip
-                      label={`Year: ${filters.year}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('year')}
-                      color="primary"
-                    />
-                  )}
-                  {filters.category && filters.category !== 'all' && (
-                    <Chip
-                      label={`Category: ${filters.category}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('category')}
-                      color="primary"
-                    />
-                  )}
-                  {filters.country && filters.country !== 'all' && (
-                    <Chip
-                      label={`Region: ${filters.country}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('country')}
-                      color="primary"
-                    />
-                  )}
-                  {filters.tableName && (
-                    <Chip
-                      label={`Table: ${filters.tableName}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('tableName')}
-                      color="primary"
-                    />
-                  )}
-                  {filters.minDate && (
-                    <Chip
-                      label={`From: ${filters.minDate}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('minDate')}
-                      color="primary"
-                    />
-                  )}
-                  {filters.maxDate && (
-                    <Chip
-                      label={`To: ${filters.maxDate}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('maxDate')}
-                      color="primary"
-                    />
-                  )}
-                  {pickedTables && pickedTables.length > 0 && (
-                    <Chip
-                      label={`${pickedTables.length} picked table${pickedTables.length > 1 ? 's' : ''}`}
-                      size="small"
-                      onDelete={() => handleClearFilter('pickedTables')}
-                      color="secondary"
-                    />
-                  )}
-                </Box>
-              )}
             </Paper>
           </motion.div>
           </Box>
