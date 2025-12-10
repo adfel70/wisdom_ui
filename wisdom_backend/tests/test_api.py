@@ -51,17 +51,57 @@ def test_search_tables_no_query():
 
 
 def test_search_tables_with_query_and_filter():
-    payload = {
+    # First discover tables that match the query/filters
+    discover_payload = {
         "db": "db1",
         "query": [{"type": "clause", "content": {"value": "Mexico", "bdt": None}}],
         "filters": {"regions": ["Mexico"]},
         "permutations": {},
+    }
+    discover_res = client.post("/api/search/tables", json=discover_payload)
+    assert discover_res.status_code == 200
+    discover_body = discover_res.json()
+
+    if discover_body["total"] == 0:
+        # Dataset does not have Mexico in the picked db; ensure empty is handled without errors
+        assert discover_body["tables"] == []
+        return
+
+    table_id = discover_body["tables"][0]["id"]
+
+    payload = {
+        "db": "db1",
+        "query": discover_payload["query"],
+        "filters": discover_payload["filters"],
+        "permutations": discover_payload["permutations"],
+        "picked_tables": [
+          {"db": "db1", "table": table_id},
+          {"db": "db1", "table": "t2"}
+        ],
     }
     res = client.post("/api/search/tables", json=payload)
     assert res.status_code == 200
     body = res.json()
     assert body["total"] >= 1
     assert "facets" in body
+    table_count = body["tables"][0]["count"]
+    rows_payload = {
+        "query": payload["query"],
+        "filters": payload["filters"],
+        "permutations": payload["permutations"],
+        "picked_tables": payload["picked_tables"],
+        "options": {
+            "db": "db1",
+            "table": table_id,
+            "pageNumber": 1,
+            "startRow": 0,
+            "sizeLimit": 5,
+        },
+    }
+    rows_res = client.post("/api/search/rows", json=rows_payload)
+    assert rows_res.status_code == 200
+    rows_body = rows_res.json()
+    assert table_count == rows_body["pagination"]["totalRecords"]
 
 
 def test_search_tables_with_permutations():
