@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -6,20 +6,15 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Box,
   IconButton,
   Typography,
-  Grid,
   Chip,
   Stack,
   Paper,
   Tooltip,
 } from '@mui/material';
-import { Close as CloseIcon, FilterList, CalendarToday } from '@mui/icons-material';
+import { Close as CloseIcon, FilterList, LocalOfferOutlined } from '@mui/icons-material';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
@@ -43,14 +38,25 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     country: 'all',
     minDate: '',
     maxDate: '',
+    columnTags: [],
     ...initialFilters,
   });
   const [selectedTables, setSelectedTables] = useState([]);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [allDatabases, setAllDatabases] = useState([]);
-  const [yearOptions, setYearOptions] = useState([]);
-  const [categoryOptions, setCategoryOptions] = useState([]);
-  const [countryOptions, setCountryOptions] = useState([]);
+
+  const getColumnTags = useCallback((table) => {
+    const tags = new Set();
+    (table?.columns || []).forEach((col) => {
+      if (col && typeof col === 'object') {
+        const colTags = col.tags ?? (col.type ? [col.type] : []);
+        (colTags || []).forEach((tag) => tag && tags.add(String(tag)));
+      } else if (col) {
+        tags.add(String(col));
+      }
+    });
+    return Array.from(tags);
+  }, []);
 
   // Load all databases when modal opens
   useEffect(() => {
@@ -68,16 +74,10 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
 
         if (isCancelled) return;
         setAllDatabases(databases || []);
-        setYearOptions(years || []);
-        setCategoryOptions(categories || []);
-        setCountryOptions(countries || []);
       } catch (error) {
         console.error('Failed to load filter metadata:', error);
         if (!isCancelled) {
           setAllDatabases([]);
-          setYearOptions([]);
-          setCategoryOptions([]);
-          setCountryOptions([]);
         }
       }
     };
@@ -98,11 +98,12 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
           ...table,
           databaseName: db.name,
           databaseId: db.id,
+          columnTags: getColumnTags(table),
         });
       });
     });
     return tables;
-  }, [allDatabases]);
+  }, [allDatabases, getColumnTags]);
 
   // Filter tables based on current filters
   const filteredTables = useMemo(() => {
@@ -139,6 +140,14 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         return false;
       }
 
+      // Filter by column tags (must include all selected)
+      if (Array.isArray(filters.columnTags) && filters.columnTags.length > 0) {
+        const tableTags = table.columnTags || [];
+        const required = filters.columnTags.map(String);
+        const hasAll = required.every((tag) => tableTags.includes(tag));
+        if (!hasAll) return false;
+      }
+
       // Filter by date range
       if (table.indexingDate) {
         const tableDate = new Date(table.indexingDate);
@@ -167,6 +176,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         country: 'all',
         minDate: '',
         maxDate: '',
+        columnTags: [],
         ...initialFilters,
       });
       // Seed selected tables from provided picked tables
@@ -184,6 +194,12 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
 
   const handleApply = () => {
     const cleaned = { ...filters };
+    const columnTags = Array.isArray(cleaned.columnTags) ? cleaned.columnTags.filter(Boolean) : [];
+    if (columnTags.length === 0) {
+      delete cleaned.columnTags;
+    } else {
+      cleaned.columnTags = columnTags;
+    }
 
     // Drop neutral/empty values before sending
     ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
@@ -224,6 +240,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       country: 'all',
       minDate: '',
       maxDate: '',
+      columnTags: [],
     };
     setFilters(resetFilters);
     setSelectedTables([]);
@@ -320,7 +337,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
               spacing={0.5}
               flexWrap="nowrap"
               gap={0.5}
-              justifyContent="center"
               alignItems="center"
               sx={{
                 width: '100%',
@@ -340,10 +356,79 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
               ))}
               {extra > 0 && (
                 <Tooltip
-                  title={cats.join(', ')}
-                  placement="top"
+                  title={
+                    <Stack spacing={0.25}>
+                      {cats.map((cat, idx) => (
+                        <span key={`${cat}-${idx}`}>{cat}</span>
+                      ))}
+                    </Stack>
+                  }
+                  placement="right"
                   arrow
                   enterDelay={300}
+                >
+                  <Chip
+                    label={`+${extra}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.7rem', height: 20, cursor: 'pointer' }}
+                  />
+                </Tooltip>
+              )}
+            </Stack>
+          </Box>
+        );
+      },
+    },
+    {
+      headerName: 'Column Tags',
+      field: 'columnTags',
+      flex: 1.2,
+      minWidth: 220,
+      cellRenderer: ({ value }) => {
+        const tags = Array.isArray(value) ? value : [];
+        const visible = tags.slice(0, 2);
+        const extra = tags.length > 2 ? tags.length - 2 : 0;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              flexWrap="nowrap"
+              gap={0.5}
+              alignItems="center"
+              sx={{
+                width: '100%',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {visible.map((tag, idx) => (
+                <Chip
+                  key={`${tag}-${idx}`}
+                  label={tag}
+                  size="small"
+                  variant="outlined"
+                  icon={<LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />}
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              ))}
+              {extra > 0 && (
+                <Tooltip
+                  placement="right"
+                  arrow
+                  enterDelay={300}
+                  title={
+                    <Stack spacing={0.5}>
+                      {tags.map((tag, idx) => (
+                        <Box key={`${tag}-${idx}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />
+                          <span>{tag}</span>
+                        </Box>
+                      ))}
+                    </Stack>
+                  }
                 >
                   <Chip
                     label={`+${extra}`}
@@ -466,11 +551,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
             </Box>
             {selectedTables.length > 0 && (
               <Chip
-                label={
-                  showSelectedOnly
-                    ? `${selectedTables.length} selected`
-                    : `${selectedTables.length} selected`
-                }
+                label={`${selectedTables.length} selected`}
                 color={showSelectedOnly ? 'secondary' : 'primary'}
                 size="small"
                 onClick={() => setShowSelectedOnly((prev) => !prev)}
@@ -480,7 +561,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
             )}
           </Box>
 
-          <Paper variant="outlined" sx={{ height: 420, position: 'relative', overflow: 'hidden' }}>
+          <Paper variant="outlined" sx={{ height: 550, position: 'relative', overflow: 'hidden' }}>
             <AgGridReact
               style={{ height: '100%', width: '100%' }}
               theme={themeQuartz}

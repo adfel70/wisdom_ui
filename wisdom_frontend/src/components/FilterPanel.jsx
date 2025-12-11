@@ -104,7 +104,6 @@ const FilterPanel = ({ onApplyFilters, appliedFilters = {}, activeDatabase, sear
           pb: 1,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1.5,
         }}
       >
         <FacetGroup

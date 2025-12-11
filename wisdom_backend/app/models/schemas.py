@@ -13,6 +13,7 @@ class Filters(BaseModel):
     regions: Optional[List[str]] = None
     tableNames: Optional[List[str]] = None
     tableYears: Optional[List[Any]] = None
+    columnTags: Optional[List[str]] = None
 
 
 class SearchTablesRequest(BaseModel):

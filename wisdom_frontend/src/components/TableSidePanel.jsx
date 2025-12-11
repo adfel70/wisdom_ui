@@ -252,7 +252,6 @@ const TableSidePanel = ({
           justifyContent: 'center',
           cursor: 'pointer',
           boxShadow: '4px 0 8px rgba(0,0,0,0.05)',
-          position: 'absolute',
           '&:hover': {
             backgroundColor: 'action.hover',
             width: 28, // slight hover effect

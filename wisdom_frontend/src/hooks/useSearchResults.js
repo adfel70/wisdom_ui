@@ -112,10 +112,40 @@ export const useSearchResults = ({
 
     const rowData = rowDataMap.get(tableId);
 
+    // Merge metadata columns (with tags) with row columns (string list) to keep tag info
+    const metaColumns = Array.isArray(metadata.columns) ? metadata.columns : [];
+    const metaMap = new Map();
+    metaColumns.forEach((col) => {
+      if (col && typeof col === 'object') {
+        const field = col.field || col.name;
+        if (field) {
+          metaMap.set(field, col);
+        }
+      } else if (col) {
+        metaMap.set(String(col), { name: String(col) });
+      }
+    });
+
+    const mergeColumns = () => {
+      if (rowData?.columns && Array.isArray(rowData.columns) && rowData.columns.length) {
+        return rowData.columns.map((col) => {
+          if (col && typeof col === 'object') {
+            const field = col.field || col.name;
+            const meta = field ? metaMap.get(field) : null;
+            return meta ? { ...meta, ...col } : col;
+          }
+          const meta = metaMap.get(col);
+          if (meta) return meta;
+          return { name: col, field: col };
+        });
+      }
+      return metaColumns;
+    };
+
     return {
       ...metadata,
       data: rowData?.data ?? [],
-      columns: rowData?.columns ?? metadata.columns ?? [],
+      columns: mergeColumns(),
       paginationInfo: rowData?.paginationInfo ?? null,
       isLoadingRows: rowData?.status === RowStatus.LOADING,
       hasRowData: rowData?.status === RowStatus.READY,

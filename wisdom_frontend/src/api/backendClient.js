@@ -7,6 +7,7 @@ const emptyFacets = {
   regions: {},
   tableNames: {},
   tableYears: {},
+  columnTags: {},
 };
 
 let catalogCache = null;

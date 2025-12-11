@@ -41,7 +41,8 @@ import {
   ViewWeek,
   KeyboardArrowRight,
   CompareArrows,
-  RestartAlt
+  RestartAlt,
+  LocalOfferOutlined
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { highlightText } from '../utils/searchUtils';
@@ -161,6 +162,7 @@ const CustomHeader = (props) => {
   const pinMenuCloseTimeoutRef = useRef(null);
 
   const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
+  const headerTags = column?.getColDef()?.metaTags || [];
 
   useEffect(() => {
     const onSortChanged = () => {
@@ -298,6 +300,39 @@ const CustomHeader = (props) => {
             height: '100%'
         }}
       >
+        {headerTags.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.25 }}>
+            <Tooltip
+              title={
+                headerTags.length > 1 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    {headerTags.map((tag, idx) => (
+                      <Box key={`${tag}-${idx}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />
+                        <span>{tag}</span>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : headerTags[0]
+              }
+              arrow
+              placement="top"
+            >
+              <IconButton
+                size="small"
+                disableRipple
+                sx={{
+                  p: 0.25,
+                  ml: 0.25,
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main' },
+                }}
+              >
+                <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '1rem' }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <Typography 
             variant="subtitle2" 
             fontWeight={600} 
@@ -451,7 +486,28 @@ const TableCard = ({
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState(table?.columns || []);
+  const columnMeta = React.useMemo(() => {
+    const cols = Array.isArray(table?.columns) ? table.columns : [];
+    return cols
+      .map((col) => {
+        if (typeof col === 'string') {
+          return { id: col, label: col, tags: [] };
+        }
+        if (col && typeof col === 'object') {
+          const field = col.field || col.name || '';
+          if (!field) return null;
+          return {
+            id: field,
+            label: col.name || col.headerName || col.field || field,
+            tags: Array.isArray(col.tags) ? col.tags.filter(Boolean) : [],
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }, [table?.columns]);
+
+  const [columnOrder, setColumnOrder] = useState(columnMeta.map((c) => c.id));
   const [gridApi, setGridApi] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const gridContainerRef = useRef(null);
@@ -477,10 +533,10 @@ const TableCard = ({
 
   // Update column order when table changes
   useEffect(() => {
-    if (table?.columns) {
-      setColumnOrder(table.columns);
+    if (columnMeta.length) {
+      setColumnOrder(columnMeta.map((c) => c.id));
     }
-  }, [table?.columns]);
+  }, [columnMeta]);
 
   const onGridReady = useCallback((params) => {
     setGridApi(params.api);
@@ -508,14 +564,14 @@ const TableCard = ({
     if (!gridApi) return;
     
     // Reset column order to original
-    if (table?.columns) {
-      setColumnOrder(table.columns);
+    if (columnMeta.length) {
+      setColumnOrder(columnMeta.map((c) => c.id));
     }
 
     // Reset grid state (sort, filter, width, pin)
     gridApi.setFilterModel(null);
     gridApi.resetColumnState();
-  }, [gridApi, table?.columns]);
+  }, [columnMeta, gridApi]);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -671,6 +727,22 @@ const TableCard = ({
     [handleRowInfoClick]
   );
 
+  const columnTagsMap = React.useMemo(() => {
+    const map = new Map();
+    columnMeta.forEach((c) => {
+      map.set(c.id, c.tags || []);
+    });
+    return map;
+  }, [columnMeta]);
+
+  const columnLabelMap = React.useMemo(() => {
+    const map = new Map();
+    columnMeta.forEach((c) => {
+      map.set(c.id, c.label || c.id);
+    });
+    return map;
+  }, [columnMeta]);
+
   const columnDefs = React.useMemo(() => {
     const rowDetailsColumn = {
       field: '__rowDetails__',
@@ -690,20 +762,25 @@ const TableCard = ({
       menuTabs: [],
     };
 
-    const dataColumns = columnOrder.map((column) => ({
-      field: column,
-      headerName: column,
-      width: 200,
-      minWidth: 140,
-      filter: 'agTextColumnFilter',
-      sortable: true,
-      cellRenderer: renderHighlightCell,
-      wrapText: false,
-      autoHeight: false,
-    }));
+    const dataColumns = columnOrder.map((column) => {
+      const tags = columnTagsMap.get(column) || [];
+      const label = columnLabelMap.get(column) || column;
+      return {
+        field: column,
+        headerName: label,
+        width: 200,
+        minWidth: 140,
+        filter: 'agTextColumnFilter',
+        sortable: true,
+        cellRenderer: renderHighlightCell,
+        wrapText: false,
+        autoHeight: false,
+        metaTags: tags,
+      };
+    });
 
     return [rowDetailsColumn, ...dataColumns];
-  }, [columnOrder, renderActionCell, renderHighlightCell]);
+  }, [columnLabelMap, columnOrder, columnTagsMap, renderActionCell, renderHighlightCell]);
 
   const defaultColDef = React.useMemo(
     () => ({

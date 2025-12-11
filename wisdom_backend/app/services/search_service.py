@@ -23,6 +23,39 @@ def _simulate_random_latency(min_seconds: int = 5, max_seconds: int = 10) -> Non
     time.sleep(delay)
 
 
+def _format_columns(columns_meta: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert raw column metadata into API payload with tags."""
+    formatted: List[Dict[str, Any]] = []
+    for col in columns_meta or []:
+        name = col.get("name")
+        if not name:
+            continue
+        # Prefer explicit tags; otherwise fall back to the column type as a single tag.
+        tags = col.get("tags")
+        if tags is None:
+            col_type = col.get("type")
+            tags = [col_type] if col_type else []
+        formatted.append({"name": name, "tags": tags})
+    return formatted
+
+
+def _collect_column_tags(table: Dict[str, Any]) -> Set[str]:
+    """Return a normalized set of column tags for a given table metadata entry."""
+    tags: Set[str] = set()
+    for col in table.get("columns", []):
+        if isinstance(col, dict):
+            col_tags = col.get("tags")
+            if col_tags is None:
+                col_type = col.get("type")
+                col_tags = [col_type] if col_type else []
+            for tag in col_tags or []:
+                if tag:
+                    tags.add(str(tag))
+        elif col:
+            tags.add(str(col))
+    return tags
+
+
 def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_override: Optional[int] = None) -> Optional[Dict[str, Any]]:
     meta = table_meta.get(table_key)
     if not meta:
@@ -34,7 +67,7 @@ def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_overr
         "country": meta.get("country"),
         "categories": meta.get("categories", []),
         "count": count_override if count_override is not None else meta.get("recordCount"),
-        "columns": [c.get("name") for c in meta.get("columns", [])],
+        "columns": _format_columns(meta.get("columns", [])),
     }
 
 
@@ -152,6 +185,12 @@ def _filter_tables_by_filters(tables: List[Dict[str, Any]], filters: Filters) ->
             continue
         if f.tableYears and str(t.get("year")) not in [str(y) for y in f.tableYears]:
             continue
+        if f.columnTags:
+            required_tags = [str(tag) for tag in f.columnTags if tag is not None]
+            if required_tags:
+                table_tags = _collect_column_tags(t)
+                if not all(tag in table_tags for tag in required_tags):
+                    continue
         out.append(t)
     return out
 
@@ -170,6 +209,7 @@ def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) ->
     regions: Dict[str, int] = {}
     table_names: Dict[str, int] = {}
     table_years: Dict[str, int] = {}
+    column_tags: Dict[str, int] = {}
     for t in tables:
         weight = table_counts.get(t["id"], 0)
         if weight == 0:
@@ -187,11 +227,14 @@ def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) ->
         if year is not None:
             key = str(year)
             table_years[key] = table_years.get(key, 0) + weight
+        for tag in _collect_column_tags(t):
+            column_tags[tag] = column_tags.get(tag, 0) + weight
     return {
         "categories": categories,
         "regions": regions,
         "tableNames": table_names,
         "tableYears": table_years,
+        "columnTags": column_tags,
     }
 
 
@@ -278,16 +321,25 @@ def search_rows(
         raise HTTPException(status_code=404, detail=f"Table {table_key} metadata not found")
 
     columns = meta.get("columns", [])
+    column_names: List[str] = []
+    for col in columns:
+        if isinstance(col, dict):
+            name = col.get("name")
+            if name:
+                column_names.append(name)
+        elif col:
+            column_names.append(str(col))
+
     rows_list: List[List[str]] = []
     for r in filtered_records:
         row = []
-        for col in columns:
+        for col in column_names:
             val = r.get(col, "")
             row.append("" if val is None else str(val))
         rows_list.append(row)
 
     paged = paginate_rows(rows_list, start_row, size_limit, page_number)
-    paged["columns"] = columns
+    paged["columns"] = column_names
     return paged
 
 
