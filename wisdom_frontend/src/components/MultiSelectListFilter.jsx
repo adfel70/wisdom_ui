@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Box, Checkbox, MenuItem, Stack, TextField, Typography } from '@mui/material';
 
 /**
@@ -7,7 +7,7 @@ import { Box, Checkbox, MenuItem, Stack, TextField, Typography } from '@mui/mate
  */
 const MultiSelectListFilter = ({
   options = [],
-  value = [],
+  value,
   placeholder = 'Search options',
   maxHeight = 220,
   onChange,
@@ -16,11 +16,26 @@ const MultiSelectListFilter = ({
   disableSearch = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [initialized, setInitialized] = useState(false);
 
   const normalizedValue = useMemo(
-    () => (Array.isArray(value) ? value.filter(Boolean) : []),
-    [value]
+    () => {
+      if (value === undefined || value === null) return options;
+      if (!initialized && Array.isArray(value) && value.length === 0) return options;
+      return Array.isArray(value) ? value.filter(Boolean) : [];
+    },
+    [value, options, initialized]
   );
+
+  useEffect(() => {
+    if (initialized || !options.length) return;
+    const shouldDefaultAll =
+      value === undefined || value === null || (Array.isArray(value) && value.length === 0);
+    if (shouldDefaultAll) {
+      onChange?.(options);
+    }
+    setInitialized(true);
+  }, [initialized, onChange, options, value]);
 
   const filteredOptions = useMemo(() => {
     const list = Array.isArray(options) ? options : [];
@@ -37,8 +52,17 @@ const MultiSelectListFilter = ({
         : [...normalizedValue, option];
       onChange?.(next);
     },
-    [normalizedValue, onChange]
+    [normalizedValue, onChange, options]
   );
+
+  const allSelected = normalizedValue.length === options.length && options.length > 0;
+  const partiallySelected =
+    normalizedValue.length > 0 && normalizedValue.length < options.length;
+
+  const handleSelectAll = useCallback(() => {
+    const next = allSelected ? [] : options;
+    onChange?.(next);
+  }, [allSelected, onChange, options]);
 
   return (
     <Stack spacing={0}>
@@ -59,37 +83,67 @@ const MultiSelectListFilter = ({
           ...containerSx,
         }}
       >
-        {filteredOptions.length === 0 ? (
+        {options.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 0.5 }}>
             No options
           </Typography>
         ) : (
-          filteredOptions.map((option) => {
-            const checked = normalizedValue.includes(option);
-            return (
-              <MenuItem
-                key={option}
-                dense
-                onClick={() => toggleOption(option)}
-                sx={{
-                  gap: 0,
-                  py: 0,
-                  px: 0.25,
-                  minHeight: 28,
-                  ...menuItemSx,
-                }}
-              >
-                <Checkbox
-                  size="small"
-                  checked={checked}
-                  tabIndex={-1}
-                  disableRipple
-                  sx={{ p: 0, mr: 0.25 }}
-                />
-                <Typography variant="body2">{option}</Typography>
-              </MenuItem>
-            );
-          })
+          <>
+            <MenuItem
+              key="select_all"
+              dense
+              onClick={handleSelectAll}
+              sx={{
+                gap: 0,
+                py: 0,
+                px: 0.25,
+                minHeight: 28,
+                ...menuItemSx,
+              }}
+            >
+              <Checkbox
+                size="small"
+                checked={allSelected}
+                indeterminate={partiallySelected}
+                tabIndex={-1}
+                disableRipple
+                sx={{ p: 0, mr: 0.25 }}
+              />
+              <Typography variant="body2">Select all</Typography>
+            </MenuItem>
+            {filteredOptions.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 0.5 }}>
+                No matches
+              </Typography>
+            ) : (
+              filteredOptions.map((option) => {
+                const checked = normalizedValue.includes(option);
+                return (
+                  <MenuItem
+                    key={option}
+                    dense
+                    onClick={() => toggleOption(option)}
+                    sx={{
+                      gap: 0,
+                      py: 0,
+                      px: 0.25,
+                      minHeight: 28,
+                      ...menuItemSx,
+                    }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={checked}
+                      tabIndex={-1}
+                      disableRipple
+                      sx={{ p: 0, mr: 0.25 }}
+                    />
+                    <Typography variant="body2">{option}</Typography>
+                  </MenuItem>
+                );
+              })
+            )}
+          </>
         )}
       </Box>
     </Stack>
