@@ -7,13 +7,14 @@ import EmptyState from '../EmptyState';
 
 /**
  * ResultsGrid - Renders the list of table cards or empty state
- * Small component focused on rendering search results
+ *
+ * Simplified: receives helper functions instead of refs
  */
 const ResultsGrid = ({
   isSearching,
   visibleTableIds,
-  tableDataCache,
-  pendingTableIdsRef,
+  getTableData,
+  isTableLoading,
   searchQuery,
   permutationId,
   permutationParams,
@@ -41,8 +42,8 @@ const ResultsGrid = ({
   return (
     <AnimatePresence mode="popLayout">
       {visibleTableIds.map((tableId) => {
-        const table = tableDataCache.current.get(tableId);
-        const isPending = pendingTableIdsRef.current.has(tableId);
+        const table = getTableData(tableId);
+        const isPending = isTableLoading(tableId);
 
         return (
           <motion.div

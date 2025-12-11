@@ -21,7 +21,6 @@ import {
 import {
   useSearchState,
   usePagination,
-  useTableLoading,
   useURLSync,
   useSearchResults,
   useTablePagination,
@@ -149,7 +148,6 @@ const SearchResultsPage = () => {
   const [activeDatabase, setActiveDatabase] = useState('db1');
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
-  const [cacheUpdateCounter, setCacheUpdateCounter] = useState(0);
   const [permutationVariants, setPermutationVariants] = useState(null);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
   const [filtersByDb, setFiltersByDb] = useState({
@@ -173,7 +171,6 @@ const SearchResultsPage = () => {
   // Custom hooks
   const searchState = useSearchState();
   const pagination = usePagination();
-  const tableLoading = useTableLoading();
   const urlSync = useURLSync();
   const tablePagination = useTablePagination();
 
@@ -212,20 +209,25 @@ const SearchResultsPage = () => {
   }, [matchingTableIds, activeDatabase, currentPage]);
 
   // Search results hook
-  const { isSearching, isLoadingTableData, tableDataCache, facetsByDb, permutationMap } = useSearchResults({
+  const {
+    isSearching,
+    isLoadingTableData,
+    facetsByDb,
+    permutationMap,
+    getTableData,
+    isTableLoading,
+    updateTableData,
+  } = useSearchResults({
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
     perDbFilters: filtersByDb,
     pickedTables: searchState.pickedTables,
     permutationId: searchState.permutationId,
     permutationParams: searchState.permutationParams,
-    activeDatabase,
     visibleTableIds,
-    matchingTableIds,
     setMatchingTableIds,
     lastSearchSignature,
     setLastSearchSignature,
-    tableLoadingHook: tableLoading,
     tablePaginationHook: tablePagination,
   });
 
@@ -621,25 +623,20 @@ const SearchResultsPage = () => {
 
       const newRecords = tableData.data;
 
-      // Update the cache with new data
-      const cachedTable = tableDataCache.current.get(tableId);
-      if (cachedTable) {
-        const updatedTable = {
-          ...cachedTable,
-          data: [...cachedTable.data, ...newRecords],
-        };
-        tableDataCache.current.set(tableId, updatedTable);
-      }
+      // Update the table data using the new updateTableData function
+      updateTableData(tableId, (existingTable) => ({
+        ...existingTable,
+        data: [...existingTable.data, ...newRecords],
+      }));
 
-      // Update pagination state (this also triggers re-render)
+      // Update pagination state
       tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
-
-      // Force re-render by updating counter
-      setCacheUpdateCounter(prev => prev + 1);
     } catch (error) {
       console.error('Failed to load more records:', error);
+    } finally {
+      tablePagination.setLoadingMore(tableId, false);
     }
-  }, [tablePagination, tableDataCache, searchState]);
+  }, [tablePagination, updateTableData, searchState, permutationMap]);
 
   // Determine empty state type
   const getEmptyStateType = () => {
@@ -720,7 +717,7 @@ const SearchResultsPage = () => {
           databaseName={currentDatabaseInfo?.name}
           tableIds={matchingTableIds[activeDatabase] || []}
           visibleTableIds={visibleTableIds}
-          pendingTableIds={tableLoading.getPendingTableIds()}
+          pendingTableIds={visibleTableIds.filter(id => isTableLoading(id))}
           isSearching={isSearching}
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
@@ -762,8 +759,8 @@ const SearchResultsPage = () => {
                   <ResultsGrid
                     isSearching={isSearching}
                     visibleTableIds={visibleTableIds}
-                    tableDataCache={tableDataCache}
-                    pendingTableIdsRef={tableLoading.pendingTableIdsRef}
+                    getTableData={getTableData}
+                    isTableLoading={isTableLoading}
                     searchQuery={searchState.searchQuery}
                     permutationId={appliedPermutationId}
                     permutationParams={appliedPermutationParams}
