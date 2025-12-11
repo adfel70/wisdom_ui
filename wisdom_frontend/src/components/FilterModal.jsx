@@ -47,7 +47,7 @@ const ColumnFilterHeader = (props) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectionState, setSelectionState] = useState({ checked: false, indeterminate: false });
 
-  const showSelectAll = Boolean(column?.getColDef?.()?.headerCheckboxSelection);
+  const showSelectAll = Boolean(column?.getColDef?.()?.showHeaderCheckbox);
   const open = Boolean(anchorEl);
 
   const isActive = useMemo(() => {
