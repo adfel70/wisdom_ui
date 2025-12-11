@@ -29,7 +29,8 @@ def bdts():
 
 @router.post("/search/tables")
 def search_tables_route(payload: SearchTablesRequest):
-    return search_tables(payload.db, payload.query, payload.filters, payload.permutations, payload.picked_tables)
+    db_keys = payload.dbs or ([payload.db] if payload.db else [])
+    return search_tables(db_keys, payload.query, payload.filters, payload.permutations, payload.picked_tables)
 
 
 @router.post("/search/rows")

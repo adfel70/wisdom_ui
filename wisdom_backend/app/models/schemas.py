@@ -16,7 +16,8 @@ class Filters(BaseModel):
 
 
 class SearchTablesRequest(BaseModel):
-    db: str
+    db: Optional[str] = None
+    dbs: Optional[List[str]] = Field(default_factory=list)
     query: Optional[Any] = None
     filters: Filters = Field(default_factory=Filters)
     permutations: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
