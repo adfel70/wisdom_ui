@@ -15,7 +15,6 @@ import {
   Tooltip,
   Popover,
   MenuItem,
-  Autocomplete,
   Checkbox,
 } from '@mui/material';
 import {
@@ -27,6 +26,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import useFilterMetadata from '../hooks/useFilterMetadata';
 import useTableColumns from '../hooks/useTableColumns';
+import MultiSelectListFilter from './MultiSelectListFilter';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -46,7 +46,6 @@ const ColumnFilterHeader = (props) => {
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectionState, setSelectionState] = useState({ checked: false, indeterminate: false });
-  const [searchTerm, setSearchTerm] = useState('');
 
   const showSelectAll = Boolean(column?.getColDef?.()?.headerCheckboxSelection);
   const open = Boolean(anchorEl);
@@ -171,64 +170,13 @@ const ColumnFilterHeader = (props) => {
 
     if (filterConfig.type === 'multiselect') {
       const options = filterConfig.options || availableTags || [];
-      const value = Array.isArray(filtersSnapshot[filterConfig.key])
-        ? filtersSnapshot[filterConfig.key]
-        : [];
-      const normalizedSearch = searchTerm.trim().toLowerCase();
-      const filteredOptions = normalizedSearch
-        ? options.filter((opt) => opt.toString().toLowerCase().includes(normalizedSearch))
-        : options;
-
-      const toggleOption = (option) => {
-        const exists = value.includes(option);
-        const next = exists ? value.filter((v) => v !== option) : [...value, option];
-        onFilterChange?.(filterConfig.key, next);
-      };
-
       return (
-        <Stack spacing={0}>
-          <TextField
-            size="small"
-            fullWidth
-            placeholder={filterConfig.placeholder || 'Search options'}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Box
-            sx={{
-              maxHeight: 220,
-              overflowY: 'auto',
-              p: 0.5,
-            }}
-          >
-            {filteredOptions.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 0.5 }}>
-                No options
-              </Typography>
-            ) : (
-              filteredOptions.map((option) => {
-                const checked = value.includes(option);
-                return (
-                  <MenuItem
-                    key={option}
-                    dense
-                    onClick={() => toggleOption(option)}
-                    sx={{ gap: 0, py: 0, px: 0.25, minHeight: 28 }}
-                  >
-                    <Checkbox
-                      size="small"
-                      checked={checked}
-                      tabIndex={-1}
-                      disableRipple
-                      sx={{ p: 0, mr: 0.25 }}
-                    />
-                    <Typography variant="body2">{option}</Typography>
-                  </MenuItem>
-                );
-              })
-            )}
-          </Box>
-        </Stack>
+        <MultiSelectListFilter
+          options={options}
+          value={filtersSnapshot[filterConfig.key]}
+          onChange={(next) => onFilterChange?.(filterConfig.key, next)}
+          placeholder={filterConfig.placeholder || 'Search options'}
+        />
       );
     }
 
