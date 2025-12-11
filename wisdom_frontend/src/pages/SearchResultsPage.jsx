@@ -705,35 +705,55 @@ const SearchResultsPage = () => {
             }}
           >
             <Container maxWidth={false} disableGutters sx={{ px: { xs: 2, md: 3 } }}>
-              <Box sx={{ py: 1.25 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', width: '100%', pl: 0, pr: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', minWidth: 34 }}>
-                    DBs:
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="medium"
-                    endIcon={<span style={{ display: 'inline-block', fontSize: '1.1rem', lineHeight: 1 }}>▾</span>}
-                    onClick={handleOpenDbMenu}
+              <Box sx={{ py: { xs: 1.5, md: 1.75 } }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    flexWrap: 'wrap',
+                    width: '100%',
+                  }}
+                >
+                  <Box
                     sx={{
-                      textTransform: 'none',
-                      borderRadius: 2.5,
-                      px: 1,
-                      minWidth: 150,
-                      height: 34,
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
-                      },
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      width: { xs: 'auto', lg: `${sidebarOffset}px` },
+                      justifyContent: { xs: 'flex-start', lg: 'flex-end' },
+                      pr: { xs: 0, lg: 3 },
+                      flexShrink: 0,
                     }}
                   >
-                    {selectedDatabases.length === databaseMetadata.length
-                      ? 'All databases'
-                      : selectedDatabases.length === 1
-                        ? (databaseMetadata.find((db) => db.id === selectedDatabases[0])?.name || '1 database')
-                        : `${selectedDatabases.length} databases`}
-                  </Button>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', minWidth: 34 }}>
+                      DBs:
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="medium"
+                      endIcon={<span style={{ display: 'inline-block', fontSize: '1.1rem', lineHeight: 1 }}>▾</span>}
+                      onClick={handleOpenDbMenu}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: 2.5,
+                        px: 1,
+                        minWidth: 150,
+                        height: 34,
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                        },
+                      }}
+                    >
+                      {selectedDatabases.length === databaseMetadata.length
+                        ? 'All databases'
+                        : selectedDatabases.length === 1
+                          ? (databaseMetadata.find((db) => db.id === selectedDatabases[0])?.name || '1 database')
+                          : `${selectedDatabases.length} databases`}
+                    </Button>
+                  </Box>
                   <SearchSection
                     searchValue={searchState.inputValue}
                     onSearchChange={handleSearchChange}
@@ -747,7 +767,12 @@ const SearchResultsPage = () => {
                     onPermutationParamsChange={handlePermutationParamsChange}
                     pickedTables={searchState.pickedTables}
                     onClearPickedTables={() => handleRemoveFilter('pickedTables')}
-                    containerSx={{ flex: 1, minWidth: 720, maxWidth: '100%', ml: 0.5 }}
+                    containerSx={{
+                      flex: 1,
+                      minWidth: 720,
+                      maxWidth: '100%',
+                      ml: 0,
+                    }}
                     searchBarVariant="home"
                     paperSx={{ p: { xs: 1, md: 1.1 } }}
                   />
