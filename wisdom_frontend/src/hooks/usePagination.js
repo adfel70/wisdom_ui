@@ -1,52 +1,36 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 
 export const TABLES_PER_PAGE = 6;
 
 /**
- * Hook to manage pagination state per database
- * Each database maintains its own current page
+ * Hook to manage unified pagination state
  */
-export const usePagination = (databases = ['db1', 'db2', 'db3', 'db4']) => {
-  // Store page number for each database
-  const [databasePages, setDatabasePages] = useState(
-    databases.reduce((acc, db) => ({ ...acc, [db]: 1 }), {})
-  );
+export const usePagination = () => {
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Get current page for a specific database
-  const getCurrentPage = useCallback((databaseId) => {
-    return databasePages[databaseId] || 1;
-  }, [databasePages]);
-
-  // Set page for a specific database
-  const setPage = useCallback((databaseId, page) => {
-    setDatabasePages(prev => ({
-      ...prev,
-      [databaseId]: page
-    }));
+  const setPage = useCallback((page) => {
+    const next = Number(page) || 1;
+    setCurrentPage(next < 1 ? 1 : next);
   }, []);
 
-  // Reset all databases to page 1
   const resetAllPages = useCallback(() => {
-    setDatabasePages(
-      databases.reduce((acc, db) => ({ ...acc, [db]: 1 }), {})
-    );
-  }, [databases]);
+    setCurrentPage(1);
+  }, []);
 
-  // Calculate total pages for a database given table count
-  const getTotalPages = useCallback((tableCount) => {
+  const getTotalPages = useCallback((tableCount = 0) => {
+    if (!tableCount || tableCount < 0) return 0;
     return Math.ceil(tableCount / TABLES_PER_PAGE);
   }, []);
 
-  // Calculate which table IDs should be visible for current page
-  const getVisibleTableIds = useCallback((tableIds, currentPage) => {
-    const startIndex = (currentPage - 1) * TABLES_PER_PAGE;
+  const getVisibleTableIds = useCallback((tableIds = [], page = currentPage) => {
+    const safePage = page < 1 ? 1 : page;
+    const startIndex = (safePage - 1) * TABLES_PER_PAGE;
     const endIndex = startIndex + TABLES_PER_PAGE;
     return tableIds.slice(startIndex, endIndex);
-  }, []);
+  }, [currentPage]);
 
   return {
-    databasePages,
-    getCurrentPage,
+    currentPage,
     setPage,
     resetAllPages,
     getTotalPages,
