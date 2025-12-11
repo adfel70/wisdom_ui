@@ -343,6 +343,7 @@ const SearchResultsPage = () => {
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
   const sidebarOffset = sidebarWidth;
+  const headerAnchorOffset = PANEL_EXPANDED_WIDTH; // keep header alignment fixed even if panel collapses
 
   // Get expanded query info
   const appliedPermutationId = urlSync.searchParams.get('permutation') || 'none';
@@ -720,7 +721,7 @@ const SearchResultsPage = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 0.5,
-                      width: { xs: 'auto', lg: `${sidebarOffset}px` },
+                      width: { xs: 'auto', lg: `${headerAnchorOffset}px` },
                       justifyContent: { xs: 'flex-start', lg: 'flex-end' },
                       pr: { xs: 0, lg: 3 },
                       flexShrink: 0,
