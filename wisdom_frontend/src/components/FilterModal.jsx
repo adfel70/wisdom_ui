@@ -17,6 +17,7 @@ import {
   Chip,
   Stack,
   Paper,
+  Tooltip,
 } from '@mui/material';
 import { Close as CloseIcon, FilterList, CalendarToday } from '@mui/icons-material';
 import { AgGridReact } from 'ag-grid-react';
@@ -311,15 +312,22 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
               alignItems: 'center',
               width: '100%',
               height: '100%',
+              overflow: 'hidden',
             }}
           >
             <Stack
               direction="row"
               spacing={0.5}
-              flexWrap="wrap"
+              flexWrap="nowrap"
               gap={0.5}
               justifyContent="center"
               alignItems="center"
+              sx={{
+                width: '100%',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              }}
             >
               {visible.map((category, idx) => (
                 <Chip
@@ -331,12 +339,19 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
                 />
               ))}
               {extra > 0 && (
-                <Chip
-                  label={`+${extra}`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
+                <Tooltip
+                  title={cats.join(', ')}
+                  placement="top"
+                  arrow
+                  enterDelay={300}
+                >
+                  <Chip
+                    label={`+${extra}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.7rem', height: 20, cursor: 'pointer' }}
+                  />
+                </Tooltip>
               )}
             </Stack>
           </Box>
