@@ -30,7 +30,8 @@ const useTableColumns = ({
           field: 'name',
           checkboxSelection: true,
           headerCheckboxSelection: true,
-          headerCheckboxSelectionFilteredOnly: true,
+
+
           minWidth: 220,
           flex: 1.3,
           cellRenderer: (params) => (
