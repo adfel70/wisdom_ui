@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import TableCard from '../TableCard';
@@ -7,13 +7,16 @@ import EmptyState from '../EmptyState';
 
 /**
  * ResultsGrid - Renders the list of table cards or empty state
- * Small component focused on rendering search results
+ *
+ * Progressive loading:
+ * - During search: shows skeletons
+ * - After search, during row loading: shows card wrapper with loading in grid area
+ * - After rows load: shows full card with data
  */
 const ResultsGrid = ({
   isSearching,
   visibleTableIds,
-  tableDataCache,
-  pendingTableIdsRef,
+  getTableForDisplay,
   searchQuery,
   permutationId,
   permutationParams,
@@ -23,11 +26,46 @@ const ResultsGrid = ({
   tablePaginationHook,
   onLoadMore,
 }) => {
-  // Show loading spinner during initial search
-  if (isSearching) {
+  const [suppressEmptyState, setSuppressEmptyState] = useState(false);
+  const suppressTimerRef = useRef(null);
+
+  // Suppress the empty state briefly after search completes to avoid flash
+  useEffect(() => {
+    // When searching, always suppress
+    if (isSearching) {
+      setSuppressEmptyState(true);
+      if (suppressTimerRef.current) {
+        clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
+      return;
+    }
+
+    // When search finishes, wait a short moment before allowing empty state
+    if (suppressEmptyState) {
+      suppressTimerRef.current = setTimeout(() => {
+        setSuppressEmptyState(false);
+        suppressTimerRef.current = null;
+      }, 200);
+    }
+
+    return () => {
+      if (suppressTimerRef.current) {
+        clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
+    };
+  }, [isSearching, suppressEmptyState]);
+
+  const shouldShowSkeletons = (isSearching || suppressEmptyState) && visibleTableIds.length === 0;
+
+  // Show skeleton cards during search or immediately after to avoid "no results" flash
+  if (shouldShowSkeletons) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <TableCardSkeleton key={`search-skeleton-${idx}`} />
+        ))}
       </Box>
     );
   }
@@ -41,8 +79,9 @@ const ResultsGrid = ({
   return (
     <AnimatePresence mode="popLayout">
       {visibleTableIds.map((tableId) => {
-        const table = tableDataCache.current.get(tableId);
-        const isPending = pendingTableIdsRef.current.has(tableId);
+        // getTableForDisplay returns merged metadata + row data
+        // table.isLoadingRows indicates if rows are still being fetched
+        const table = getTableForDisplay(tableId);
 
         return (
           <motion.div
@@ -61,7 +100,7 @@ const ResultsGrid = ({
                 permutationId={permutationId}
                 permutationParams={permutationParams}
                 permutationVariants={permutationVariants}
-                isLoading={isPending}
+                isLoadingRows={table.isLoadingRows}
                 onSendToLastPage={onSendToLastPage}
                 hasMore={tablePaginationHook?.hasMoreRecords(tableId) || false}
                 onLoadMore={onLoadMore ? () => onLoadMore(tableId) : null}

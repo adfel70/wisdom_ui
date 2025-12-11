@@ -420,14 +420,17 @@ const TableSidePanel = ({
           isSearching ? (
             // Loading skeleton
             <Stack spacing={1}>
-              {Array.from({ length: 6 }).map((_, idx) => (
+              {Array.from({ length: 10 }).map((_, idx) => (
                 <Skeleton
                   key={idx}
                   variant="rounded"
                   height={48}
                   width={'100%'}
                   animation="wave"
-                  sx={{ borderRadius: 1.5 }}
+                  sx={{
+                    borderRadius: 1.5,
+                    bgcolor: (theme) => theme.palette.action.hover, // lighter skeleton tone
+                  }}
                 />
               ))}
             </Stack>
