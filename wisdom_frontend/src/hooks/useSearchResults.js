@@ -7,7 +7,6 @@ import { extractTermsFromQuery } from '../utils/searchUtils';
  * Table data status enum
  */
 const TableStatus = {
-  IDLE: 'idle',
   LOADING: 'loading',
   READY: 'ready',
   ERROR: 'error',
@@ -18,8 +17,8 @@ const TableStatus = {
  *
  * Simplified architecture:
  * - Single source of truth: tableDataMap (React state)
- * - Loading state is derived from map entries, not tracked separately
- * - AbortControllers handled via ref (don't need re-renders)
+ * - Loading state is derived from map entries
+ * - Uses ref for checking current state to avoid effect dependency loops
  */
 export const useSearchResults = ({
   searchQuery,
@@ -47,6 +46,10 @@ export const useSearchResults = ({
   // Table data state - single source of truth
   // Map<tableId, { data: TableData | null, status: TableStatus, error?: Error }>
   const [tableDataMap, setTableDataMap] = useState(() => new Map());
+
+  // Ref to access current tableDataMap without causing effect re-runs
+  const tableDataMapRef = useRef(tableDataMap);
+  tableDataMapRef.current = tableDataMap;
 
   // Abort controllers - ref because they don't need to trigger re-renders
   const abortControllersRef = useRef(new Map());
@@ -231,6 +234,7 @@ export const useSearchResults = ({
   ]);
 
   // Step 2: Load table data for visible table IDs
+  // Uses refs to check current state without causing re-runs
   useEffect(() => {
     if (!visibleTableIds || visibleTableIds.length === 0) {
       return;
@@ -239,27 +243,26 @@ export const useSearchResults = ({
     // Capture current generation for this effect run
     const currentGeneration = fetchGenerationRef.current;
 
+    // Use ref to check current state (avoids dependency on tableDataMap)
+    const currentMap = tableDataMapRef.current;
+
     // Determine which tables need fetching
     const tablesToFetch = visibleTableIds.filter(tableId => {
-      const entry = tableDataMap.get(tableId);
-      // Fetch if: no entry, or idle status (never fetched), or error (retry)
+      const entry = currentMap.get(tableId);
+      // Fetch if: no entry, or error (retry)
       // Don't fetch if: loading or ready
-      return !entry || entry.status === TableStatus.IDLE || entry.status === TableStatus.ERROR;
+      return !entry || entry.status === TableStatus.ERROR;
     });
 
     if (tablesToFetch.length === 0) {
       return;
     }
 
-    // Mark tables as loading immediately (synchronous state update)
+    // Mark tables as loading immediately
     setTableDataMap(prev => {
       const newMap = new Map(prev);
       tablesToFetch.forEach(tableId => {
-        // Only mark as loading if not already loading/ready
-        const existing = newMap.get(tableId);
-        if (!existing || existing.status === TableStatus.IDLE || existing.status === TableStatus.ERROR) {
-          newMap.set(tableId, { data: null, status: TableStatus.LOADING, error: null });
-        }
+        newMap.set(tableId, { data: null, status: TableStatus.LOADING, error: null });
       });
       return newMap;
     });
@@ -329,19 +332,10 @@ export const useSearchResults = ({
     // Start all fetches
     tablesToFetch.forEach(tableId => fetchTable(tableId));
 
-    // Cleanup: abort in-flight requests for tables that are no longer visible
-    return () => {
-      tablesToFetch.forEach(tableId => {
-        const controller = abortControllersRef.current.get(tableId);
-        if (controller) {
-          controller.abort();
-          abortControllersRef.current.delete(tableId);
-        }
-      });
-    };
+    // No cleanup needed - we don't abort on visibleTableIds change
+    // The generation check handles stale responses
   }, [
     visibleTableIds,
-    tableDataMap,
     searchQuery,
     filters,
     permutationMap,
@@ -356,29 +350,29 @@ export const useSearchResults = ({
       return;
     }
 
-    setTableDataMap(prev => {
-      const visibleSet = new Set(visibleTableIds);
-      let hasChanges = false;
+    const visibleSet = new Set(visibleTableIds);
+    const currentMap = tableDataMapRef.current;
 
-      prev.forEach((_, tableId) => {
-        if (!visibleSet.has(tableId)) {
-          hasChanges = true;
-        }
-      });
-
-      if (!hasChanges) {
-        return prev; // No changes needed
+    // Check if any pruning is needed
+    let needsPruning = false;
+    currentMap.forEach((_, tableId) => {
+      if (!visibleSet.has(tableId)) {
+        needsPruning = true;
       }
-
-      const newMap = new Map();
-      visibleTableIds.forEach(tableId => {
-        const entry = prev.get(tableId);
-        if (entry) {
-          newMap.set(tableId, entry);
-        }
-      });
-      return newMap;
     });
+
+    if (needsPruning) {
+      setTableDataMap(prev => {
+        const newMap = new Map();
+        visibleTableIds.forEach(tableId => {
+          const entry = prev.get(tableId);
+          if (entry) {
+            newMap.set(tableId, entry);
+          }
+        });
+        return newMap;
+      });
+    }
   }, [visibleTableIds]);
 
   // Compute derived loading state
