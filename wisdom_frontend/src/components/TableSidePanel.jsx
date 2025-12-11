@@ -427,7 +427,10 @@ const TableSidePanel = ({
                   height={48}
                   width={'100%'}
                   animation="wave"
-                  sx={{ borderRadius: 1.5 }}
+                  sx={{
+                    borderRadius: 1.5,
+                    bgcolor: (theme) => theme.palette.action.hover, // lighter skeleton tone
+                  }}
                 />
               ))}
             </Stack>
