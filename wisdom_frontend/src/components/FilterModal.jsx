@@ -13,8 +13,17 @@ import {
   Stack,
   Paper,
   Tooltip,
+  Popover,
+  MenuItem,
+  Autocomplete,
+  Checkbox,
 } from '@mui/material';
-import { Close as CloseIcon, FilterList, LocalOfferOutlined } from '@mui/icons-material';
+import {
+  Close as CloseIcon,
+  FilterList,
+  LocalOfferOutlined,
+  FilterAlt,
+} from '@mui/icons-material';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
@@ -27,23 +36,368 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 /**
+ * Column header with inline filter popover
+ */
+const ColumnFilterHeader = (props) => {
+  const {
+    displayName,
+    filterConfig = {},
+    filtersSnapshot = {},
+    onFilterChange,
+    availableTags = [],
+    api,
+    column,
+  } = props;
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectionState, setSelectionState] = useState({ checked: false, indeterminate: false });
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const showSelectAll = Boolean(column?.getColDef?.()?.headerCheckboxSelection);
+  const open = Boolean(anchorEl);
+
+  const isActive = useMemo(() => {
+    if (filterConfig.disableFilter) return false;
+    if (filterConfig.type === 'text') {
+      return Boolean(filtersSnapshot[filterConfig.key]?.toString().trim());
+    }
+    if (filterConfig.type === 'select') {
+      const value = filtersSnapshot[filterConfig.key];
+      return Boolean(value && value !== 'all');
+    }
+    if (filterConfig.type === 'multiselect') {
+      const value = filtersSnapshot[filterConfig.key];
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (filterConfig.type === 'dateRange') {
+      const min = filtersSnapshot[filterConfig.minKey || 'minDate'];
+      const max = filtersSnapshot[filterConfig.maxKey || 'maxDate'];
+      return Boolean(min || max);
+    }
+    return false;
+  }, [filterConfig, filtersSnapshot]);
+
+  const handleOpen = (event) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => setAnchorEl(null);
+
+  const handleClear = () => {
+    if (!onFilterChange) {
+      handleClose();
+      return;
+    }
+    if (filterConfig.type === 'dateRange') {
+      onFilterChange(filterConfig.minKey || 'minDate', '');
+      onFilterChange(filterConfig.maxKey || 'maxDate', '');
+    } else if (filterConfig.type === 'multiselect') {
+      onFilterChange(filterConfig.key, []);
+    } else if (filterConfig.type === 'select') {
+      onFilterChange(filterConfig.key, 'all');
+    } else if (filterConfig.type === 'text') {
+      onFilterChange(filterConfig.key, '');
+    }
+    handleClose();
+  };
+
+  const handleSelectAllClick = (event) => {
+    event.stopPropagation();
+    if (!api) return;
+    const shouldSelectAll = !(selectionState.checked && !selectionState.indeterminate);
+    api.forEachNodeAfterFilterAndSort((node) => {
+      node.setSelected(shouldSelectAll);
+    });
+  };
+
+  useEffect(() => {
+    if (!api || !showSelectAll) return undefined;
+
+    const updateSelectionState = () => {
+      let total = 0;
+      let selected = 0;
+      api.forEachNodeAfterFilterAndSort((node) => {
+        total += 1;
+        if (node.isSelected()) selected += 1;
+      });
+      setSelectionState({
+        checked: total > 0 && selected === total,
+        indeterminate: selected > 0 && selected < total,
+      });
+    };
+
+    updateSelectionState();
+    api.addEventListener('selectionChanged', updateSelectionState);
+    api.addEventListener('modelUpdated', updateSelectionState);
+    return () => {
+      api.removeEventListener('selectionChanged', updateSelectionState);
+      api.removeEventListener('modelUpdated', updateSelectionState);
+    };
+  }, [api, showSelectAll]);
+
+  const renderContent = () => {
+    if (filterConfig.disableFilter) return null;
+
+    if (filterConfig.type === 'text') {
+      return (
+        <TextField
+          autoFocus
+          size="small"
+          fullWidth
+          label={filterConfig.label || 'Search'}
+          placeholder={filterConfig.placeholder}
+          value={filtersSnapshot[filterConfig.key] || ''}
+          onChange={(e) => onFilterChange?.(filterConfig.key, e.target.value)}
+        />
+      );
+    }
+
+    if (filterConfig.type === 'select') {
+      const options = filterConfig.options || [];
+      return (
+        <TextField
+          select
+          size="small"
+          fullWidth
+          label={filterConfig.label || displayName}
+          value={filtersSnapshot[filterConfig.key] ?? 'all'}
+          onChange={(e) => onFilterChange?.(filterConfig.key, e.target.value)}
+        >
+          <MenuItem value="all">All</MenuItem>
+          {options.map((option) => (
+            <MenuItem key={option} value={option}>
+              {option}
+            </MenuItem>
+          ))}
+        </TextField>
+      );
+    }
+
+    if (filterConfig.type === 'multiselect') {
+      const options = filterConfig.options || availableTags || [];
+      const value = Array.isArray(filtersSnapshot[filterConfig.key])
+        ? filtersSnapshot[filterConfig.key]
+        : [];
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      const filteredOptions = normalizedSearch
+        ? options.filter((opt) => opt.toString().toLowerCase().includes(normalizedSearch))
+        : options;
+
+      const toggleOption = (option) => {
+        const exists = value.includes(option);
+        const next = exists ? value.filter((v) => v !== option) : [...value, option];
+        onFilterChange?.(filterConfig.key, next);
+      };
+
+      return (
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder={filterConfig.placeholder || 'Search options'}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Box
+            sx={{
+              maxHeight: 220,
+              overflowY: 'auto',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 0.5,
+            }}
+          >
+            {filteredOptions.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 0.5 }}>
+                No options
+              </Typography>
+            ) : (
+              filteredOptions.map((option) => {
+                const checked = value.includes(option);
+                return (
+                  <MenuItem
+                    key={option}
+                    dense
+                    onClick={() => toggleOption(option)}
+                    sx={{ gap: 1 }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={checked}
+                      tabIndex={-1}
+                      disableRipple
+                    />
+                    <Typography variant="body2">{option}</Typography>
+                  </MenuItem>
+                );
+              })
+            )}
+          </Box>
+        </Stack>
+      );
+    }
+
+    if (filterConfig.type === 'dateRange') {
+      const minKey = filterConfig.minKey || 'minDate';
+      const maxKey = filterConfig.maxKey || 'maxDate';
+      return (
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            label="From"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filtersSnapshot[minKey] || ''}
+            onChange={(e) => onFilterChange?.(minKey, e.target.value)}
+          />
+          <TextField
+            size="small"
+            label="To"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filtersSnapshot[maxKey] || ''}
+            onChange={(e) => onFilterChange?.(maxKey, e.target.value)}
+          />
+        </Stack>
+      );
+    }
+
+    return null;
+  };
+
+  if (filterConfig.disableFilter) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          width: '100%',
+        }}
+      >
+        <Typography
+          variant="subtitle2"
+          fontWeight={600}
+          noWrap
+          sx={{
+            flex: 1,
+            fontSize: '0.8rem',
+            color: 'text.secondary',
+          }}
+        >
+          {displayName}
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        width: '100%',
+      }}
+    >
+      {showSelectAll && (
+        <Checkbox
+          size="small"
+          checked={selectionState.checked}
+          indeterminate={selectionState.indeterminate}
+          onClick={handleSelectAllClick}
+          sx={{ p: 0.25, mr: 0.25 }}
+        />
+      )}
+      <Typography
+        variant="subtitle2"
+        fontWeight={600}
+        noWrap
+        sx={{
+          flex: 1,
+          fontSize: '0.8rem',
+          color: 'text.secondary',
+        }}
+      >
+        {displayName}
+      </Typography>
+      <Tooltip title="Filter">
+        <IconButton
+          size="small"
+          onClick={handleOpen}
+          sx={{
+            p: 0.5,
+            color: isActive ? 'primary.main' : 'text.secondary',
+            '&:hover': { color: 'primary.main', backgroundColor: 'action.hover' },
+          }}
+        >
+          <FilterAlt fontSize="inherit" sx={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: {
+              p: 1.5,
+              minWidth: 240,
+              maxWidth: 320,
+              borderRadius: 1.5,
+              boxShadow: 4,
+            },
+          },
+        }}
+      >
+        <Stack spacing={1}>
+          {renderContent()}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button size="small" color="inherit" onClick={handleClear}>
+              Clear
+            </Button>
+            <Button size="small" variant="contained" onClick={handleClose}>
+              Done
+            </Button>
+          </Box>
+        </Stack>
+      </Popover>
+    </Box>
+  );
+};
+
+/**
  * FilterModal Component
  * Modal dialog for filtering and selecting tables with metadata view
  */
 const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPickedTables = [] }) => {
+  const normalizeArrayValue = useCallback((value) => {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!value) return [];
+    if (typeof value === 'string' && value.toLowerCase() === 'all') return [];
+    return [value];
+  }, []);
+
   const [filters, setFilters] = useState({
     tableName: '',
-    year: 'all',
-    category: 'all',
-    country: 'all',
+    year: normalizeArrayValue(initialFilters.year),
+    category: normalizeArrayValue(initialFilters.category),
+    country: normalizeArrayValue(initialFilters.country),
     minDate: '',
     maxDate: '',
-    columnTags: [],
+    columnTags: normalizeArrayValue(initialFilters.columnTags),
     ...initialFilters,
   });
   const [selectedTables, setSelectedTables] = useState([]);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [allDatabases, setAllDatabases] = useState([]);
+  const [availableYears, setAvailableYears] = useState([]);
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [availableCountries, setAvailableCountries] = useState([]);
 
   const getColumnTags = useCallback((table) => {
     const tags = new Set();
@@ -74,10 +428,16 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
 
         if (isCancelled) return;
         setAllDatabases(databases || []);
+        setAvailableYears(Array.isArray(years) ? years : []);
+        setAvailableCategories(Array.isArray(categories) ? categories : []);
+        setAvailableCountries(Array.isArray(countries) ? countries : []);
       } catch (error) {
         console.error('Failed to load filter metadata:', error);
         if (!isCancelled) {
           setAllDatabases([]);
+          setAvailableYears([]);
+          setAvailableCategories([]);
+          setAvailableCountries([]);
         }
       }
     };
@@ -105,6 +465,16 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     return tables;
   }, [allDatabases, getColumnTags]);
 
+  const availableColumnTags = useMemo(() => {
+    const tags = new Set();
+    allTables.forEach((table) => {
+      (table.columnTags || []).forEach((tag) => {
+        if (tag) tags.add(String(tag));
+      });
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [allTables]);
+
   // Filter tables based on current filters
   const filteredTables = useMemo(() => {
     return allTables.filter(table => {
@@ -117,6 +487,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
           String(table.year ?? ''),
           table.country,
           ...(table.categories || []),
+        ...(table.columnTags || []),
         ]
           .filter(Boolean)
           .map((val) => val.toString().toLowerCase());
@@ -125,19 +496,31 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         if (!matchesAnyField) return false;
       }
 
-      // Filter by year
-      if (filters.year !== 'all' && table.year !== filters.year) {
-        return false;
+      // Filter by year (match any selected)
+      const selectedYears = Array.isArray(filters.year) ? filters.year.filter(Boolean) : [];
+      if (selectedYears.length > 0) {
+        const matchesYear = selectedYears.some((y) => {
+          const tableYear = Number(table.year);
+          const target = Number(y);
+          if (!Number.isNaN(tableYear) && !Number.isNaN(target)) return tableYear === target;
+          return String(table.year) === String(y);
+        });
+        if (!matchesYear) return false;
       }
 
       // Filter by category
-      if (filters.category !== 'all' && !table.categories.includes(filters.category)) {
-        return false;
+      const tableCategories = Array.isArray(table.categories) ? table.categories : [];
+      const selectedCategories = Array.isArray(filters.category) ? filters.category.filter(Boolean) : [];
+      if (selectedCategories.length > 0) {
+        const matches = selectedCategories.some((cat) => tableCategories.includes(cat));
+        if (!matches) return false;
       }
 
       // Filter by country
-      if (filters.country !== 'all' && table.country !== filters.country) {
-        return false;
+      const selectedCountries = Array.isArray(filters.country) ? filters.country.filter(Boolean) : [];
+      if (selectedCountries.length > 0) {
+        const matchesCountry = selectedCountries.some((c) => table.country === c);
+        if (!matchesCountry) return false;
       }
 
       // Filter by column tags (must include all selected)
@@ -168,15 +551,24 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   }, [allTables, filters]);
 
   useEffect(() => {
+    const allowedIds = new Set(filteredTables.map((table) => table.id));
+    setSelectedTables((prev) => {
+      const next = prev.filter((id) => allowedIds.has(id));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [filteredTables]);
+
+  useEffect(() => {
     if (open) {
       setFilters({
         tableName: '',
-        year: 'all',
-        category: 'all',
-        country: 'all',
+        year: normalizeArrayValue(initialFilters.year),
+        category: normalizeArrayValue(initialFilters.category),
+        country: normalizeArrayValue(initialFilters.country),
         minDate: '',
         maxDate: '',
-        columnTags: [],
+        columnTags: normalizeArrayValue(initialFilters.columnTags),
         ...initialFilters,
       });
       // Seed selected tables from provided picked tables
@@ -188,9 +580,9 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     }
   }, [open, initialFilters, initialPickedTables]);
 
-  const handleChange = (field, value) => {
+  const handleChange = useCallback((field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
   const handleApply = () => {
     const cleaned = { ...filters };
@@ -202,7 +594,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     }
 
     // Drop neutral/empty values before sending
-    ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
+    ['tableName', 'minDate', 'maxDate'].forEach((key) => {
       const val = cleaned[key];
       if (val === undefined || val === null) {
         delete cleaned[key];
@@ -217,6 +609,20 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         cleaned[key] = trimmed;
       }
     });
+
+    const cleanArrayField = (key) => {
+      if (Array.isArray(cleaned[key])) {
+        cleaned[key] = cleaned[key].filter(Boolean);
+        if (cleaned[key].length === 0) {
+          delete cleaned[key];
+        }
+      }
+    };
+
+    cleanArrayField('category');
+    cleanArrayField('columnTags');
+    cleanArrayField('year');
+    cleanArrayField('country');
 
     // Map selected table IDs to { db, table }
     const tableIndex = new Map(allTables.map((t) => [t.id, t]));
@@ -235,9 +641,9 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   const handleReset = () => {
     const resetFilters = {
       tableName: '',
-      year: 'all',
-      category: 'all',
-      country: 'all',
+      year: [],
+      category: [],
+      country: [],
       minDate: '',
       maxDate: '',
       columnTags: [],
@@ -246,7 +652,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     setSelectedTables([]);
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -254,9 +660,18 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       month: 'short',
       day: 'numeric'
     });
-  };
+  }, []);
 
   const gridApiRef = useRef(null);
+
+  const headerParams = useMemo(() => ({
+    filtersSnapshot: filters,
+    onFilterChange: handleChange,
+    availableYears,
+    availableCategories,
+    availableCountries,
+    availableTags: availableColumnTags,
+  }), [availableCategories, availableColumnTags, availableCountries, availableYears, filters, handleChange]);
 
   const columnDefs = useMemo(() => [
     {
@@ -267,6 +682,15 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       headerCheckboxSelectionFilteredOnly: true,
       minWidth: 220,
       flex: 1.3,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          key: 'tableName',
+          type: 'text',
+          label: 'Search',
+          placeholder: 'Name, database, country, category, tags',
+        },
+      },
       cellRenderer: (params) => (
         <Box sx={{ maxWidth: '100%' }}>
           <Typography
@@ -304,12 +728,32 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       headerName: 'Year',
       field: 'year',
       width: 110,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          key: 'year',
+          type: 'multiselect',
+          label: 'Years',
+          options: availableYears,
+          placeholder: 'Search years',
+        },
+      },
       valueFormatter: ({ value }) => value ?? '—',
     },
     {
       headerName: 'Country',
       field: 'country',
       width: 140,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          key: 'country',
+          type: 'multiselect',
+          label: 'Countries',
+          options: availableCountries,
+          placeholder: 'Search countries',
+        },
+      },
       valueFormatter: ({ value }) => value ?? '—',
     },
     {
@@ -317,6 +761,16 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       field: 'categories',
       flex: 1.2,
       minWidth: 200,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          key: 'category',
+          type: 'multiselect',
+          label: 'Categories',
+          options: availableCategories,
+          placeholder: 'Search categories',
+        },
+      },
       cellRenderer: ({ value }) => {
         const cats = Array.isArray(value) ? value : [];
         const visible = cats.slice(0, 2);
@@ -385,6 +839,16 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       field: 'columnTags',
       flex: 1.2,
       minWidth: 220,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          key: 'columnTags',
+          type: 'multiselect',
+          label: 'Column Tags',
+          options: availableColumnTags,
+          placeholder: 'Search tags',
+        },
+      },
       cellRenderer: ({ value }) => {
         const tags = Array.isArray(value) ? value : [];
         const visible = tags.slice(0, 2);
@@ -447,6 +911,14 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       headerName: 'Indexing Date',
       field: 'indexingDate',
       width: 170,
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: {
+          type: 'dateRange',
+          minKey: 'minDate',
+          maxKey: 'maxDate',
+        },
+      },
       valueFormatter: ({ value }) => formatDate(value),
     },
     {
@@ -454,12 +926,16 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       field: 'count',
       width: 140,
       type: 'rightAligned',
+      headerComponentParams: {
+        ...headerParams,
+        filterConfig: { disableFilter: true },
+      },
       valueFormatter: ({ value }) => {
         if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
         return Number(value).toLocaleString();
       },
     },
-  ], [formatDate]);
+  ], [availableCategories, availableColumnTags, availableCountries, availableYears, formatDate, headerParams]);
 
   const displayedTables = useMemo(
     () => (showSelectedOnly ? filteredTables.filter((t) => selectedTables.includes(t.id)) : filteredTables),
@@ -468,11 +944,13 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
 
   const defaultColDef = useMemo(() => ({
     sortable: true,
-    filter: true,
+    filter: false,
     resizable: true,
     flex: 1,
     minWidth: 120,
-  }), []);
+    headerComponent: ColumnFilterHeader,
+    headerComponentParams: headerParams,
+  }), [headerParams]);
 
   useEffect(() => {
     if (!gridApiRef.current) return;
@@ -525,26 +1003,17 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
 
       <DialogContent dividers>
         <Box>
-          <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Table Name */}
-              <TextField
-                fullWidth
-                label="Search Tables"
-                placeholder="Search by name, database, country, category..."
-                value={filters.tableName}
-                onChange={(e) => handleChange('tableName', e.target.value)}
-                size="small"
-              />
-            </Box>
-          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="subtitle1" fontWeight={600}>
                 Tables
               </Typography>
               <Chip
-                label={`${filteredTables.length} available`}
+                label={
+                  showSelectedOnly
+                    ? `${displayedTables.length} visible / ${filteredTables.length} filtered`
+                    : `${filteredTables.length} visible`
+                }
                 size="small"
                 variant="outlined"
               />
