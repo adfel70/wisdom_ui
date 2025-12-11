@@ -527,11 +527,7 @@ const SearchResultsPage = () => {
       pickedTables: searchState.pickedTables,
     });
 
-    if (resultsContainerRef.current) {
-      resultsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeDatabase, pagination, urlSync, searchState, resultsContainerRef, activeFilters]);
 
   const handleDatabaseChange = (newDbId) => {
