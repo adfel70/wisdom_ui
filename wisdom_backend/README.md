@@ -18,7 +18,7 @@ python -m venv .venv
 pip install -r requirements.txt
 set HOST=0.0.0.0
 set PORT=8000
-set FRONTEND_ORIGIN=http://localhost:5173
+set FRONTEND_ORIGINS=http://localhost:5173,http://localhost:4173
 uvicorn app.main:app --host %HOST% --port %PORT% --reload
 ```
 

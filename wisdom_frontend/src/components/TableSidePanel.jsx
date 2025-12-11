@@ -1,10 +1,9 @@
-import React, { useMemo, memo, useState, useCallback } from 'react';
+import React, { useMemo, memo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   Paper,
   Box,
   Typography,
   Divider,
-  List,
   ListItemButton,
   ListItemText,
   Stack,
@@ -22,12 +21,11 @@ import {
   ChevronLeft,
   ChevronRight,
   PlaylistPlay,
-  Build,
   Search,
   Clear,
   FilterList,
 } from '@mui/icons-material';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { motion } from 'framer-motion';
 import FilterPanel from './FilterPanel';
 
 // Panel width constants
@@ -136,6 +134,11 @@ const TableSidePanel = ({
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
   const totalTables = tableIds?.length ?? 0;
+  const listContainerRef = useRef(null);
+  const [listHeight, setListHeight] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const ROW_HEIGHT = 56;
+  const OVERSCAN = 3; // smaller buffer to reduce extra rendering
 
   // Detect if any facet filters are currently applied for this database
   const hasActiveFacetFilters = useMemo(() => {
@@ -179,6 +182,42 @@ const TableSidePanel = ({
       (item.subtitle || '').toLowerCase().includes(query)
     );
   }, [panelItems, searchQuery]);
+
+  const totalRows = filteredItems.length;
+  const effectiveHeight = listHeight || 360;
+  const visibleCount = Math.ceil(effectiveHeight / ROW_HEIGHT) + OVERSCAN * 2;
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIndex = Math.min(totalRows, startIndex + visibleCount);
+  const offsetY = startIndex * ROW_HEIGHT;
+  const visibleItems = filteredItems.slice(startIndex, endIndex);
+  const spacerHeight = totalRows * ROW_HEIGHT;
+
+  // Measure available height for virtualization
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    const update = () => {
+      const h = el.clientHeight || 0;
+      if (h > 0) setListHeight(h);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const Row = useCallback(
+    ({ index, style, data }) => {
+      const item = data.items[index];
+      if (!item) return null;
+      return (
+        <div style={style}>
+          <PanelRow item={item} onSelect={data.onSelectTable} isCollapsed={false} />
+        </div>
+      );
+    },
+    []
+  );
 
   return (
     <Paper
@@ -374,31 +413,21 @@ const TableSidePanel = ({
       {!isCollapsed && <Divider />}
 
       {/* Content Area */}
-      {!isCollapsed && (
       <Box
+        ref={listContainerRef}
         sx={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
           p: 1,
-          '&::-webkit-scrollbar': {
-            width: 6
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: 'transparent'
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'action.disabled',
-            borderRadius: 3,
-            '&:hover': {
-              backgroundColor: 'action.active'
-            }
-          }
+          opacity: isCollapsed ? 0 : 1,
+          transition: 'opacity 0.2s',
+          pointerEvents: isCollapsed ? 'none' : 'auto',
         }}
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
         {activeTab === 'tableList' ? (
           isSearching ? (
-            // Loading skeleton
             <Stack spacing={1}>
               {Array.from({ length: 10 }).map((_, idx) => (
                 <Skeleton
@@ -415,7 +444,6 @@ const TableSidePanel = ({
               ))}
             </Stack>
           ) : filteredItems.length === 0 ? (
-            // Empty state
             <Box
               sx={{
                 textAlign: 'center',
@@ -434,21 +462,31 @@ const TableSidePanel = ({
               </Typography>
             </Box>
           ) : (
-            // Table list with animations
-            <LayoutGroup>
-              <List disablePadding dense>
-                <AnimatePresence>
-                  {filteredItems.map(item => (
-                    <AnimatedPanelRow
-                      key={item.id}
-                      item={item}
-                      onSelect={onSelectTable}
-                      isCollapsed={isCollapsed}
-                    />
-                  ))}
-                </AnimatePresence>
-              </List>
-            </LayoutGroup>
+            <Box
+              sx={{
+                position: 'relative',
+                height: spacerHeight || effectiveHeight,
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: offsetY,
+                  left: 0,
+                  right: 0,
+                }}
+              >
+                {visibleItems.map((item) => (
+                  <PanelRow
+                    key={item.id}
+                    item={item}
+                    onSelect={onSelectTable}
+                    isCollapsed={false}
+                  />
+                ))}
+              </Box>
+            </Box>
           )
         ) : (
           <FilterPanel
@@ -460,7 +498,6 @@ const TableSidePanel = ({
           />
         )}
       </Box>
-      )}
     </Paper>
   );
 };
