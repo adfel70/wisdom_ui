@@ -15,6 +15,7 @@ import {
   Tooltip,
   TextField,
   InputAdornment,
+  Chip,
 } from '@mui/material';
 import {
   TableChart,
@@ -34,7 +35,7 @@ const PANEL_EXPANDED_WIDTH = 320;
 const PANEL_COLLAPSED_WIDTH = 0;
 
 const PANEL_TABS = [
-  { value: 'tableList', label: 'Table List', icon: <PlaylistPlay /> },
+  { value: 'tableList', label: 'Tables', icon: <PlaylistPlay /> },
   { value: 'filters', label: 'Filters', icon: <FilterList /> }
 ];
 
@@ -134,6 +135,7 @@ const TableSidePanel = ({
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
+  const totalTables = tableIds?.length ?? 0;
 
   // Detect if any facet filters are currently applied for this database
   const hasActiveFacetFilters = useMemo(() => {
@@ -246,8 +248,8 @@ const TableSidePanel = ({
       {/* Header */}
       <Box
         sx={{
-          p: 2,
-          pb: 1.5,
+          p: 1.5,
+          pb: 1,
           display: isCollapsed ? 'none' : 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
@@ -255,33 +257,29 @@ const TableSidePanel = ({
           transition: 'opacity 0.2s',
         }}
       >
-        {/* Database Label */}
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Tables
-            </Typography>
-
             <Tabs
               value={activeTab}
               onChange={handleTabChange}
-              variant="scrollable"
-              allowScrollButtonsMobile
+              variant="fullWidth"
+              centered
               aria-label="Table side panel tabs"
               sx={{
-                mt: 1,
-                minHeight: 36,
+                mt: 0,
+                minHeight: 40,
                 '& .MuiTab-root': {
                   textTransform: 'none',
                   fontWeight: 600,
-                  minHeight: 36,
+                  minHeight: 40,
                   minWidth: 'auto',
-                  px: 1.5,
-                  fontSize: '0.8rem'
+                  px: 2,
+                  fontSize: '0.85rem',
+                  justifyContent: 'center'
                 },
                 '& .MuiTabs-indicator': {
                   height: 3,
@@ -295,6 +293,22 @@ const TableSidePanel = ({
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <Box component="span">{tab.label}</Box>
+                      {tab.value === 'tableList' && (
+                        <Chip
+                          label={totalTables}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          sx={{
+                            height: 18,
+                            minWidth: 18,
+                            fontSize: '0.7rem',
+                            px: 0.5,
+                            fontWeight: 700,
+                            lineHeight: 1,
+                          }}
+                        />
+                      )}
                       {tab.value === 'filters' && hasActiveFacetFilters && (
                         <Box
                           component="span"
