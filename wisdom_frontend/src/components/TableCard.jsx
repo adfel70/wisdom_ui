@@ -667,6 +667,11 @@ const TableCard = ({
 
   const hasVisibleRows = filteredRowData.length > 0;
 
+  // When the table changes (e.g., new list selection), clear column filters so they don't leak
+  useEffect(() => {
+    setColumnFilters({});
+  }, [table?.id]);
+
   // Keep AG Grid overlays in sync; rely on our outer overlay for loading
   useEffect(() => {
     if (!gridApi) return;

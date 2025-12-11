@@ -491,45 +491,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   }, []);
 
   const handleApply = () => {
-    const cleaned = { ...filters };
-    const columnTags = Array.isArray(cleaned.columnTags) ? cleaned.columnTags.filter(Boolean) : [];
-    if (columnTags.length === 0) {
-      delete cleaned.columnTags;
-    } else {
-      cleaned.columnTags = columnTags;
-    }
-
-    // Drop neutral/empty values before sending
-    ['tableName', 'minDate', 'maxDate'].forEach((key) => {
-      const val = cleaned[key];
-      if (val === undefined || val === null) {
-        delete cleaned[key];
-        return;
-      }
-      if (typeof val === 'string') {
-        const trimmed = val.trim();
-        if (trimmed === '' || trimmed.toLowerCase() === 'all') {
-          delete cleaned[key];
-          return;
-        }
-        cleaned[key] = trimmed;
-      }
-    });
-
-    const cleanArrayField = (key) => {
-      if (Array.isArray(cleaned[key])) {
-        cleaned[key] = cleaned[key].filter(Boolean);
-        if (cleaned[key].length === 0) {
-          delete cleaned[key];
-        }
-      }
-    };
-
-    cleanArrayField('category');
-    cleanArrayField('columnTags');
-    cleanArrayField('year');
-    cleanArrayField('country');
-
     // Map selected table IDs to { db, table }
     const tableIndex = new Map(allTables.map((t) => [t.id, t]));
     const pickedTables = (selectedTables || []).map((tableId) => {
@@ -540,7 +501,8 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       };
     }).filter((t) => t.db && t.table);
 
-    onApply({ filters: cleaned, pickedTables });
+    // Only surface picked tables to the caller; filters are for local narrowing only
+    onApply({ filters: {}, pickedTables });
     onClose();
   };
 
