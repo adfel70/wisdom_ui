@@ -420,7 +420,7 @@ const TableSidePanel = ({
           isSearching ? (
             // Loading skeleton
             <Stack spacing={1}>
-              {Array.from({ length: 6 }).map((_, idx) => (
+              {Array.from({ length: 10 }).map((_, idx) => (
                 <Skeleton
                   key={idx}
                   variant="rounded"

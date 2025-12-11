@@ -202,7 +202,7 @@ def search_tables(
     permutations: Optional[Dict[str, List[str]]] = None,
     picked_tables: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
-    _simulate_random_latency(min_seconds=3, max_seconds=3)
+    _simulate_random_latency(min_seconds=1, max_seconds=8)
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
     table_meta = get_table_metadata()

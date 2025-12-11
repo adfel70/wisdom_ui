@@ -875,14 +875,7 @@ const TableCard = ({
                     minWidth: 'auto',
                   }}
                 >
-                  {isLoadingMore ? (
-                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-                      <span>Loading</span>
-                      <AnimatedDots />
-                    </Box>
-                  ) : (
-                    'Load More'
-                  )}
+                  {isLoadingMore ? 'Loading...' : 'Load More'}
                 </Button>
               )}
             </Box>

@@ -211,6 +211,7 @@ const SearchResultsPage = () => {
   // Search results hook
   const {
     isSearching,
+    dbLoadingState,
     isLoadingRows,
     facetsByDb,
     permutationMap,
@@ -358,6 +359,7 @@ const SearchResultsPage = () => {
     () => databaseMetadata.find(db => db.id === activeDatabase),
     [activeDatabase, databaseMetadata]
   );
+  const isActiveDbSearching = dbLoadingState?.[activeDatabase];
 
   // Scroll to table card
   const focusTableCard = useCallback((tableId) => {
@@ -702,7 +704,7 @@ const SearchResultsPage = () => {
                   activeDatabase={activeDatabase}
                   onChange={handleDatabaseChange}
                   tableCounts={tableCounts}
-                  isSearching={isSearching}
+                  isSearchingByDb={dbLoadingState}
                 />
               </Box>
             </Container>
@@ -716,7 +718,7 @@ const SearchResultsPage = () => {
           tableIds={matchingTableIds[activeDatabase] || []}
           visibleTableIds={visibleTableIds}
           pendingTableIds={visibleTableIds.filter(id => isRowsLoading(id))}
-          isSearching={isSearching}
+          isSearching={!!isActiveDbSearching}
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
@@ -755,7 +757,7 @@ const SearchResultsPage = () => {
                   />
 
                   <ResultsGrid
-                    isSearching={isSearching}
+                    isSearching={!!isActiveDbSearching}
                     visibleTableIds={visibleTableIds}
                     getTableForDisplay={getTableForDisplay}
                     searchQuery={searchState.searchQuery}
@@ -778,7 +780,7 @@ const SearchResultsPage = () => {
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={handlePageChange}
-          isSearching={isSearching}
+          isSearching={!!isActiveDbSearching}
           sidebarOffset={sidebarOffset}
         />
 

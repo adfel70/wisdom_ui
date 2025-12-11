@@ -8,7 +8,7 @@ import { Storage as DatabaseIcon } from '@mui/icons-material';
  *
  * Shows loading indicator when isSearching is true
  */
-const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {}, isSearching = false }) => {
+const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {}, isSearchingByDb = {} }) => {
   const handleChange = (event, newValue) => {
     onChange(newValue);
   };
@@ -35,6 +35,7 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {}, i
       >
         {databases.map((database) => {
           const tableCount = tableCounts[database.id] !== undefined ? tableCounts[database.id] : (database.tables?.length);
+          const isDbSearching = !!isSearchingByDb[database.id];
 
           return (
             <Tab
@@ -44,7 +45,7 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {}, i
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DatabaseIcon sx={{ fontSize: 18 }} />
                   <span>{database.name}</span>
-                  {isSearching ? (
+                  {isDbSearching ? (
                     <CircularProgress size={14} sx={{ ml: 0.5 }} />
                   ) : (
                     tableCount !== undefined && tableCount > 0 && (

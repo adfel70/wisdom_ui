@@ -36,6 +36,12 @@ export const useSearchResults = ({
 }) => {
   // Search state
   const [isSearching, setIsSearching] = useState(true);
+  const [dbLoadingState, setDbLoadingState] = useState({
+    db1: true,
+    db2: true,
+    db3: true,
+    db4: true,
+  });
   const [facetsByDb, setFacetsByDb] = useState({
     db1: null,
     db2: null,
@@ -203,75 +209,100 @@ export const useSearchResults = ({
       // If we already have results for this exact search, don't re-run
       if (lastSearchSignature === currentSignature) {
         setIsSearching(false);
+        setDbLoadingState({
+          db1: false,
+          db2: false,
+          db3: false,
+          db4: false,
+        });
         return;
       }
 
       setIsSearching(true);
+      setDbLoadingState({
+        db1: true,
+        db2: true,
+        db3: true,
+        db4: true,
+      });
+      // Reset table metadata and visible matches immediately to avoid showing stale cards
+      setTableMetadataByDb({
+        db1: new Map(),
+        db2: new Map(),
+        db3: new Map(),
+        db4: new Map(),
+      });
+      setMatchingTableIds({
+        db1: [],
+        db2: [],
+        db3: [],
+        db4: [],
+      });
       const permutations = await buildPermutationMap();
       setPermutationMap(permutations);
 
-      try {
-        const searchPromises = ['db1', 'db2', 'db3', 'db4'].map((dbId) =>
-          searchTables({
+      const dbIds = ['db1', 'db2', 'db3', 'db4'];
+
+      const searchDb = async (dbId) => {
+        try {
+          const result = await searchTables({
             db: dbId,
             query: searchQuery,
             filters: { ...(perDbFilters[dbId] || {}) },
             pickedTables,
             permutations,
-          })
-        );
-
-        const results = await Promise.all(searchPromises);
-
-        if (!isCancelled) {
-          // Store table IDs for matching (used by context)
-          setMatchingTableIds({
-            db1: results[0]?.tableIds || [],
-            db2: results[1]?.tableIds || [],
-            db3: results[2]?.tableIds || [],
-            db4: results[3]?.tableIds || [],
           });
 
-          // Store full table metadata by database
-          const newMetadataByDb = {
-            db1: new Map(),
-            db2: new Map(),
-            db3: new Map(),
-            db4: new Map(),
-          };
+          if (isCancelled) return;
 
-          ['db1', 'db2', 'db3', 'db4'].forEach((dbId, index) => {
-            const tables = results[index]?.tables || [];
-            tables.forEach(table => {
-              newMetadataByDb[dbId].set(table.id, table);
+          setTableMetadataByDb(prev => {
+            const next = {
+              ...prev,
+              [dbId]: new Map(),
+            };
+            (result?.tables || []).forEach(table => {
+              next[dbId].set(table.id, table);
             });
+            return next;
           });
 
-          setTableMetadataByDb(newMetadataByDb);
+          setMatchingTableIds(prev => ({
+            ...prev,
+            [dbId]: result?.tableIds || [],
+          }));
+
+          setFacetsByDb(prev => ({
+            ...prev,
+            [dbId]: result?.facets || null,
+          }));
+        } catch (error) {
+          console.error(`Failed to search database ${dbId}:`, error);
+          if (isCancelled) return;
+          setTableMetadataByDb(prev => ({
+            ...prev,
+            [dbId]: new Map(),
+          }));
+          setMatchingTableIds(prev => ({
+            ...prev,
+            [dbId]: [],
+          }));
+        } finally {
+          if (!isCancelled) {
+            setDbLoadingState(prev => ({
+              ...prev,
+              [dbId]: false,
+            }));
+          }
+        }
+      };
+
+      try {
+        await Promise.all(dbIds.map(searchDb));
+        if (!isCancelled) {
           setLastSearchSignature(currentSignature);
-          setFacetsByDb({
-            db1: results[0]?.facets || null,
-            db2: results[1]?.facets || null,
-            db3: results[2]?.facets || null,
-            db4: results[3]?.facets || null,
-          });
         }
       } catch (error) {
         console.error('Failed to search databases:', error);
-        if (!isCancelled) {
-          setMatchingTableIds({
-            db1: [],
-            db2: [],
-            db3: [],
-            db4: [],
-          });
-          setTableMetadataByDb({
-            db1: new Map(),
-            db2: new Map(),
-            db3: new Map(),
-            db4: new Map(),
-          });
-        }
       } finally {
         if (!isCancelled) {
           setIsSearching(false);
@@ -442,6 +473,7 @@ export const useSearchResults = ({
   return {
     // Search state
     isSearching,
+    dbLoadingState,
     facetsByDb,
     permutationMap,
 
