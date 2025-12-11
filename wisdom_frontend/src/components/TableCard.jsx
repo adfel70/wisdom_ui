@@ -19,6 +19,7 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
+import { keyframes } from '@mui/system';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
@@ -48,6 +49,29 @@ import * as XLSX from 'xlsx';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
  
+// Animated ellipsis for record loading state
+const loadingDots = keyframes`
+  0% { content: '.'; }
+  33% { content: '..'; }
+  66% { content: '...'; }
+  100% { content: '.'; }
+`;
+
+const AnimatedDots = () => (
+  <Box
+    component="span"
+    sx={{
+      display: 'inline-block',
+      minWidth: '1.5em',
+      '&::after': {
+        content: '"..."',
+        display: 'inline-block',
+        animation: `${loadingDots} 1s steps(3, end) infinite`,
+      },
+    }}
+  />
+);
+
 /**
  * Custom Loading Overlay Component
  * Shows a circular progress indicator instead of default "Loading..." text
@@ -462,12 +486,13 @@ const TableCard = ({
     setGridApi(params.api);
   }, []);
 
-  // Keep AG Grid overlays in sync with loading state to avoid the "no rows" flash
+  // Keep AG Grid overlays in sync; rely on our outer overlay for loading
   useEffect(() => {
     if (!gridApi) return;
 
     if (isGridLoading) {
-      gridApi.showLoadingOverlay();
+      // Use outer semi-transparent overlay; keep grid overlays hidden to avoid double spinners
+      gridApi.hideOverlay();
       return;
     }
 
@@ -816,8 +841,17 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                icon={isLoadingRows ? <CircularProgress size={12} sx={{ ml: 0.5 }} /> : undefined}
-                label={isLoadingRows ? `Records: ... / ${totalRecords}` : `Records: ${dedupedData.length} / ${totalRecords}`}
+                label={
+                  (isLoadingRows || isLoadingMore) ? (
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                      <span>Records:</span>
+                      <AnimatedDots />
+                      <span>/ {totalRecords}</span>
+                    </Box>
+                  ) : (
+                    `Records: ${dedupedData.length} / ${totalRecords}`
+                  )
+                }
                 size="small"
                 color="primary"
                 variant="outlined"
@@ -827,7 +861,7 @@ const TableCard = ({
                 <Button
                   size="small"
                   variant="outlined"
-                  startIcon={isLoadingMore ? <CircularProgress size={14} /> : <ExpandCircleDown />}
+                  startIcon={isLoadingMore ? null : <ExpandCircleDown />}
                   onClick={(e) => {
                     e.stopPropagation();
                     onLoadMore();
@@ -841,7 +875,14 @@ const TableCard = ({
                     minWidth: 'auto',
                   }}
                 >
-                  {isLoadingMore ? 'Loading...' : 'Load More'}
+                  {isLoadingMore ? (
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                      <span>Loading</span>
+                      <AnimatedDots />
+                    </Box>
+                  ) : (
+                    'Load More'
+                  )}
                 </Button>
               )}
             </Box>

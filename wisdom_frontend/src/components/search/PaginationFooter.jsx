@@ -1,11 +1,11 @@
 import React from 'react';
-import { Box, Container, Pagination, CircularProgress, Typography } from '@mui/material';
+import { Box, Container, Pagination, PaginationItem } from '@mui/material';
 
 /**
  * PaginationFooter - Fixed bottom pagination bar
  *
  * Behavior:
- * - During search (isSearching=true): Shows loading indicator
+ * - During search (isSearching=true): Shows disabled placeholder with ellipsis
  * - After search, during row loading: Pagination is ENABLED (user can switch pages)
  * - Hidden when only 1 page of results
  */
@@ -16,7 +16,7 @@ const PaginationFooter = ({
   isSearching,
   sidebarOffset,
 }) => {
-  // During search, show a loading placeholder
+  // Show static placeholder while searching
   if (isSearching) {
     return (
       <Box
@@ -36,18 +36,42 @@ const PaginationFooter = ({
         }}
       >
         <Container maxWidth="xl">
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={16} />
-            <Typography variant="body2" color="text.secondary">
-              Loading results...
-            </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Pagination
+              count={1}
+              page={1}
+              showFirstButton
+              showLastButton
+              siblingCount={0}
+              boundaryCount={0}
+              renderItem={(item) => (
+                <PaginationItem
+                  {...item}
+                  disabled
+                  page={item.type === 'page' ? '...' : item.page}
+                  sx={{
+                    color: 'text.disabled',
+                    pointerEvents: 'none',
+                    '&.Mui-disabled': { opacity: 0.6 },
+                  }}
+                />
+              )}
+              sx={{
+                pointerEvents: 'none',
+                '& .MuiPaginationItem-root': {
+                  fontSize: '0.875rem',
+                  minWidth: '32px',
+                  height: '32px',
+                },
+              }}
+            />
           </Box>
         </Container>
       </Box>
     );
   }
 
-  // Hide if only 1 page
+  // Hide if only 1 page (when not actively searching)
   if (totalPages <= 1) return null;
 
   return (

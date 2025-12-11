@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import TableCard from '../TableCard';
@@ -26,11 +26,46 @@ const ResultsGrid = ({
   tablePaginationHook,
   onLoadMore,
 }) => {
-  // Show loading spinner during initial search
-  if (isSearching) {
+  const [suppressEmptyState, setSuppressEmptyState] = useState(false);
+  const suppressTimerRef = useRef(null);
+
+  // Suppress the empty state briefly after search completes to avoid flash
+  useEffect(() => {
+    // When searching, always suppress
+    if (isSearching) {
+      setSuppressEmptyState(true);
+      if (suppressTimerRef.current) {
+        clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
+      return;
+    }
+
+    // When search finishes, wait a short moment before allowing empty state
+    if (suppressEmptyState) {
+      suppressTimerRef.current = setTimeout(() => {
+        setSuppressEmptyState(false);
+        suppressTimerRef.current = null;
+      }, 200);
+    }
+
+    return () => {
+      if (suppressTimerRef.current) {
+        clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
+    };
+  }, [isSearching, suppressEmptyState]);
+
+  const shouldShowSkeletons = (isSearching || suppressEmptyState) && visibleTableIds.length === 0;
+
+  // Show skeleton cards during search or immediately after to avoid "no results" flash
+  if (shouldShowSkeletons) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <TableCardSkeleton key={`search-skeleton-${idx}`} />
+        ))}
       </Box>
     );
   }

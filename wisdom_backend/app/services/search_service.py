@@ -1,3 +1,5 @@
+import random
+import time
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import HTTPException
@@ -14,6 +16,11 @@ from app.services.pagination import paginate_rows
 
 def _normalize_filters(filters: Optional[Filters]) -> Filters:
     return filters or Filters()
+
+
+def _simulate_random_latency(min_seconds: int = 5, max_seconds: int = 10) -> None:
+    delay = random.uniform(min_seconds, max_seconds)
+    time.sleep(delay)
 
 
 def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_override: Optional[int] = None) -> Optional[Dict[str, Any]]:
@@ -195,6 +202,7 @@ def search_tables(
     permutations: Optional[Dict[str, List[str]]] = None,
     picked_tables: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
+    _simulate_random_latency(min_seconds=3, max_seconds=3)
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
     table_meta = get_table_metadata()
@@ -238,6 +246,7 @@ def search_rows(
     start_row: int,
     size_limit: int,
 ) -> Dict[str, Any]:
+    _simulate_random_latency(min_seconds=4, max_seconds=8)
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
     table_meta_all = get_table_metadata()
