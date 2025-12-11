@@ -21,17 +21,12 @@ import {
 import {
   Close as CloseIcon,
   FilterList,
-  LocalOfferOutlined,
   FilterAlt,
 } from '@mui/icons-material';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
-import {
-  getAvailableYears,
-  getAvailableCategories,
-  getAvailableCountries,
-  getDatabasesWithTables,
-} from '../api/backendClient';
+import useFilterMetadata from '../hooks/useFilterMetadata';
+import useTableColumns from '../hooks/useTableColumns';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -191,7 +186,7 @@ const ColumnFilterHeader = (props) => {
       };
 
       return (
-        <Stack spacing={1}>
+        <Stack spacing={0}>
           <TextField
             size="small"
             fullWidth
@@ -203,9 +198,6 @@ const ColumnFilterHeader = (props) => {
             sx={{
               maxHeight: 220,
               overflowY: 'auto',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
               p: 0.5,
             }}
           >
@@ -221,13 +213,14 @@ const ColumnFilterHeader = (props) => {
                     key={option}
                     dense
                     onClick={() => toggleOption(option)}
-                    sx={{ gap: 1 }}
+                    sx={{ gap: 0, py: 0, px: 0.25, minHeight: 28 }}
                   >
                     <Checkbox
                       size="small"
                       checked={checked}
                       tabIndex={-1}
                       disableRipple
+                      sx={{ p: 0, mr: 0.25 }}
                     />
                     <Typography variant="body2">{option}</Typography>
                   </MenuItem>
@@ -394,10 +387,12 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   });
   const [selectedTables, setSelectedTables] = useState([]);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
-  const [allDatabases, setAllDatabases] = useState([]);
-  const [availableYears, setAvailableYears] = useState([]);
-  const [availableCategories, setAvailableCategories] = useState([]);
-  const [availableCountries, setAvailableCountries] = useState([]);
+  const {
+    allDatabases,
+    availableYears,
+    availableCategories,
+    availableCountries,
+  } = useFilterMetadata(open);
 
   const getColumnTags = useCallback((table) => {
     const tags = new Set();
@@ -411,43 +406,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     });
     return Array.from(tags);
   }, []);
-
-  // Load all databases when modal opens
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadData = async () => {
-      if (!open) return;
-      try {
-        const [databases, years, categories, countries] = await Promise.all([
-          getDatabasesWithTables(),
-          getAvailableYears(),
-          getAvailableCategories(),
-          getAvailableCountries(),
-        ]);
-
-        if (isCancelled) return;
-        setAllDatabases(databases || []);
-        setAvailableYears(Array.isArray(years) ? years : []);
-        setAvailableCategories(Array.isArray(categories) ? categories : []);
-        setAvailableCountries(Array.isArray(countries) ? countries : []);
-      } catch (error) {
-        console.error('Failed to load filter metadata:', error);
-        if (!isCancelled) {
-          setAllDatabases([]);
-          setAvailableYears([]);
-          setAvailableCategories([]);
-          setAvailableCountries([]);
-        }
-      }
-    };
-
-    loadData();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [open]);
 
   // Flatten all tables from all databases
   const allTables = useMemo(() => {
@@ -673,269 +631,14 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     availableTags: availableColumnTags,
   }), [availableCategories, availableColumnTags, availableCountries, availableYears, filters, handleChange]);
 
-  const columnDefs = useMemo(() => [
-    {
-      headerName: 'Name',
-      field: 'name',
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
-      headerCheckboxSelectionFilteredOnly: true,
-      minWidth: 220,
-      flex: 1.3,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          key: 'tableName',
-          type: 'text',
-          label: 'Search',
-          placeholder: 'Name, database, country, category, tags',
-        },
-      },
-      cellRenderer: (params) => (
-        <Box sx={{ maxWidth: '100%' }}>
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            title={params.data?.name}
-            sx={{
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: 'block',
-              maxWidth: '100%',
-            }}
-          >
-            {params.data?.name}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            title={params.data?.databaseName}
-            sx={{
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: 'block',
-              maxWidth: '100%',
-            }}
-          >
-            {params.data?.databaseName}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      headerName: 'Year',
-      field: 'year',
-      width: 110,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          key: 'year',
-          type: 'multiselect',
-          label: 'Years',
-          options: availableYears,
-          placeholder: 'Search years',
-        },
-      },
-      valueFormatter: ({ value }) => value ?? '—',
-    },
-    {
-      headerName: 'Country',
-      field: 'country',
-      width: 140,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          key: 'country',
-          type: 'multiselect',
-          label: 'Countries',
-          options: availableCountries,
-          placeholder: 'Search countries',
-        },
-      },
-      valueFormatter: ({ value }) => value ?? '—',
-    },
-    {
-      headerName: 'Categories',
-      field: 'categories',
-      flex: 1.2,
-      minWidth: 200,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          key: 'category',
-          type: 'multiselect',
-          label: 'Categories',
-          options: availableCategories,
-          placeholder: 'Search categories',
-        },
-      },
-      cellRenderer: ({ value }) => {
-        const cats = Array.isArray(value) ? value : [];
-        const visible = cats.slice(0, 2);
-        const extra = cats.length > 2 ? cats.length - 2 : 0;
-        return (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              width: '100%',
-              height: '100%',
-              overflow: 'hidden',
-            }}
-          >
-            <Stack
-              direction="row"
-              spacing={0.5}
-              flexWrap="nowrap"
-              gap={0.5}
-              alignItems="center"
-              sx={{
-                width: '100%',
-                maxWidth: '100%',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {visible.map((category, idx) => (
-                <Chip
-                  key={`${category}-${idx}`}
-                  label={category}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
-              ))}
-              {extra > 0 && (
-                <Tooltip
-                  title={
-                    <Stack spacing={0.25}>
-                      {cats.map((cat, idx) => (
-                        <span key={`${cat}-${idx}`}>{cat}</span>
-                      ))}
-                    </Stack>
-                  }
-                  placement="right"
-                  arrow
-                  enterDelay={300}
-                >
-                  <Chip
-                    label={`+${extra}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.7rem', height: 20, cursor: 'pointer' }}
-                  />
-                </Tooltip>
-              )}
-            </Stack>
-          </Box>
-        );
-      },
-    },
-    {
-      headerName: 'Column Tags',
-      field: 'columnTags',
-      flex: 1.2,
-      minWidth: 220,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          key: 'columnTags',
-          type: 'multiselect',
-          label: 'Column Tags',
-          options: availableColumnTags,
-          placeholder: 'Search tags',
-        },
-      },
-      cellRenderer: ({ value }) => {
-        const tags = Array.isArray(value) ? value : [];
-        const visible = tags.slice(0, 2);
-        const extra = tags.length > 2 ? tags.length - 2 : 0;
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
-            <Stack
-              direction="row"
-              spacing={0.5}
-              flexWrap="nowrap"
-              gap={0.5}
-              alignItems="center"
-              sx={{
-                width: '100%',
-                maxWidth: '100%',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {visible.map((tag, idx) => (
-                <Chip
-                  key={`${tag}-${idx}`}
-                  label={tag}
-                  size="small"
-                  variant="outlined"
-                  icon={<LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />}
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
-              ))}
-              {extra > 0 && (
-                <Tooltip
-                  placement="right"
-                  arrow
-                  enterDelay={300}
-                  title={
-                    <Stack spacing={0.5}>
-                      {tags.map((tag, idx) => (
-                        <Box key={`${tag}-${idx}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />
-                          <span>{tag}</span>
-                        </Box>
-                      ))}
-                    </Stack>
-                  }
-                >
-                  <Chip
-                    label={`+${extra}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.7rem', height: 20, cursor: 'pointer' }}
-                  />
-                </Tooltip>
-              )}
-            </Stack>
-          </Box>
-        );
-      },
-    },
-    {
-      headerName: 'Indexing Date',
-      field: 'indexingDate',
-      width: 170,
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: {
-          type: 'dateRange',
-          minKey: 'minDate',
-          maxKey: 'maxDate',
-        },
-      },
-      valueFormatter: ({ value }) => formatDate(value),
-    },
-    {
-      headerName: 'Records',
-      field: 'count',
-      width: 140,
-      type: 'rightAligned',
-      headerComponentParams: {
-        ...headerParams,
-        filterConfig: { disableFilter: true },
-      },
-      valueFormatter: ({ value }) => {
-        if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
-        return Number(value).toLocaleString();
-      },
-    },
-  ], [availableCategories, availableColumnTags, availableCountries, availableYears, formatDate, headerParams]);
+  const columnDefs = useTableColumns({
+    headerParams,
+    availableYears,
+    availableCountries,
+    availableCategories,
+    availableColumnTags,
+    formatDate,
+  });
 
   const displayedTables = useMemo(
     () => (showSelectedOnly ? filteredTables.filter((t) => selectedTables.includes(t.id)) : filteredTables),
