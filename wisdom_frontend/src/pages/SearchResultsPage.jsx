@@ -705,7 +705,7 @@ const SearchResultsPage = () => {
             }}
           >
             <Container maxWidth={false} disableGutters sx={{ px: { xs: 2, md: 3 } }}>
-              <Box sx={{ py: 1.25 }}>
+              <Box sx={{ py: { xs: 1.5, md: 1.75 } }}>
                 <Box
                   sx={{
                     display: 'flex',
@@ -722,7 +722,7 @@ const SearchResultsPage = () => {
                       gap: 0.5,
                       width: { xs: 'auto', lg: `${sidebarOffset}px` },
                       justifyContent: { xs: 'flex-start', lg: 'flex-end' },
-                      pr: { xs: 0, lg: 0.5 },
+                      pr: { xs: 0, lg: 3 },
                       flexShrink: 0,
                     }}
                   >
