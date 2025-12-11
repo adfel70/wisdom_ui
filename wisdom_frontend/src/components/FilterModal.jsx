@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,25 +14,21 @@ import {
   IconButton,
   Typography,
   Grid,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Checkbox,
   Chip,
   Stack,
   Paper,
-  Divider,
 } from '@mui/material';
 import { Close as CloseIcon, FilterList, CalendarToday } from '@mui/icons-material';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import {
   getAvailableYears,
   getAvailableCategories,
   getAvailableCountries,
   getDatabasesWithTables,
 } from '../api/backendClient';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 /**
  * FilterModal Component
@@ -49,6 +45,7 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     ...initialFilters,
   });
   const [selectedTables, setSelectedTables] = useState([]);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [allDatabases, setAllDatabases] = useState([]);
   const [yearOptions, setYearOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
@@ -109,9 +106,21 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   // Filter tables based on current filters
   const filteredTables = useMemo(() => {
     return allTables.filter(table => {
-      // Filter by table name
-      if (filters.tableName && !table.name.toLowerCase().includes(filters.tableName.toLowerCase())) {
-        return false;
+      // Free-text search across table metadata
+      if (filters.tableName) {
+        const query = filters.tableName.trim().toLowerCase();
+        const fields = [
+          table.name,
+          table.databaseName,
+          String(table.year ?? ''),
+          table.country,
+          ...(table.categories || []),
+        ]
+          .filter(Boolean)
+          .map((val) => val.toString().toLowerCase());
+
+        const matchesAnyField = fields.some((val) => val.includes(query));
+        if (!matchesAnyField) return false;
       }
 
       // Filter by year
@@ -164,29 +173,12 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         ? initialPickedTables.map((t) => t.table).filter(Boolean)
         : [];
       setSelectedTables(initialSelected);
+      setShowSelectedOnly(false);
     }
   }, [open, initialFilters, initialPickedTables]);
 
   const handleChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSelectTable = (tableId) => {
-    setSelectedTables(prev => {
-      if (prev.includes(tableId)) {
-        return prev.filter(id => id !== tableId);
-      } else {
-        return [...prev, tableId];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedTables.length === filteredTables.length) {
-      setSelectedTables([]);
-    } else {
-      setSelectedTables(filteredTables.map(t => t.id));
-    }
   };
 
   const handleApply = () => {
@@ -246,8 +238,151 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
     });
   };
 
-  const allSelected = filteredTables.length > 0 && selectedTables.length === filteredTables.length;
-  const someSelected = selectedTables.length > 0 && selectedTables.length < filteredTables.length;
+  const gridApiRef = useRef(null);
+
+  const columnDefs = useMemo(() => [
+    {
+      headerName: 'Name',
+      field: 'name',
+      checkboxSelection: true,
+      headerCheckboxSelection: true,
+      headerCheckboxSelectionFilteredOnly: true,
+      minWidth: 220,
+      flex: 1.3,
+      cellRenderer: (params) => (
+        <Box sx={{ maxWidth: '100%' }}>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            title={params.data?.name}
+            sx={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: 'block',
+              maxWidth: '100%',
+            }}
+          >
+            {params.data?.name}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            title={params.data?.databaseName}
+            sx={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: 'block',
+              maxWidth: '100%',
+            }}
+          >
+            {params.data?.databaseName}
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      headerName: 'Year',
+      field: 'year',
+      width: 110,
+      valueFormatter: ({ value }) => value ?? '—',
+    },
+    {
+      headerName: 'Country',
+      field: 'country',
+      width: 140,
+      valueFormatter: ({ value }) => value ?? '—',
+    },
+    {
+      headerName: 'Categories',
+      field: 'categories',
+      flex: 1.2,
+      minWidth: 200,
+      cellRenderer: ({ value }) => {
+        const cats = Array.isArray(value) ? value : [];
+        const visible = cats.slice(0, 2);
+        const extra = cats.length > 2 ? cats.length - 2 : 0;
+        return (
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              width: '100%',
+              height: '100%',
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={0.5}
+              flexWrap="wrap"
+              gap={0.5}
+              justifyContent="center"
+              alignItems="center"
+            >
+              {visible.map((category, idx) => (
+                <Chip
+                  key={`${category}-${idx}`}
+                  label={category}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              ))}
+              {extra > 0 && (
+                <Chip
+                  label={`+${extra}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              )}
+            </Stack>
+          </Box>
+        );
+      },
+    },
+    {
+      headerName: 'Indexing Date',
+      field: 'indexingDate',
+      width: 170,
+      valueFormatter: ({ value }) => formatDate(value),
+    },
+    {
+      headerName: 'Records',
+      field: 'count',
+      width: 140,
+      type: 'rightAligned',
+      valueFormatter: ({ value }) => {
+        if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
+        return Number(value).toLocaleString();
+      },
+    },
+  ], [formatDate]);
+
+  const displayedTables = useMemo(
+    () => (showSelectedOnly ? filteredTables.filter((t) => selectedTables.includes(t.id)) : filteredTables),
+    [showSelectedOnly, filteredTables, selectedTables]
+  );
+
+  const defaultColDef = useMemo(() => ({
+    sortable: true,
+    filter: true,
+    resizable: true,
+    flex: 1,
+    minWidth: 120,
+  }), []);
+
+  useEffect(() => {
+    if (!gridApiRef.current) return;
+    gridApiRef.current.forEachNode((node) => {
+      const shouldSelect = selectedTables.includes(node.data?.id);
+      if (node.isSelected() !== shouldSelect) {
+        node.setSelected(shouldSelect);
+      }
+    });
+  }, [selectedTables, displayedTables]);
 
   return (
     <Dialog
@@ -289,125 +424,20 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       </DialogTitle>
 
       <DialogContent dividers>
-        {/* Filters Section */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Filters
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Table Name */}
-            <TextField
-              fullWidth
-              label="Table Name"
-              placeholder="Search by table name..."
-              value={filters.tableName}
-              onChange={(e) => handleChange('tableName', e.target.value)}
-              size="small"
-            />
-
-            <Grid container spacing={2}>
-              {/* Year Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Year</InputLabel>
-                  <Select
-                    value={filters.year}
-                    label="Year"
-                    onChange={(e) => handleChange('year', e.target.value)}
-                  >
-                    <MenuItem value="all">All Years</MenuItem>
-                    {yearOptions.map((year) => (
-                      <MenuItem key={year} value={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {/* Category Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    value={filters.category}
-                    label="Category"
-                    onChange={(e) => handleChange('category', e.target.value)}
-                  >
-                    <MenuItem value="all">All Categories</MenuItem>
-                    {categoryOptions.map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {/* Country Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Region/Country</InputLabel>
-                  <Select
-                    value={filters.country}
-                    label="Region/Country"
-                    onChange={(e) => handleChange('country', e.target.value)}
-                  >
-                    <MenuItem value="all">All Regions</MenuItem>
-                    {countryOptions.map((country) => (
-                      <MenuItem key={country} value={country}>
-                        {country}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-
-            {/* Date Range Filters */}
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <CalendarToday fontSize="small" color="primary" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Indexing Date Range
-                </Typography>
-              </Box>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Min Date"
-                    type="date"
-                    value={filters.minDate}
-                    onChange={(e) => handleChange('minDate', e.target.value)}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                    size="small"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Max Date"
-                    type="date"
-                    value={filters.maxDate}
-                    onChange={(e) => handleChange('maxDate', e.target.value)}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                    size="small"
-                  />
-                </Grid>
-              </Grid>
+        <Box>
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Table Name */}
+              <TextField
+                fullWidth
+                label="Search Tables"
+                placeholder="Search by name, database, country, category..."
+                value={filters.tableName}
+                onChange={(e) => handleChange('tableName', e.target.value)}
+                size="small"
+              />
             </Box>
           </Box>
-        </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Tables Selection Section */}
-        <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="subtitle1" fontWeight={600}>
@@ -421,120 +451,47 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
             </Box>
             {selectedTables.length > 0 && (
               <Chip
-                label={`${selectedTables.length} selected`}
-                color="primary"
+                label={
+                  showSelectedOnly
+                    ? `${selectedTables.length} selected`
+                    : `${selectedTables.length} selected`
+                }
+                color={showSelectedOnly ? 'secondary' : 'primary'}
                 size="small"
+                onClick={() => setShowSelectedOnly((prev) => !prev)}
+                clickable
                 sx={{ fontWeight: 600 }}
               />
             )}
           </Box>
 
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={someSelected}
-                      onChange={handleSelectAll}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Year</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Country</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Categories</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Indexing Date</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Records</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredTables.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No tables found matching the current filters
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredTables.map((table) => {
-                    const isSelected = selectedTables.includes(table.id);
-                    return (
-                      <TableRow
-                        key={table.id}
-                        hover
-                        onClick={() => handleSelectTable(table.id)}
-                        sx={{
-                          cursor: 'pointer',
-                          bgcolor: isSelected ? 'action.selected' : 'inherit',
-                          '&:hover': {
-                            bgcolor: isSelected ? 'action.selected' : 'action.hover',
-                          }
-                        }}
-                      >
-                        <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={() => handleSelectTable(table.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
-                            {table.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {table.databaseName}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
-                            {table.year}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
-                            {table.country}
-                          </Typography>
-                        </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
-                          {table.categories.slice(0, 2).map((category, idx) => (
-                            <Chip
-                              key={idx}
-                              label={category}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          ))}
-                          {table.categories.length > 2 && (
-                            <Chip
-                              label={`+${table.categories.length - 2}`}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                        </Stack>
-                      </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDate(table.indexingDate)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
-                            {table.count.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Paper variant="outlined" sx={{ height: 420, position: 'relative', overflow: 'hidden' }}>
+            <AgGridReact
+              style={{ height: '100%', width: '100%' }}
+              theme={themeQuartz}
+              rowData={displayedTables}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              animateRows
+              rowSelection="multiple"
+              rowMultiSelectWithClick
+              suppressRowClickSelection={false}
+              tooltipShowDelay={200}
+              overlayNoRowsTemplate="No tables found matching the current filters"
+              getRowId={(params) => params?.data?.id}
+              onGridReady={(params) => {
+                gridApiRef.current = params.api;
+                params.api.forEachNode((node) => {
+                  const shouldSelect = selectedTables.includes(node.data?.id);
+                  if (shouldSelect) node.setSelected(true);
+                });
+              }}
+              onSelectionChanged={(event) => {
+                const ids = (event.api.getSelectedRows() || []).map((row) => row.id);
+                setSelectedTables(ids);
+              }}
+            />
+          </Paper>
         </Box>
       </DialogContent>
 
