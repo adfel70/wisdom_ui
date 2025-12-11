@@ -122,6 +122,47 @@ def test_search_tables_with_permutations():
     assert body["total"] >= 1
 
 
+def test_search_tables_multi_db_includes_db_fields_and_order():
+    payload = {"dbs": ["db1", "db2"], "query": None, "filters": {}, "permutations": {}}
+    res = client.post("/api/search/tables", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == len(body["tables"])
+    assert len(body["tables"]) > 0
+
+    db_ids = [t.get("dbId") for t in body["tables"]]
+    assert set(db_ids).issubset({"db1", "db2"})
+    assert db_ids.count("db1") > 0 and db_ids.count("db2") > 0
+
+    # db order should follow the order requested in dbs
+    first_db1 = db_ids.index("db1")
+    first_db2 = db_ids.index("db2")
+    assert first_db1 < first_db2
+
+    for table in body["tables"]:
+        assert "dbId" in table
+        assert "dbName" in table
+        assert table["dbName"]
+        assert table["id"]
+
+
+def test_search_tables_multi_db_respects_picked_tables():
+    payload = {
+        "dbs": ["db1", "db2"],
+        "query": None,
+        "filters": {},
+        "picked_tables": [{"db": "db2", "table": "t26"}],
+    }
+    res = client.post("/api/search/tables", json=payload)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] == 1
+    table = body["tables"][0]
+    assert table["id"] == "t26"
+    assert table["dbId"] == "db2"
+    assert table["count"] >= 0
+
+
 def test_search_rows_basic_paging():
     payload = {
         "query": None,

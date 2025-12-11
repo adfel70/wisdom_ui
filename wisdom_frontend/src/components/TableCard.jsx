@@ -1038,6 +1038,14 @@ const TableCard = ({
               <Typography variant="h6" fontWeight={700}>
                 {table.name}
               </Typography>
+              {(table.dbName || table.dbId) && (
+                <Chip
+                  label={table.dbName || table.dbId}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 600 }}
+                />
+              )}
               <Chip
                 label={table.year}
                 size="small"

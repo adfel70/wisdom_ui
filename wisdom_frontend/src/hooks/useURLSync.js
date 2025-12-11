@@ -94,6 +94,20 @@ export const useURLSync = () => {
     const pageParam = searchParams.get('page');
     const page = pageParam ? parseInt(pageParam, 10) : 1;
 
+    // Selected databases (JSON array)
+    let dbs = [];
+    const dbsParam = searchParams.get('dbs');
+    if (dbsParam) {
+      try {
+        const parsed = JSON.parse(dbsParam);
+        if (Array.isArray(parsed)) {
+          dbs = parsed.filter((db) => typeof db === 'string' && db.trim().length > 0);
+        }
+      } catch (e) {
+        console.error('Failed to parse dbs from URL:', e);
+      }
+    }
+
     return {
       query,
       permutation,
@@ -101,6 +115,7 @@ export const useURLSync = () => {
       filters,
       pickedTables,
       page,
+      dbs,
     };
   }, [searchParams]);
 
@@ -143,6 +158,15 @@ export const useURLSync = () => {
         params.append('pickedTables', JSON.stringify(state.pickedTables));
       } catch (e) {
         console.error('Failed to stringify pickedTables for URL:', e);
+      }
+    }
+
+    // Add selected databases
+    if (state.dbs && Array.isArray(state.dbs) && state.dbs.length > 0) {
+      try {
+        params.append('dbs', JSON.stringify(state.dbs));
+      } catch (e) {
+        console.error('Failed to stringify dbs for URL:', e);
       }
     }
 

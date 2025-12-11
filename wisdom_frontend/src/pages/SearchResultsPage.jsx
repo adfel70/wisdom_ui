@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Container, Paper } from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Box, Container, Paper, FormGroup, FormControlLabel, Checkbox, Typography, Button, Menu } from '@mui/material';
 import { motion } from 'framer-motion';
 
 // Components
 import FilterModal from '../components/FilterModal';
 import QueryBuilderModal from '../components/QueryBuilderModal';
-import DatabaseTabs from '../components/DatabaseTabs';
 import TableSidePanel from '../components/TableSidePanel';
 import {
   BrandHeader,
@@ -46,6 +45,7 @@ const STATIC_DATABASES = [
  */
 const SearchResultsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const resultsContainerRef = useRef(null);
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(280); // Fallback height
@@ -145,17 +145,14 @@ const SearchResultsPage = () => {
   // Modal states
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
-  const [activeDatabase, setActiveDatabase] = useState('db1');
+  const [selectedDatabases, setSelectedDatabases] = useState([]);
+  const [pendingDatabases, setPendingDatabases] = useState([]);
+  const [dbMenuAnchor, setDbMenuAnchor] = useState(null);
+  const [urlProvidedDbs, setUrlProvidedDbs] = useState(null); // null = unknown, true = provided, false = not provided
   const [pendingScrollTableId, setPendingScrollTableId] = useState(null);
   const [visibleTableIds, setVisibleTableIds] = useState([]);
   const [permutationVariants, setPermutationVariants] = useState(null);
   const [draftQueryJSON, setDraftQueryJSON] = useState([]);
-  const [filtersByDb, setFiltersByDb] = useState({
-    db1: {},
-    db2: {},
-    db3: {},
-    db4: {},
-  });
 
   // Global context
   const {
@@ -183,6 +180,7 @@ const SearchResultsPage = () => {
         if (isMounted) {
           const next = (data && data.length) ? data : STATIC_DATABASES;
           setDatabaseMetadata(next);
+          setPendingDatabases((prev) => (prev && prev.length ? prev : next.map((db) => db.id)));
         }
       })
       .catch((error) => {
@@ -195,33 +193,30 @@ const SearchResultsPage = () => {
     };
   }, []);
 
-  // Calculate current page and visible table IDs
-  const currentPage = pagination.getCurrentPage(activeDatabase);
-  const activeFilters = filtersByDb[activeDatabase] || {};
+  // Pagination helpers (avoid object identity churn in deps)
+  const { currentPage, getVisibleTableIds, resetAllPages, setPage, TABLES_PER_PAGE } = pagination;
 
   // Update visible table IDs when dependencies change
   useEffect(() => {
-    const tableIds = matchingTableIds[activeDatabase] || [];
-    const startIndex = (currentPage - 1) * 6; // TABLES_PER_PAGE
-    const endIndex = startIndex + 6;
-    const pageTableIds = tableIds.slice(startIndex, endIndex);
+    const tableIds = matchingTableIds || [];
+    const pageTableIds = getVisibleTableIds(tableIds, currentPage);
     setVisibleTableIds(pageTableIds);
-  }, [matchingTableIds, activeDatabase, currentPage]);
+  }, [matchingTableIds, getVisibleTableIds, currentPage]);
 
   // Search results hook
   const {
     isSearching,
-    dbLoadingState,
     isLoadingRows,
-    facetsByDb,
+    facets,
     permutationMap,
+    tableMetadata,
     getTableForDisplay,
     isRowsLoading,
     updateRowData,
   } = useSearchResults({
     searchQuery: searchState.searchQuery,
-    filters: activeFilters,
-    perDbFilters: filtersByDb,
+    filters: searchState.filters,
+    selectedDatabases,
     pickedTables: searchState.pickedTables,
     permutationId: searchState.permutationId,
     permutationParams: searchState.permutationParams,
@@ -248,14 +243,53 @@ const SearchResultsPage = () => {
       permutationId: params.permutation,
       permutationParams: params.permutationParams,
     });
-    setFiltersByDb(prev => ({
-      ...prev,
-      [activeDatabase]: params.filters || {},
-    }));
-    pagination.setPage(activeDatabase, params.page);
+    const hasDbsParam = params.dbs && params.dbs.length;
+    if (hasDbsParam) {
+      setSelectedDatabases(params.dbs);
+      setPendingDatabases(params.dbs);
+    }
+    setUrlProvidedDbs(Boolean(hasDbsParam));
+    setPage(params.page || 1);
     hasHydratedFromUrl.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsString]);
+
+  // Ensure we always have a selected database set once metadata is loaded (post-hydration)
+  useEffect(() => {
+    if (!hasHydratedFromUrl.current) return;
+    if (!databaseMetadata.length) return;
+    if (selectedDatabases.length === 0 && urlProvidedDbs === false) {
+      const allIds = databaseMetadata.map((db) => db.id);
+      setSelectedDatabases(allIds);
+      setPendingDatabases(allIds);
+    }
+  }, [databaseMetadata, selectedDatabases.length, urlProvidedDbs]);
+
+  const updateUrlIfOnSearch = useCallback(
+    (state) => {
+      if (location.pathname !== '/search') return;
+      urlSync.updateURL(state);
+    },
+    [location.pathname, urlSync],
+  );
+
+  // Sync URL when database selection changes (post-hydration)
+  useEffect(() => {
+    if (!hasHydratedFromUrl.current) return;
+    if (!selectedDatabases.length) return;
+    resetAllPages();
+    const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
+    updateUrlIfOnSearch({
+      query: currentQueryForUrl,
+      page: 1,
+      permutationId: searchState.permutationId,
+      permutationParams: searchState.permutationParams,
+      filters: searchState.filters,
+      pickedTables: searchState.pickedTables,
+      dbs: selectedDatabases,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDatabases]);
 
   // Keep draft query JSON aligned with committed search query (used for token hydration)
   useEffect(() => {
@@ -306,18 +340,6 @@ const SearchResultsPage = () => {
     };
   }, [searchState.searchQuery, searchState.permutationId, JSON.stringify(searchState.permutationParams)]);
 
-  // Keep filters map in sync with the active database filter state
-  useEffect(() => {
-    setFiltersByDb(prev => {
-      const existing = prev[activeDatabase] || {};
-      const next = searchState.filters || {};
-      if (JSON.stringify(existing) === JSON.stringify(next)) {
-        return prev;
-      }
-      return { ...prev, [activeDatabase]: next };
-    });
-  }, [activeDatabase, searchState.filters]);
-
   // Calculate sidebar offset
   const sidebarWidth = isSidePanelCollapsed ? PANEL_COLLAPSED_WIDTH : PANEL_EXPANDED_WIDTH;
   const sidebarOffset = sidebarWidth;
@@ -341,25 +363,7 @@ const SearchResultsPage = () => {
     );
   }, [permutationVariants, searchState.searchQuery, appliedPermutationId, appliedPermutationParams]);
 
-  // Calculate table counts and totals
-  const tableCounts = useMemo(() => ({
-    db1: matchingTableIds.db1.length,
-    db2: matchingTableIds.db2.length,
-    db3: matchingTableIds.db3.length,
-    db4: matchingTableIds.db4.length,
-  }), [matchingTableIds]);
-
-  const totalTablesWithResults = useMemo(
-    () => Object.values(tableCounts).reduce((sum, count) => sum + count, 0),
-    [tableCounts]
-  );
-
-  const totalPages = pagination.getTotalPages(tableCounts[activeDatabase]);
-  const currentDatabaseInfo = useMemo(
-    () => databaseMetadata.find(db => db.id === activeDatabase),
-    [activeDatabase, databaseMetadata]
-  );
-  const isActiveDbSearching = dbLoadingState?.[activeDatabase];
+  const totalPages = pagination.getTotalPages(matchingTableIds.length);
 
   // Scroll to table card
   const focusTableCard = useCallback((tableId) => {
@@ -389,7 +393,7 @@ const SearchResultsPage = () => {
   }, [pendingScrollTableId, visibleTableIds, focusTableCard]);
 
   // Event Handlers
-  const handleBackToHome = () => navigate('/');
+  const handleBackToHome = () => navigate('/', { replace: true });
 
   const handleSearch = (query) => {
     // Handle both JSON array (from query builder) and string (from simple search)
@@ -426,15 +430,53 @@ const SearchResultsPage = () => {
     // Keep local search state in sync (avoids waiting for URL re-read)
     searchState.setSearchQuery(queryJSON);
     setDraftQueryJSON(queryJSON);
-    pagination.resetAllPages();
-    urlSync.updateURL({
+    resetAllPages();
+    updateUrlIfOnSearch({
       query: queryJSON,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: activeFilters,
+      filters: searchState.filters,
       pickedTables: searchState.pickedTables,
+      dbs: selectedDatabases,
     });
+  };
+
+  const handleOpenDbMenu = (event) => {
+    setPendingDatabases(selectedDatabases);
+    setDbMenuAnchor(event.currentTarget);
+  };
+
+  const handleCloseDbMenu = () => setDbMenuAnchor(null);
+
+  const handleTogglePendingDb = (dbId) => {
+    setPendingDatabases((prev) => {
+      const hasDb = prev.includes(dbId);
+      if (hasDb && prev.length === 1) {
+        return prev; // enforce at least one selection
+      }
+      return hasDb ? prev.filter((id) => id !== dbId) : [...prev, dbId];
+    });
+  };
+
+  const handleApplyDatabases = () => {
+    if (!pendingDatabases.length) {
+      handleCloseDbMenu();
+      return;
+    }
+    resetAllPages();
+    setSelectedDatabases(pendingDatabases);
+    const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
+    updateUrlIfOnSearch({
+      query: currentQueryForUrl,
+      page: 1,
+      permutationId: searchState.permutationId,
+      permutationParams: searchState.permutationParams,
+      filters: searchState.filters,
+      pickedTables: searchState.pickedTables,
+      dbs: pendingDatabases,
+    });
+    handleCloseDbMenu();
   };
 
   const handleApplyFilters = (newFilters) => {
@@ -466,21 +508,18 @@ const SearchResultsPage = () => {
       }
     });
 
-    setFiltersByDb(prev => ({
-      ...prev,
-      [activeDatabase]: cleanedFilters,
-    }));
     searchState.setFilters(cleanedFilters);
     searchState.setPickedTables(nextPickedTables || []);
-    pagination.resetAllPages();
+    resetAllPages();
     const currentQueryForUrl = searchState.searchQuery || searchState.inputValue;
-    urlSync.updateURL({
+    updateUrlIfOnSearch({
       query: currentQueryForUrl,
       page: 1,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
       filters: cleanedFilters,
       pickedTables: nextPickedTables || [],
+      dbs: selectedDatabases,
     });
   };
 
@@ -501,14 +540,15 @@ const SearchResultsPage = () => {
 
   const handlePermutationChange = (newPermutationId) => {
     searchState.setPermutationId(newPermutationId);
-    pagination.resetAllPages();
-    urlSync.updateURL({
+    resetAllPages();
+    updateUrlIfOnSearch({
       query: searchState.inputValue,
       page: 1,
       permutationId: newPermutationId,
       permutationParams: searchState.permutationParams,
-      filters: activeFilters,
+      filters: searchState.filters,
       pickedTables: searchState.pickedTables,
+      dbs: selectedDatabases,
     });
   };
 
@@ -517,33 +557,19 @@ const SearchResultsPage = () => {
   };
 
   const handlePageChange = useCallback((event, newPage) => {
-    pagination.setPage(activeDatabase, newPage);
-    urlSync.updateURL({
+    setPage(newPage);
+    updateUrlIfOnSearch({
       query: searchState.searchQuery,
       page: newPage,
       permutationId: searchState.permutationId,
       permutationParams: searchState.permutationParams,
-      filters: activeFilters,
+      filters: searchState.filters,
       pickedTables: searchState.pickedTables,
+      dbs: selectedDatabases,
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeDatabase, pagination, urlSync, searchState, resultsContainerRef, activeFilters]);
-
-  const handleDatabaseChange = (newDbId) => {
-    setActiveDatabase(newDbId);
-    const newDbPage = pagination.getCurrentPage(newDbId);
-    const newDbFilters = filtersByDb[newDbId] || {};
-    searchState.setFilters(newDbFilters);
-    urlSync.updateURL({
-      query: searchState.searchQuery,
-      page: newDbPage,
-      permutationId: searchState.permutationId,
-      permutationParams: searchState.permutationParams,
-      filters: newDbFilters,
-      pickedTables: searchState.pickedTables,
-    });
-  };
+  }, [pagination, urlSync, searchState, selectedDatabases, resultsContainerRef]);
 
   const handleQueryBuilderApply = (queryJSON) => {
     // Query builder now returns JSON array
@@ -569,7 +595,7 @@ const SearchResultsPage = () => {
   };
 
   const handleSendToLastPage = useCallback((tableId) => {
-    updateTableOrder(activeDatabase, (currentIds = []) => {
+    updateTableOrder((currentIds = []) => {
       const index = currentIds.indexOf(tableId);
       if (index === -1) return currentIds;
 
@@ -578,21 +604,21 @@ const SearchResultsPage = () => {
       nextOrder.push(tableId);
       return nextOrder;
     });
-  }, [activeDatabase, updateTableOrder]);
+  }, [updateTableOrder]);
 
   const handleSidePanelSelect = useCallback((tableId) => {
-    const allIds = matchingTableIds[activeDatabase] || [];
+    const allIds = matchingTableIds || [];
     const targetIndex = allIds.indexOf(tableId);
     if (targetIndex === -1) return;
 
-    const targetPage = Math.floor(targetIndex / pagination.TABLES_PER_PAGE) + 1;
+    const targetPage = Math.floor(targetIndex / TABLES_PER_PAGE) + 1;
     if (targetPage !== currentPage) {
       setPendingScrollTableId(tableId);
       handlePageChange(null, targetPage);
       return;
     }
     focusTableCard(tableId);
-  }, [matchingTableIds, activeDatabase, currentPage, handlePageChange, focusTableCard, pagination]);
+  }, [matchingTableIds, currentPage, handlePageChange, focusTableCard, pagination]);
 
   const handleLoadMore = useCallback(async (tableId) => {
     // Get current pagination state for this table
@@ -641,7 +667,7 @@ const SearchResultsPage = () => {
     }) || (Array.isArray(searchState.pickedTables) && searchState.pickedTables.length > 0);
     // Check if query is a non-empty array (new JSON format)
     const hasSearch = Array.isArray(searchState.searchQuery) && searchState.searchQuery.length > 0;
-    const currentTableCount = matchingTableIds[activeDatabase]?.length || 0;
+    const currentTableCount = matchingTableIds?.length || 0;
 
     if (currentTableCount === 0 && !hasFilters && !hasSearch) return 'empty-database';
     if (hasFilters && currentTableCount === 0) return 'filter-empty';
@@ -678,30 +704,94 @@ const SearchResultsPage = () => {
               borderRadius: 0,
             }}
           >
-            <Container maxWidth="xl">
-              <Box sx={{ py: 1.5 }}>
-                <SearchSection
-          searchValue={searchState.inputValue}
-          onSearchChange={handleSearchChange}
-                  onSearchSubmit={handleSearch}
-                  onFilterClick={() => setIsFilterOpen(true)}
-                  onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
-                  queryJSON={draftQueryJSON}
-                  permutationId={searchState.permutationId}
-                  permutationParams={searchState.permutationParams}
-                  onPermutationChange={handlePermutationChange}
-                  onPermutationParamsChange={handlePermutationParamsChange}
-                  pickedTables={searchState.pickedTables}
-                  onClearPickedTables={() => handleRemoveFilter('pickedTables')}
-                />
-
-                <DatabaseTabs
-                  databases={databaseMetadata}
-                  activeDatabase={activeDatabase}
-                  onChange={handleDatabaseChange}
-                  tableCounts={tableCounts}
-                  isSearchingByDb={dbLoadingState}
-                />
+            <Container maxWidth={false} disableGutters sx={{ px: { xs: 2, md: 3 } }}>
+              <Box sx={{ py: 1.25 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', width: '100%', pl: 0, pr: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', minWidth: 34 }}>
+                    DBs:
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="medium"
+                    endIcon={<span style={{ display: 'inline-block', fontSize: '1.1rem', lineHeight: 1 }}>▾</span>}
+                    onClick={handleOpenDbMenu}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: 2.5,
+                      px: 1,
+                      minWidth: 150,
+                      height: 34,
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                      },
+                    }}
+                  >
+                    {selectedDatabases.length === databaseMetadata.length
+                      ? 'All databases'
+                      : selectedDatabases.length === 1
+                        ? (databaseMetadata.find((db) => db.id === selectedDatabases[0])?.name || '1 database')
+                        : `${selectedDatabases.length} databases`}
+                  </Button>
+                  <SearchSection
+                    searchValue={searchState.inputValue}
+                    onSearchChange={handleSearchChange}
+                    onSearchSubmit={handleSearch}
+                    onFilterClick={() => setIsFilterOpen(true)}
+                    onQueryBuilderClick={() => setIsQueryBuilderOpen(true)}
+                    queryJSON={draftQueryJSON}
+                    permutationId={searchState.permutationId}
+                    permutationParams={searchState.permutationParams}
+                    onPermutationChange={handlePermutationChange}
+                    onPermutationParamsChange={handlePermutationParamsChange}
+                    pickedTables={searchState.pickedTables}
+                    onClearPickedTables={() => handleRemoveFilter('pickedTables')}
+                    containerSx={{ flex: 1, minWidth: 720, maxWidth: '100%', ml: 0.5 }}
+                    searchBarVariant="home"
+                    paperSx={{ p: { xs: 1, md: 1.1 } }}
+                  />
+                </Box>
+                <Menu
+                  anchorEl={dbMenuAnchor}
+                  open={Boolean(dbMenuAnchor)}
+                  onClose={handleCloseDbMenu}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  transitionDuration={120}
+                  disableAutoFocusItem
+                  MenuListProps={{ disablePadding: true, dense: true }}
+                >
+                  <Box sx={{ px: 1.5, py: 1 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      Select databases
+                    </Typography>
+                    <FormGroup>
+                      {databaseMetadata.map((db) => (
+                        <FormControlLabel
+                          key={db.id}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={pendingDatabases.includes(db.id)}
+                              onChange={() => handleTogglePendingDb(db.id)}
+                            />
+                          }
+                          label={db.name}
+                          sx={{ m: 0 }}
+                        />
+                      ))}
+                    </FormGroup>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1.5 }}>
+                      <Button onClick={handleCloseDbMenu} color="inherit" size="small">
+                        Cancel
+                      </Button>
+                      <Button onClick={handleApplyDatabases} variant="contained" size="small">
+                        Apply
+                      </Button>
+                    </Box>
+                  </Box>
+                </Menu>
               </Box>
             </Container>
           </Paper>
@@ -709,20 +799,19 @@ const SearchResultsPage = () => {
 
         {/* Fixed Side Panel */}
         <TableSidePanel
-          databaseId={activeDatabase}
-          databaseName={currentDatabaseInfo?.name}
-          tableIds={matchingTableIds[activeDatabase] || []}
+          tableIds={matchingTableIds}
+          tableMetadata={tableMetadata}
           visibleTableIds={visibleTableIds}
           pendingTableIds={visibleTableIds.filter(id => isRowsLoading(id))}
-          isSearching={!!isActiveDbSearching}
+          isSearching={!!isSearching}
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
           onToggleCollapse={toggleSidePanel}
           topOffset={headerHeight}
-          appliedFilters={filtersByDb[activeDatabase] || {}}
+          appliedFilters={searchState.filters || {}}
           onApplyFilters={handleApplyFilters}
           facetSearchQuery={searchState.searchQuery}
-          facetData={facetsByDb?.[activeDatabase] || null}
+          facetData={facets || null}
         />
 
         {/* Results Content */}
@@ -753,7 +842,7 @@ const SearchResultsPage = () => {
                   />
 
                   <ResultsGrid
-                    isSearching={!!isActiveDbSearching}
+                    isSearching={!!isSearching}
                     visibleTableIds={visibleTableIds}
                     getTableForDisplay={getTableForDisplay}
                     searchQuery={searchState.searchQuery}
@@ -776,7 +865,7 @@ const SearchResultsPage = () => {
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={handlePageChange}
-          isSearching={!!isActiveDbSearching}
+          isSearching={!!isSearching}
           sidebarOffset={sidebarOffset}
         />
 

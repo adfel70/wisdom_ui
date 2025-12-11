@@ -13,18 +13,17 @@ const RowStatus = {
 };
 
 /**
- * Hook to manage search execution and table data fetching
+ * Hook to manage unified search execution and table data fetching
  *
  * Architecture:
- * - Table metadata (name, year, count, etc.) comes from searchTables API
+ * - Table metadata (name, year, db, etc.) comes from searchTables API
  * - Row data comes from getTableDataPaginatedById API
  * - These are stored separately and merged for display
- * - This allows showing table card wrappers immediately while rows load
  */
 export const useSearchResults = ({
   searchQuery,
   filters,
-  perDbFilters = {},
+  selectedDatabases = [],
   pickedTables = [],
   permutationId,
   permutationParams,
@@ -34,30 +33,12 @@ export const useSearchResults = ({
   setLastSearchSignature,
   tablePaginationHook,
 }) => {
-  // Search state
   const [isSearching, setIsSearching] = useState(true);
-  const [dbLoadingState, setDbLoadingState] = useState({
-    db1: true,
-    db2: true,
-    db3: true,
-    db4: true,
-  });
-  const [facetsByDb, setFacetsByDb] = useState({
-    db1: null,
-    db2: null,
-    db3: null,
-    db4: null,
-  });
+  const [facets, setFacets] = useState(null);
   const [permutationMap, setPermutationMap] = useState(null);
 
-  // Table metadata from searchTables - keyed by database
-  // Structure: { db1: Map<tableId, tableMetadata>, db2: Map, ... }
-  const [tableMetadataByDb, setTableMetadataByDb] = useState({
-    db1: new Map(),
-    db2: new Map(),
-    db3: new Map(),
-    db4: new Map(),
-  });
+  // Table metadata from searchTables - keyed by tableId
+  const [tableMetadata, setTableMetadata] = useState(() => new Map());
 
   // Row data state - keyed by tableId
   // Map<tableId, { data: rows[], status: RowStatus, error?: Error, paginationInfo?: object }>
@@ -73,19 +54,12 @@ export const useSearchResults = ({
   // Track current fetch generation to ignore stale responses
   const fetchGenerationRef = useRef(0);
 
-  // Current active database (needed to look up metadata)
-  const [activeDb, setActiveDb] = useState('db1');
-
   /**
-   * Get table metadata by ID (from any database)
+   * Get table metadata by ID
    */
   const getTableMetadata = useCallback((tableId) => {
-    for (const db of ['db1', 'db2', 'db3', 'db4']) {
-      const metadata = tableMetadataByDb[db].get(tableId);
-      if (metadata) return metadata;
-    }
-    return null;
-  }, [tableMetadataByDb]);
+    return tableMetadata.get(tableId) || null;
+  }, [tableMetadata]);
 
   /**
    * Get row data by table ID
@@ -183,7 +157,7 @@ export const useSearchResults = ({
     fetchGenerationRef.current++;
   }, []);
 
-  // Step 1: Search all databases for matching tables
+  // Step 1: Run unified search across selected databases
   useEffect(() => {
     let isCancelled = false;
 
@@ -193,10 +167,15 @@ export const useSearchResults = ({
 
     const hasAnyFilters =
       (Array.isArray(pickedTables) && pickedTables.length > 0) ||
-      Object.values(perDbFilters || {}).some((f) => f && Object.keys(f).length > 0);
+      (filters && Object.keys(filters || {}).length > 0);
 
     // Skip searching when there's no query and no filters
     if (!hasSearchQuery && !hasAnyFilters) {
+      clearRowData();
+      setTableMetadata(new Map());
+      setMatchingTableIds([]);
+      setFacets(null);
+      setPermutationMap(null);
       setIsSearching(false);
       return undefined;
     }
@@ -207,10 +186,11 @@ export const useSearchResults = ({
     // Create signature for deduplication
     const currentSignature = JSON.stringify({
       query: searchQuery,
-      perDbFilters,
+      filters,
       pickedTables,
       permutationId,
       permutationParams,
+      selectedDatabases: [...(selectedDatabases || [])].sort(),
     });
 
     const buildPermutationMap = async () => {
@@ -235,104 +215,49 @@ export const useSearchResults = ({
       }
     };
 
-    const searchAllDatabases = async () => {
+    const runUnifiedSearch = async () => {
       // If we already have results for this exact search, don't re-run
       if (lastSearchSignature === currentSignature) {
         setIsSearching(false);
-        setDbLoadingState({
-          db1: false,
-          db2: false,
-          db3: false,
-          db4: false,
-        });
         return;
       }
 
       setIsSearching(true);
-      setDbLoadingState({
-        db1: true,
-        db2: true,
-        db3: true,
-        db4: true,
-      });
-      // Reset table metadata and visible matches immediately to avoid showing stale cards
-      setTableMetadataByDb({
-        db1: new Map(),
-        db2: new Map(),
-        db3: new Map(),
-        db4: new Map(),
-      });
-      setMatchingTableIds({
-        db1: [],
-        db2: [],
-        db3: [],
-        db4: [],
-      });
+      setTableMetadata(new Map());
+      setMatchingTableIds([]);
+      setFacets(null);
       const permutations = await buildPermutationMap();
       setPermutationMap(permutations);
 
-      const dbIds = ['db1', 'db2', 'db3', 'db4'];
-
-      const searchDb = async (dbId) => {
-        try {
-          const result = await searchTables({
-            db: dbId,
-            query: searchQuery,
-            filters: { ...(perDbFilters[dbId] || {}) },
-            pickedTables,
-            permutations,
-          });
-
-          if (isCancelled) return;
-
-          setTableMetadataByDb(prev => {
-            const next = {
-              ...prev,
-              [dbId]: new Map(),
-            };
-            (result?.tables || []).forEach(table => {
-              next[dbId].set(table.id, table);
-            });
-            return next;
-          });
-
-          setMatchingTableIds(prev => ({
-            ...prev,
-            [dbId]: result?.tableIds || [],
-          }));
-
-          setFacetsByDb(prev => ({
-            ...prev,
-            [dbId]: result?.facets || null,
-          }));
-        } catch (error) {
-          console.error(`Failed to search database ${dbId}:`, error);
-          if (isCancelled) return;
-          setTableMetadataByDb(prev => ({
-            ...prev,
-            [dbId]: new Map(),
-          }));
-          setMatchingTableIds(prev => ({
-            ...prev,
-            [dbId]: [],
-          }));
-        } finally {
-          if (!isCancelled) {
-            setDbLoadingState(prev => ({
-              ...prev,
-              [dbId]: false,
-            }));
-          }
-        }
-      };
-
       try {
-        await Promise.all(dbIds.map(searchDb));
-        if (!isCancelled) {
-          setLastSearchSignature(currentSignature);
-        }
+        const result = await searchTables({
+          dbs: selectedDatabases,
+          query: searchQuery,
+          filters,
+          pickedTables,
+          permutations,
+        });
+
+        if (isCancelled) return;
+
+        const metaMap = new Map();
+        (result?.tables || []).forEach((table) => {
+          if (table?.id) {
+            metaMap.set(table.id, table);
+          }
+        });
+
+        setTableMetadata(metaMap);
+        setMatchingTableIds(result?.tableIds || []);
+        setFacets(result?.facets || null);
+        setLastSearchSignature(currentSignature);
       } catch (error) {
-        console.error('Failed to search databases:', error);
+        console.error('Failed to run unified search:', error);
+        if (!isCancelled) {
+          setTableMetadata(new Map());
+          setMatchingTableIds([]);
+          setFacets(null);
+        }
       } finally {
         if (!isCancelled) {
           setIsSearching(false);
@@ -340,7 +265,7 @@ export const useSearchResults = ({
       }
     };
 
-    searchAllDatabases();
+    runUnifiedSearch();
 
     return () => {
       isCancelled = true;
@@ -348,10 +273,11 @@ export const useSearchResults = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     searchQuery,
-    JSON.stringify(perDbFilters),
+    JSON.stringify(filters),
     JSON.stringify(pickedTables),
     permutationId,
     JSON.stringify(permutationParams),
+    JSON.stringify(selectedDatabases),
   ]);
 
   // Step 2: Load row data for visible table IDs
@@ -501,21 +427,13 @@ export const useSearchResults = ({
   );
 
   return {
-    // Search state
     isSearching,
-    dbLoadingState,
-    facetsByDb,
+    facets,
     permutationMap,
-
-    // Table metadata (from searchTables)
-    tableMetadataByDb,
+    tableMetadata,
     getTableMetadata,
-
-    // Row data state
     rowDataMap,
     isLoadingRows,
-
-    // Helper functions
     getRowData,
     isRowsLoading,
     getTableForDisplay,

@@ -189,15 +189,19 @@ export const getColumnTypes = async () => {
 };
 
 export const searchTables = async ({
-  db,
+  dbs = [],
   query = null,
   filters = {},
   permutations = null,
   pickedTables = [],
 }) => {
-  await ensureCatalog();
+  const catalog = await ensureCatalog();
+  const selectedDbs = Array.isArray(dbs) && dbs.length
+    ? dbs
+    : (catalog?.databases || []).map((db) => db.id);
+
   const payload = {
-    db,
+    dbs: selectedDbs,
     query: query ?? null,
     filters: filters || {},
     picked_tables: Array.isArray(pickedTables) ? pickedTables : [],
@@ -210,7 +214,10 @@ export const searchTables = async ({
   });
 
   const tables = result?.tables || [];
-  tables.forEach((t) => updateTableMeta(t, db));
+  tables.forEach((t) => {
+    const dbId = t?.dbId || t?.db || null;
+    updateTableMeta(t, dbId);
+  });
 
   return {
     tables,

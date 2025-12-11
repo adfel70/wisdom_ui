@@ -55,12 +55,17 @@ def _collect_column_tags(table: Dict[str, Any]) -> Set[str]:
             tags.add(str(col))
     return tags
 
-
-def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_override: Optional[int] = None) -> Optional[Dict[str, Any]]:
+def _table_meta_from_key(
+    table_key: str,
+    table_meta: Dict[str, Any],
+    count_override: Optional[int] = None,
+    db_key: Optional[str] = None,
+    db_config: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     meta = table_meta.get(table_key)
     if not meta:
         return None
-    return {
+    result = {
         "id": table_key,
         "name": meta.get("name"),
         "year": meta.get("year"),
@@ -69,6 +74,24 @@ def _table_meta_from_key(table_key: str, table_meta: Dict[str, Any], count_overr
         "count": count_override if count_override is not None else meta.get("recordCount"),
         "columns": _format_columns(meta.get("columns", [])),
     }
+    if db_key:
+        result["dbId"] = db_key
+        if db_config:
+            db_name = db_config.get(db_key, {}).get("name")
+            if db_name:
+                result["dbName"] = db_name
+    return result
+
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen: Set[str] = set()
+    ordered: List[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
 
 
 def _evaluate_clause(
@@ -198,10 +221,47 @@ def _filter_tables_by_filters(tables: List[Dict[str, Any]], filters: Filters) ->
 def _apply_picked_tables_constraint(tables: List[Dict[str, Any]], picked_tables: Optional[List[Dict[str, str]]]) -> List[Dict[str, Any]]:
     if not picked_tables:
         return tables
-    allowed = {item["table"] for item in picked_tables if "table" in item}
-    if not allowed:
+    allowed_pairs = {(item.get("db"), item["table"]) for item in picked_tables if "table" in item}
+    if not allowed_pairs:
         return []
-    return [t for t in tables if t["id"] in allowed]
+    filtered: List[Dict[str, Any]] = []
+    for t in tables:
+        table_id = t.get("id")
+        db_id = t.get("dbId") or t.get("db")
+        if (db_id, table_id) in allowed_pairs or (None, table_id) in allowed_pairs:
+            filtered.append(t)
+    return filtered
+
+
+def _tables_for_db(
+    db_key: str,
+    assignments: Dict[str, Any],
+    table_meta: Dict[str, Any],
+    db_config: Dict[str, Any],
+    query: Optional[Any],
+    permutations: Optional[Dict[str, List[str]]],
+) -> Dict[str, Any]:
+    table_keys_for_db: List[str] = assignments.get(db_key, [])
+    records = load_records(db_key)
+    filtered_records = _apply_query_to_records(records, query, table_meta, permutations)
+
+    if query:
+        table_ids: Set[str] = {r.get("tableKey") for r in filtered_records if r.get("tableKey")}
+        table_counts: Dict[str, int] = {}
+        for r in filtered_records:
+            tk = r.get("tableKey")
+            if tk:
+                table_counts[tk] = table_counts.get(tk, 0) + 1
+        ordered_table_ids = [tid for tid in table_keys_for_db if tid in table_ids]
+    else:
+        table_ids = set(table_keys_for_db)
+        table_counts = {tid: table_meta.get(tid, {}).get("recordCount", 0) for tid in table_ids}
+        ordered_table_ids = list(table_keys_for_db)
+
+    tables = [
+        _table_meta_from_key(tid, table_meta, table_counts.get(tid), db_key, db_config) for tid in ordered_table_ids
+    ]
+    return {"tables": [t for t in tables if t], "table_counts": table_counts}
 
 
 def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) -> Dict[str, Dict[str, int]]:
@@ -239,7 +299,7 @@ def _build_facets(tables: List[Dict[str, Any]], table_counts: Dict[str, int]) ->
 
 
 def search_tables(
-    db_key: str,
+    db_keys: List[str],
     query: Optional[Any],
     filters: Optional[Filters],
     permutations: Optional[Dict[str, List[str]]] = None,
@@ -248,34 +308,30 @@ def search_tables(
     _simulate_random_latency(min_seconds=1, max_seconds=3)
     filters = _normalize_filters(filters)
     assignments = get_database_assignments()
+    db_config = get_database_config()
     table_meta = get_table_metadata()
 
-    if db_key not in assignments:
-        raise HTTPException(status_code=404, detail=f"Database {db_key} not found")
+    selected_dbs = _dedupe_preserve_order(db_keys)
+    if not selected_dbs:
+        raise HTTPException(status_code=400, detail="At least one database must be provided")
+    for db_key in selected_dbs:
+        if db_key not in assignments:
+            raise HTTPException(status_code=404, detail=f"Database {db_key} not found")
 
-    all_table_keys: List[str] = assignments.get(db_key, [])
-    records = load_records(db_key)
-    filtered_records = _apply_query_to_records(records, query, table_meta, permutations)
+    combined_tables: List[Dict[str, Any]] = []
+    combined_counts: Dict[str, int] = {}
+    for db_key in selected_dbs:
+        result = _tables_for_db(db_key, assignments, table_meta, db_config, query, permutations)
+        combined_tables.extend(result["tables"])
+        for tid, count in result["table_counts"].items():
+            combined_counts[tid] = combined_counts.get(tid, 0) + count
 
-    if query:
-        table_ids: Set[str] = {r.get("tableKey") for r in filtered_records if r.get("tableKey")}
-        table_counts: Dict[str, int] = {}
-        for r in filtered_records:
-            tk = r.get("tableKey")
-            if tk:
-                table_counts[tk] = table_counts.get(tk, 0) + 1
-    else:
-        table_ids = set(all_table_keys)
-        # when no query, use full record counts from metadata
-        table_counts = {tid: table_meta.get(tid, {}).get("recordCount", 0) for tid in table_ids}
+    combined_tables = _filter_tables_by_filters(combined_tables, filters)
+    combined_tables = _apply_picked_tables_constraint(combined_tables, picked_tables)
+    visible_counts = {t["id"]: combined_counts.get(t["id"], 0) for t in combined_tables}
+    facets = _build_facets(combined_tables, visible_counts)
 
-    tables = [_table_meta_from_key(tid, table_meta, table_counts.get(tid)) for tid in table_ids]
-    tables = [t for t in tables if t]
-    tables = _filter_tables_by_filters(tables, filters)
-    tables = _apply_picked_tables_constraint(tables, picked_tables)
-    facets = _build_facets(tables, table_counts)
-
-    return {"tables": tables, "facets": facets, "total": len(tables)}
+    return {"tables": combined_tables, "facets": facets, "total": len(combined_tables)}
 
 
 def search_rows(
@@ -305,8 +361,8 @@ def search_rows(
             "pagination": {"hasMore": False, "nextOffset": None, "pageNumber": page_number, "pageSize": size_limit, "totalRecords": 0},
         }
     if picked_tables:
-        allowed = {item["table"] for item in picked_tables if "table" in item}
-        if allowed and table_key not in allowed:
+        allowed_pairs = {(item.get("db"), item["table"]) for item in picked_tables if "table" in item}
+        if allowed_pairs and (db_key, table_key) not in allowed_pairs and (None, table_key) not in allowed_pairs:
             return {
                 "columns": [],
                 "rows": [],

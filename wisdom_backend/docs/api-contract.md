@@ -74,7 +74,7 @@
 - Body:
   ```json
   {
-    "db": "db1",
+    "dbs": ["db1", "db2"],
     "query": [ { "type": "clause", "content": { "value": "active", "bdt": null } } ],
     "filters": { "categories": ["Finance"], "year": "all" },
     "permutations": {
@@ -82,14 +82,26 @@
     },
     "picked_tables": [
       { "db": "db1", "table": "t1" },
-      { "db": "db1", "table": "t2" }
+      { "db": "db2", "table": "t3" }
     ]
   }
   ```
 - Returns:
   ```json
   {
-    "tables": [ /* TableMeta objects */ ],
+    "tables": [
+      {
+        "id": "t1",
+        "dbId": "db1",
+        "dbName": "Database 1",
+        "name": "...",
+        "year": 2024,
+        "country": "USA",
+        "categories": ["Finance"],
+        "columns": ["id","amount", "..."],
+        "count": 3
+      }
+    ],
     "facets": {
       "categories": { "Finance": 3 },
       "regions": { "USA": 2 },
@@ -99,7 +111,9 @@
     "total": 3
   }
   ```
-  - Note: each table’s `count` reflects the number of rows matching the query/filters/permutations and picked_tables.
+  - Notes:
+    - `dbs` order is preserved in the results; tables are grouped per DB order.
+    - Each table’s `count` reflects the number of rows matching the query/filters/permutations and picked_tables.
 
 ### searchRows
 - `POST /api/search/rows`
