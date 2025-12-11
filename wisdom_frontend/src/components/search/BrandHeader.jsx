@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Container, Typography, IconButton, Divider } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { Home as HomeIcon, AccountCircle } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
@@ -40,6 +41,8 @@ const BrandHeader = ({ onBackToHome }) => {
             {/* Left: Home button and Title */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <IconButton
+                component={RouterLink}
+                to="/"
                 onClick={onBackToHome}
                 sx={{
                   color: 'white',

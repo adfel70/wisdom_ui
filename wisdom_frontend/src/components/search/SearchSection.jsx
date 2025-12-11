@@ -24,6 +24,10 @@ const SearchSection = ({
   onPermutationParamsChange,
   pickedTables = [],
   onClearPickedTables,
+  // Layout overrides
+  containerSx = {},
+  searchBarVariant = 'compact',
+  paperSx = {},
 }) => {
   const pickedCount = Array.isArray(pickedTables) ? pickedTables.length : 0;
   const hasPicked = pickedCount > 0;
@@ -35,18 +39,20 @@ const SearchSection = ({
       exit={{ opacity: 1, y: 200 }}
       transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'nowrap', ...containerSx }}>
         {/* Left: Search Bar */}
         <Paper
           elevation={3}
           sx={{
-            flex: 1,
-            minWidth: 0,
+            flex: '1 1 1100px',
+            minWidth: 1000,
+            maxWidth: '100%',
             overflow: 'hidden',
             backgroundColor: 'background.paper',
             borderRadius: 2,
             p: 1.25,
             boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+            ...paperSx,
           }}
         >
           <SearchBar
@@ -56,7 +62,7 @@ const SearchSection = ({
             onFilterClick={onFilterClick}
             onQueryBuilderClick={onQueryBuilderClick}
             queryJSON={queryJSON}
-            variant="compact"
+            variant={searchBarVariant}
           />
         </Paper>
 
@@ -64,8 +70,9 @@ const SearchSection = ({
         <Box
           sx={{
             display: 'flex',
-            gap: 1.5,
+            gap: 0.75,
             flexShrink: 0,
+            flexWrap: 'nowrap',
           }}
         >
           <PermutationMenu

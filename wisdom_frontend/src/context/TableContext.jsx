@@ -15,14 +15,8 @@ export const PANEL_EXPANDED_WIDTH = 320;
 export const PANEL_COLLAPSED_WIDTH = 60;
 
 export const TableProvider = ({ children }) => {
-  // Store matching table IDs per database
-  // This state needs to persist across page navigations
-  const [matchingTableIds, setMatchingTableIds] = useState({
-    db1: [],
-    db2: [],
-    db3: [],
-    db4: []
-  });
+  // Store matching table IDs for unified search (persists across navigations)
+  const [matchingTableIds, setMatchingTableIds] = useState([]);
 
   // Track if we have performed an initial search/load for a specific query/filter combo
   // This helps avoid overwriting our custom order with a fresh search if the criteria haven't changed
@@ -46,37 +40,25 @@ export const TableProvider = ({ children }) => {
     return true;
   };
 
-  const updateTableOrder = useCallback((dbId, newOrderOrUpdater) => {
+  const updateTableOrder = useCallback((newOrderOrUpdater) => {
     setMatchingTableIds(prev => {
-      const currentOrder = prev[dbId] || [];
       const nextOrder =
         typeof newOrderOrUpdater === 'function'
-          ? newOrderOrUpdater(currentOrder)
+          ? newOrderOrUpdater(prev)
           : newOrderOrUpdater;
 
-      if (!nextOrder || arraysAreEqual(currentOrder, nextOrder)) {
+      if (!nextOrder || arraysAreEqual(prev, nextOrder)) {
         return prev;
       }
 
-      return {
-        ...prev,
-        [dbId]: nextOrder
-      };
+      return nextOrder;
     });
-  }, []);
-
-  const setTablesForDatabase = useCallback((dbId, tableIds) => {
-    setMatchingTableIds(prev => ({
-      ...prev,
-      [dbId]: tableIds
-    }));
   }, []);
 
   const value = {
     matchingTableIds,
     setMatchingTableIds,
     updateTableOrder,
-    setTablesForDatabase,
     lastSearchSignature,
     setLastSearchSignature,
     isSidePanelCollapsed,

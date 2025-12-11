@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Container, Typography, Paper, Button, Menu, MenuItem, IconButton } from '@mui/material';
+import { Box, Container, Typography, Paper, Button, Menu, MenuItem, IconButton, FormGroup, FormControlLabel, Checkbox } from '@mui/material';
 import { School, FilterList, Shuffle, ChevronRight, AccountTree, Close } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import SearchBar from '../components/SearchBar';
@@ -8,6 +8,14 @@ import FilterModal from '../components/FilterModal';
 import QueryBuilderModal from '../components/QueryBuilderModal';
 import { PERMUTATION_FUNCTIONS } from '../utils/permutationUtils';
 import { queryJSONToString, queryStringToJSON } from '../utils/searchUtils';
+import { getDatabaseMetadata } from '../api/backendClient';
+
+const STATIC_DATABASES = [
+  { id: 'db1', name: 'Sales Database' },
+  { id: 'db2', name: 'HR & Personnel' },
+  { id: 'db3', name: 'Marketing Analytics' },
+  { id: 'db4', name: 'Legacy Archives' },
+];
 
 /**
  * HomePage Component
@@ -26,6 +34,28 @@ const HomePage = () => {
   const [permutationMenuAnchor, setPermutationMenuAnchor] = useState(null);
   const [nestedMenuPermutation, setNestedMenuPermutation] = useState(null);
   const isApplyingQueryBuilderRef = useRef(false);  // Flag to prevent clearing JSON during apply
+  const [databaseMetadata, setDatabaseMetadata] = useState(STATIC_DATABASES);
+  const [selectedDatabases, setSelectedDatabases] = useState(STATIC_DATABASES.map((db) => db.id));
+
+  useEffect(() => {
+    let isMounted = true;
+    getDatabaseMetadata()
+      .then((data) => {
+        if (!isMounted) return;
+        const next = (data && data.length) ? data : STATIC_DATABASES;
+        setDatabaseMetadata(next);
+        setSelectedDatabases((prev) => (prev && prev.length ? prev : next.map((db) => db.id)));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setDatabaseMetadata(STATIC_DATABASES);
+        setSelectedDatabases((prev) => (prev && prev.length ? prev : STATIC_DATABASES.map((db) => db.id)));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Normalize query strings for comparisons (case- and whitespace-insensitive)
   const normalizeQueryString = (str) =>
@@ -154,6 +184,9 @@ const HomePage = () => {
 
     // Navigate to results page with search params
     const params = new URLSearchParams({ q: JSON.stringify(queryJSON) });
+    if (selectedDatabases && selectedDatabases.length) {
+      params.append('dbs', JSON.stringify(selectedDatabases));
+    }
 
     // Add permutation if selected
     if (permutationId && permutationId !== 'none') {
@@ -228,6 +261,14 @@ const HomePage = () => {
     setTimeout(() => {
       isApplyingQueryBuilderRef.current = false;
     }, 0);
+  };
+
+  const handleDatabaseToggle = (dbId) => {
+    setSelectedDatabases((prev) => {
+      const hasDb = prev.includes(dbId);
+      const next = hasDb ? prev.filter((id) => id !== dbId) : [...prev, dbId];
+      return next.length ? next : prev;
+    });
   };
 
   const handleSearchQueryChange = (value) => {
@@ -522,6 +563,31 @@ const HomePage = () => {
 
             </Paper>
           </motion.div>
+
+          {/* Databases below search bar, label inline */}
+          <Box sx={{ mt: 1.5, mb: 1, px: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                Databases:
+              </Typography>
+              <FormGroup row sx={{ gap: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
+                {databaseMetadata.map((db) => (
+                  <FormControlLabel
+                    key={db.id}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedDatabases.includes(db.id)}
+                        onChange={() => handleDatabaseToggle(db.id)}
+                      />
+                    }
+                    label={db.name}
+                    sx={{ m: 0, mr: 0.5 }}
+                  />
+                ))}
+              </FormGroup>
+            </Box>
+          </Box>
           </Box>
 
           {/* Info Cards */}

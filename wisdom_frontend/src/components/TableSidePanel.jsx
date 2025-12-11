@@ -1,4 +1,4 @@
-import React, { useMemo, memo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, memo, useState, useCallback } from 'react';
 import {
   Paper,
   Box,
@@ -27,7 +27,6 @@ import {
   FilterList,
 } from '@mui/icons-material';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { getTablesMetadataForDatabase } from '../api/backendClient';
 import FilterPanel from './FilterPanel';
 
 // Panel width constants
@@ -119,9 +118,8 @@ const isFacetValueActive = (value) => {
 };
 
 const TableSidePanel = ({
-  databaseId,
-  databaseName,
   tableIds = [],
+  tableMetadata = new Map(),
   visibleTableIds = [],
   pendingTableIds = [],
   isSearching = false,
@@ -136,7 +134,6 @@ const TableSidePanel = ({
 }) => {
   const [activeTab, setActiveTab] = useState(PANEL_TABS[0].value);
   const [searchQuery, setSearchQuery] = useState('');
-  const [metadataMap, setMetadataMap] = useState(new Map());
 
   // Detect if any facet filters are currently applied for this database
   const hasActiveFacetFilters = useMemo(() => {
@@ -144,46 +141,16 @@ const TableSidePanel = ({
     return Object.values(filters).some(isFacetValueActive);
   }, [appliedFilters]);
 
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadMetadata = async () => {
-      if (!databaseId) {
-        if (!isCancelled) setMetadataMap(new Map());
-        return;
-      }
-
-      try {
-        const tables = await getTablesMetadataForDatabase(databaseId);
-        if (!isCancelled) {
-          setMetadataMap(new Map((tables || []).map((meta) => [meta.id, meta])));
-        }
-      } catch (error) {
-        console.error('Failed to load table metadata:', error);
-        if (!isCancelled) {
-          setMetadataMap(new Map());
-        }
-      }
-    };
-
-    loadMetadata();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [databaseId]);
-
   const visibleSet = useMemo(() => new Set(visibleTableIds), [visibleTableIds]);
   const pendingSet = useMemo(() => new Set(pendingTableIds), [pendingTableIds]);
 
   const panelItems = useMemo(() => {
     return (tableIds || []).map((id, index) => {
-      const meta = metadataMap.get(id);
-      const categories = meta?.categories?.slice(0, 2) || [];
+      const meta = tableMetadata.get(id);
       const subtitleParts = [];
       if (meta?.year) subtitleParts.push(meta.year);
       if (meta?.country) subtitleParts.push(meta.country);
-      if (categories.length > 0) subtitleParts.push(categories.join(', '));
+      if (meta?.dbName || meta?.dbId) subtitleParts.push(meta.dbName || meta.dbId);
 
       return {
         id,
@@ -194,7 +161,7 @@ const TableSidePanel = ({
         isPending: pendingSet.has(id)
       };
     });
-  }, [tableIds, metadataMap, visibleSet, pendingSet]);
+  }, [tableIds, tableMetadata, visibleSet, pendingSet]);
 
 
   const handleTabChange = useCallback((_, value) => {
@@ -252,7 +219,6 @@ const TableSidePanel = ({
           justifyContent: 'center',
           cursor: 'pointer',
           boxShadow: '4px 0 8px rgba(0,0,0,0.05)',
-          position: 'absolute',
           '&:hover': {
             backgroundColor: 'action.hover',
             width: 28, // slight hover effect
@@ -297,7 +263,7 @@ const TableSidePanel = ({
             transition={{ duration: 0.2 }}
           >
             <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Tables in {databaseName || databaseId?.toUpperCase()}
+              Tables
             </Typography>
 
             <Tabs
@@ -474,7 +440,7 @@ const TableSidePanel = ({
           <FilterPanel
             appliedFilters={appliedFilters}
             onApplyFilters={onApplyFilters}
-            activeDatabase={databaseId}
+            activeDatabase={null}
             searchQuery={facetSearchQuery}
             facetData={facetData}
           />
