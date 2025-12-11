@@ -485,7 +485,7 @@ const SearchResultsPage = () => {
     const nextPickedTables = Array.isArray(newFilters?.pickedTables) ? newFilters.pickedTables : searchState.pickedTables;
 
     // Remove empty arrays
-    ['categories', 'regions', 'tableNames', 'tableYears'].forEach((key) => {
+    ['categories', 'regions', 'tableNames', 'tableYears', 'columnTags'].forEach((key) => {
       if (Array.isArray(cleanedFilters[key]) && cleanedFilters[key].length === 0) {
         delete cleanedFilters[key];
       }

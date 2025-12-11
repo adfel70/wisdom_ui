@@ -16,7 +16,8 @@
     "categories": ["Finance"],
     "regions": ["USA"],
     "tableNames": ["Transactions_Q4"],
-    "tableYears": ["2024", 2023]
+    "tableYears": ["2024", 2023],
+    "columnTags": ["amount", "date"]
   }
   ```
 - **Pagination policy**: unified offset paging for all DBs. Requests use `pageNumber` (1-based) and/or `startRow` + `sizeLimit`. Responses include `pagination.nextOffset` and `hasMore`.
@@ -48,14 +49,28 @@
 - Returns:
   ```json
   {
-    "tables": [ { "id": "t1", "name": "...", "year": 2024, "country": "USA", "categories": ["Finance"], "count": 100, "columns": ["id","amount",...]} ],
+    "tables": [
+      {
+        "id": "t1",
+        "name": "...",
+        "year": 2024,
+        "country": "USA",
+        "categories": ["Finance"],
+        "count": 100,
+        "columns": [
+          { "name": "id", "tags": ["id"] },
+          { "name": "amount", "tags": ["amount"] }
+        ]
+      }
+    ],
     "databases": [ { "id": "db1", "name": "...", "description": "...", "tableKeys": ["t1","t2",...] } ]
   }
   ```
 
 ### searchTables
 - `POST /api/search/tables`
-- Use: unified search to find tables matching query/filters across one or more DBs; returns combined facets (frontend paginates locally).
+- Use: step 1 search to find tables matching query/filters for a db; returns facets.
+- Facets include `categories`, `regions`, `tableNames`, `tableYears`, and `columnTags` (counts weighted by matching rows when available).
 - Body:
   ```json
   {
@@ -126,7 +141,12 @@
 - Returns:
   ```json
   {
-    "columns": ["id","amount","country", "..."],
+    "columns": [
+      { "name": "id", "tags": ["id"] },
+      { "name": "amount", "tags": ["amount"] },
+      { "name": "country", "tags": ["country"] },
+      "..."
+    ],
     "rows": [
       ["TX-000001","$80,194","Mexico", "..."],
       ["TX-000002","$3,238","Japan", "..."]

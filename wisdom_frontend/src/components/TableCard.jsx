@@ -17,7 +17,9 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Popover,
+  Stack
 } from '@mui/material';
 import { keyframes } from '@mui/system';
 import { AgGridReact } from 'ag-grid-react';
@@ -41,9 +43,11 @@ import {
   ViewWeek,
   KeyboardArrowRight,
   CompareArrows,
-  RestartAlt
+  RestartAlt,
+  LocalOfferOutlined
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
+import MultiSelectListFilter from './MultiSelectListFilter';
 import { highlightText } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
 
@@ -157,10 +161,25 @@ const CustomHeader = (props) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [pinMenuAnchorEl, setPinMenuAnchorEl] = useState(null);
   const [sortState, setSortState] = useState(null);
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
   const pinMenuCloseTimeoutRef = useRef(null);
 
-  const { column, displayName, showColumnMenu, progressSort, enableSorting, api } = props;
+  const {
+    column,
+    displayName,
+    progressSort,
+    enableSorting,
+    api,
+    getFilterOptions = () => [],
+    getFilterValues = () => [],
+    onFilterChange,
+    onFilterClear,
+  } = props;
+  const headerTags = column?.getColDef()?.metaTags || [];
+  const colId = column?.getColId?.();
+  const filterOptions = getFilterOptions(colId) || [];
+  const selectedFilterValues = getFilterValues(colId) || [];
+  const isFilterActive = Array.isArray(selectedFilterValues) && selectedFilterValues.length > 0;
 
   useEffect(() => {
     const onSortChanged = () => {
@@ -178,18 +197,6 @@ const CustomHeader = (props) => {
     column.addEventListener('sortChanged', onSortChanged);
     return () => column.removeEventListener('sortChanged', onSortChanged);
   }, [column]);
-
-  // Listen for popup menu hidden event to reset filter menu state
-  useEffect(() => {
-    const onPopupMenuHidden = () => {
-      setIsFilterMenuOpen(false);
-    };
-
-    if (api) {
-      api.addEventListener('popupMenuHidden', onPopupMenuHidden);
-      return () => api.removeEventListener('popupMenuHidden', onPopupMenuHidden);
-    }
-  }, [api]);
 
   const handleMenuClick = (event) => {
     event.stopPropagation();
@@ -239,17 +246,7 @@ const CustomHeader = (props) => {
 
   const handleFilterClick = (e) => {
     e.stopPropagation();
-    if (isFilterMenuOpen) {
-      // Hide the column menu if it's already open
-      if (api?.hidePopupMenu) {
-        api.hidePopupMenu();
-      }
-      setIsFilterMenuOpen(false);
-    } else {
-      // Show the column menu
-      showColumnMenu(e.currentTarget);
-      setIsFilterMenuOpen(true);
-    }
+    setFilterAnchorEl(e.currentTarget);
   };
 
   const handlePin = (pinned) => {
@@ -298,6 +295,39 @@ const CustomHeader = (props) => {
             height: '100%'
         }}
       >
+        {headerTags.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.25 }}>
+            <Tooltip
+              title={
+                headerTags.length > 1 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    {headerTags.map((tag, idx) => (
+                      <Box key={`${tag}-${idx}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '0.9rem' }} />
+                        <span>{tag}</span>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : headerTags[0]
+              }
+              arrow
+              placement="top"
+            >
+              <IconButton
+                size="small"
+                disableRipple
+                sx={{
+                  p: 0.25,
+                  ml: 0.25,
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main' },
+                }}
+              >
+                <LocalOfferOutlined fontSize="inherit" sx={{ fontSize: '1rem' }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <Typography 
             variant="subtitle2" 
             fontWeight={600} 
@@ -322,12 +352,55 @@ const CustomHeader = (props) => {
             sx={{ 
                 p: 0.5,
                 opacity: 0.7,
-                '&:hover': { opacity: 1 }
+                color: isFilterActive ? 'primary.main' : 'text.secondary',
+                '&:hover': { opacity: 1, color: 'primary.main' }
             }}
          >
             <FilterAlt fontSize="small" sx={{ fontSize: 16 }} />
          </IconButton>
       </Tooltip>
+      <Popover
+        open={Boolean(filterAnchorEl)}
+        anchorEl={filterAnchorEl}
+        onClose={() => setFilterAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: {
+              p: 1.25,
+              minWidth: 220,
+              maxWidth: 320,
+              borderRadius: 1.5,
+              boxShadow: 4,
+            },
+          },
+        }}
+      >
+        <Stack spacing={1}>
+          <MultiSelectListFilter
+            options={filterOptions}
+            value={selectedFilterValues}
+            onChange={(next) => onFilterChange?.(colId, next)}
+            placeholder="Search options"
+          />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button
+              size="small"
+              color="inherit"
+              onClick={() => {
+                onFilterClear?.(colId);
+                setFilterAnchorEl(null);
+              }}
+            >
+              Clear
+            </Button>
+            <Button size="small" variant="contained" onClick={() => setFilterAnchorEl(null)}>
+              Done
+            </Button>
+          </Box>
+        </Stack>
+      </Popover>
 
       {/* Column Menu Button */}
       <Tooltip title="Column Options">
@@ -451,7 +524,29 @@ const TableCard = ({
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedRow, setSelectedRow] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState(table?.columns || []);
+  const [columnFilters, setColumnFilters] = useState({});
+  const columnMeta = React.useMemo(() => {
+    const cols = Array.isArray(table?.columns) ? table.columns : [];
+    return cols
+      .map((col) => {
+        if (typeof col === 'string') {
+          return { id: col, label: col, tags: [] };
+        }
+        if (col && typeof col === 'object') {
+          const field = col.field || col.name || '';
+          if (!field) return null;
+          return {
+            id: field,
+            label: col.name || col.headerName || col.field || field,
+            tags: Array.isArray(col.tags) ? col.tags.filter(Boolean) : [],
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }, [table?.columns]);
+
+  const [columnOrder, setColumnOrder] = useState(columnMeta.map((c) => c.id));
   const [gridApi, setGridApi] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const gridContainerRef = useRef(null);
@@ -471,20 +566,111 @@ const TableCard = ({
 
   const totalRecords = table?.count ?? dedupedData.length;
 
-  const hasRows = dedupedData.length > 0;
   const expectsRows = (table?.count ?? 0) > 0;
-  const isGridLoading = isLoadingRows || (!hasRows && expectsRows);
+  const isGridLoading = isLoadingRows || (!dedupedData.length && expectsRows);
+
+  const normalizeCellValue = useCallback((value) => {
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => (v === null || v === undefined ? '' : String(v)))
+        .filter((v) => v !== '')
+        .join(', ');
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  }, []);
+
+  const columnFilterOptions = React.useMemo(() => {
+    const options = {};
+    dedupedData.forEach((row) => {
+      columnOrder.forEach((colId) => {
+        const cellValue = row?.[colId];
+        if (cellValue === undefined || cellValue === null) return;
+        const normalized = normalizeCellValue(cellValue);
+        if (!options[colId]) {
+          options[colId] = new Set();
+        }
+        options[colId].add(normalized);
+      });
+    });
+
+    return Object.fromEntries(
+      Object.entries(options).map(([key, set]) => [
+        key,
+        Array.from(set).sort((a, b) => String(a).localeCompare(String(b))),
+      ])
+    );
+  }, [columnOrder, dedupedData, normalizeCellValue]);
+
+  const handleColumnFilterChange = useCallback((colId, values) => {
+    setColumnFilters((prev) => {
+      const nextValues = Array.isArray(values) ? values.filter(Boolean) : [];
+      if (nextValues.length === 0) {
+        if (!prev[colId]) return prev;
+        const { [colId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [colId]: nextValues };
+    });
+  }, []);
+
+  const handleColumnFilterClear = useCallback((colId) => {
+    setColumnFilters((prev) => {
+      if (!prev[colId]) return prev;
+      const { [colId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
 
   // Update column order when table changes
   useEffect(() => {
-    if (table?.columns) {
-      setColumnOrder(table.columns);
+    if (columnMeta.length) {
+      setColumnOrder(columnMeta.map((c) => c.id));
     }
-  }, [table?.columns]);
+  }, [columnMeta]);
 
   const onGridReady = useCallback((params) => {
     setGridApi(params.api);
   }, []);
+
+  // Transform data for AG Grid (add id field)
+  const rowData = React.useMemo(() => {
+    if (!dedupedData) return [];
+    return dedupedData.map((row, index) => ({
+      id: row?.id ?? index,
+      ...row,
+    }));
+  }, [dedupedData, table?.id]);
+
+  const filteredRowData = React.useMemo(() => {
+    const activeFilters = Object.entries(columnFilters).filter(
+      ([, values]) => Array.isArray(values) && values.length > 0
+    );
+    if (activeFilters.length === 0) return rowData;
+
+    return rowData.filter((row) =>
+      activeFilters.every(([colId, selected]) => {
+        const cellValue = row?.[colId];
+        if (cellValue === undefined || cellValue === null) return false;
+        const normalized = normalizeCellValue(cellValue);
+        return selected.includes(normalized);
+      })
+    );
+  }, [columnFilters, normalizeCellValue, rowData]);
+
+  const hasVisibleRows = filteredRowData.length > 0;
+
+  // When the table changes (e.g., new list selection), clear column filters so they don't leak
+  useEffect(() => {
+    setColumnFilters({});
+  }, [table?.id]);
 
   // Keep AG Grid overlays in sync; rely on our outer overlay for loading
   useEffect(() => {
@@ -496,26 +682,27 @@ const TableCard = ({
       return;
     }
 
-    if (!hasRows) {
+    if (!hasVisibleRows) {
       gridApi.showNoRowsOverlay();
       return;
     }
 
     gridApi.hideOverlay();
-  }, [gridApi, isGridLoading, hasRows]);
+  }, [gridApi, hasVisibleRows, isGridLoading]);
 
   const handleResetView = useCallback(() => {
     if (!gridApi) return;
     
     // Reset column order to original
-    if (table?.columns) {
-      setColumnOrder(table.columns);
+    if (columnMeta.length) {
+      setColumnOrder(columnMeta.map((c) => c.id));
     }
 
     // Reset grid state (sort, filter, width, pin)
+    setColumnFilters({});
     gridApi.setFilterModel(null);
     gridApi.resetColumnState();
-  }, [gridApi, table?.columns]);
+  }, [columnMeta, gridApi]);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -571,15 +758,6 @@ const TableCard = ({
 
     XLSX.writeFile(workbook, `${safeFileName}.xlsx`);
   };
-
-  // Transform data for AG Grid (add id field)
-  const rowData = React.useMemo(() => {
-    if (!dedupedData) return [];
-    return dedupedData.map((row, index) => ({
-      id: row?.id ?? index,
-      ...row,
-    }));
-  }, [dedupedData, table?.id]);
 
   const renderHighlightCell = useCallback(
     (params) => {
@@ -671,6 +849,22 @@ const TableCard = ({
     [handleRowInfoClick]
   );
 
+  const columnTagsMap = React.useMemo(() => {
+    const map = new Map();
+    columnMeta.forEach((c) => {
+      map.set(c.id, c.tags || []);
+    });
+    return map;
+  }, [columnMeta]);
+
+  const columnLabelMap = React.useMemo(() => {
+    const map = new Map();
+    columnMeta.forEach((c) => {
+      map.set(c.id, c.label || c.id);
+    });
+    return map;
+  }, [columnMeta]);
+
   const columnDefs = React.useMemo(() => {
     const rowDetailsColumn = {
       field: '__rowDetails__',
@@ -690,34 +884,48 @@ const TableCard = ({
       menuTabs: [],
     };
 
-    const dataColumns = columnOrder.map((column) => ({
-      field: column,
-      headerName: column,
-      width: 200,
-      minWidth: 140,
-      filter: 'agTextColumnFilter',
-      sortable: true,
-      cellRenderer: renderHighlightCell,
-      wrapText: false,
-      autoHeight: false,
-    }));
+    const dataColumns = columnOrder.map((column) => {
+      const tags = columnTagsMap.get(column) || [];
+      const label = columnLabelMap.get(column) || column;
+      return {
+        field: column,
+        headerName: label,
+        width: 200,
+        minWidth: 140,
+        filter: false,
+        sortable: true,
+        cellRenderer: renderHighlightCell,
+        wrapText: false,
+        autoHeight: false,
+        metaTags: tags,
+      };
+    });
 
     return [rowDetailsColumn, ...dataColumns];
-  }, [columnOrder, renderActionCell, renderHighlightCell]);
+  }, [columnLabelMap, columnOrder, columnTagsMap, renderActionCell, renderHighlightCell]);
+
+  const headerComponentParams = React.useMemo(
+    () => ({
+      onResetView: handleResetView,
+      getFilterOptions: (colId) => columnFilterOptions[colId] || [],
+      getFilterValues: (colId) => columnFilters[colId] || [],
+      onFilterChange: handleColumnFilterChange,
+      onFilterClear: handleColumnFilterClear,
+    }),
+    [columnFilterOptions, columnFilters, handleColumnFilterChange, handleColumnFilterClear, handleResetView]
+  );
 
   const defaultColDef = React.useMemo(
     () => ({
       headerComponent: CustomHeader,
-      headerComponentParams: {
-        onResetView: handleResetView
-      },
+      headerComponentParams,
       resizable: true,
       sortable: true,
-      filter: true,
+      filter: false,
       unSortIcon: true,
       suppressHeaderMenuButton: true,
     }),
-    [handleResetView]
+    [headerComponentParams]
   );
 
   const getMainMenuItems = useCallback((params) => {
@@ -981,7 +1189,7 @@ const TableCard = ({
           <Box sx={{ height: '100%', width: '100%' }} ref={gridContainerRef}>
             <AgGridReact
               theme={themeQuartz}
-              rowData={rowData}
+              rowData={filteredRowData}
               columnDefs={columnDefs}
               defaultColDef={defaultColDef}
               animateRows

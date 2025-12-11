@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -6,90 +6,354 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Box,
   IconButton,
   Typography,
-  Grid,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Checkbox,
   Chip,
   Stack,
   Paper,
-  Divider,
+  Tooltip,
+  Popover,
+  MenuItem,
+  Checkbox,
 } from '@mui/material';
-import { Close as CloseIcon, FilterList, CalendarToday } from '@mui/icons-material';
 import {
-  getAvailableYears,
-  getAvailableCategories,
-  getAvailableCountries,
-  getDatabasesWithTables,
-} from '../api/backendClient';
+  Close as CloseIcon,
+  FilterList,
+  FilterAlt,
+} from '@mui/icons-material';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
+import useFilterMetadata from '../hooks/useFilterMetadata';
+import useTableColumns from '../hooks/useTableColumns';
+import MultiSelectListFilter from './MultiSelectListFilter';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+/**
+ * Column header with inline filter popover
+ */
+const ColumnFilterHeader = (props) => {
+  const {
+    displayName,
+    filterConfig = {},
+    filtersSnapshot = {},
+    onFilterChange,
+    availableTags = [],
+    api,
+    column,
+  } = props;
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectionState, setSelectionState] = useState({ checked: false, indeterminate: false });
+
+  const showSelectAll = Boolean(column?.getColDef?.()?.showHeaderCheckbox);
+  const open = Boolean(anchorEl);
+
+  const isActive = useMemo(() => {
+    if (filterConfig.disableFilter) return false;
+    if (filterConfig.type === 'text') {
+      return Boolean(filtersSnapshot[filterConfig.key]?.toString().trim());
+    }
+    if (filterConfig.type === 'select') {
+      const value = filtersSnapshot[filterConfig.key];
+      return Boolean(value && value !== 'all');
+    }
+    if (filterConfig.type === 'multiselect') {
+      const value = filtersSnapshot[filterConfig.key];
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (filterConfig.type === 'dateRange') {
+      const min = filtersSnapshot[filterConfig.minKey || 'minDate'];
+      const max = filtersSnapshot[filterConfig.maxKey || 'maxDate'];
+      return Boolean(min || max);
+    }
+    return false;
+  }, [filterConfig, filtersSnapshot]);
+
+  const handleOpen = (event) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => setAnchorEl(null);
+
+  const handleClear = () => {
+    if (!onFilterChange) {
+      handleClose();
+      return;
+    }
+    if (filterConfig.type === 'dateRange') {
+      onFilterChange(filterConfig.minKey || 'minDate', '');
+      onFilterChange(filterConfig.maxKey || 'maxDate', '');
+    } else if (filterConfig.type === 'multiselect') {
+      onFilterChange(filterConfig.key, []);
+    } else if (filterConfig.type === 'select') {
+      onFilterChange(filterConfig.key, 'all');
+    } else if (filterConfig.type === 'text') {
+      onFilterChange(filterConfig.key, '');
+    }
+    handleClose();
+  };
+
+  const handleSelectAllClick = (event) => {
+    event.stopPropagation();
+    if (!api) return;
+    const shouldSelectAll = !(selectionState.checked && !selectionState.indeterminate);
+    api.forEachNodeAfterFilterAndSort((node) => {
+      node.setSelected(shouldSelectAll);
+    });
+  };
+
+  useEffect(() => {
+    if (!api || !showSelectAll) return undefined;
+
+    const updateSelectionState = () => {
+      let total = 0;
+      let selected = 0;
+      api.forEachNodeAfterFilterAndSort((node) => {
+        total += 1;
+        if (node.isSelected()) selected += 1;
+      });
+      setSelectionState({
+        checked: total > 0 && selected === total,
+        indeterminate: selected > 0 && selected < total,
+      });
+    };
+
+    updateSelectionState();
+    api.addEventListener('selectionChanged', updateSelectionState);
+    api.addEventListener('modelUpdated', updateSelectionState);
+    return () => {
+      api.removeEventListener('selectionChanged', updateSelectionState);
+      api.removeEventListener('modelUpdated', updateSelectionState);
+    };
+  }, [api, showSelectAll]);
+
+  const renderContent = () => {
+    if (filterConfig.disableFilter) return null;
+
+    if (filterConfig.type === 'text') {
+      return (
+        <TextField
+          autoFocus
+          size="small"
+          fullWidth
+          label={filterConfig.label || 'Search'}
+          placeholder={filterConfig.placeholder}
+          value={filtersSnapshot[filterConfig.key] || ''}
+          onChange={(e) => onFilterChange?.(filterConfig.key, e.target.value)}
+        />
+      );
+    }
+
+    if (filterConfig.type === 'select') {
+      const options = filterConfig.options || [];
+      return (
+        <TextField
+          select
+          size="small"
+          fullWidth
+          label={filterConfig.label || displayName}
+          value={filtersSnapshot[filterConfig.key] ?? 'all'}
+          onChange={(e) => onFilterChange?.(filterConfig.key, e.target.value)}
+        >
+          <MenuItem value="all">All</MenuItem>
+          {options.map((option) => (
+            <MenuItem key={option} value={option}>
+              {option}
+            </MenuItem>
+          ))}
+        </TextField>
+      );
+    }
+
+    if (filterConfig.type === 'multiselect') {
+      const options = filterConfig.options || availableTags || [];
+      return (
+        <MultiSelectListFilter
+          options={options}
+          value={filtersSnapshot[filterConfig.key]}
+          onChange={(next) => onFilterChange?.(filterConfig.key, next)}
+          placeholder={filterConfig.placeholder || 'Search options'}
+        />
+      );
+    }
+
+    if (filterConfig.type === 'dateRange') {
+      const minKey = filterConfig.minKey || 'minDate';
+      const maxKey = filterConfig.maxKey || 'maxDate';
+      return (
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            label="From"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filtersSnapshot[minKey] || ''}
+            onChange={(e) => onFilterChange?.(minKey, e.target.value)}
+          />
+          <TextField
+            size="small"
+            label="To"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filtersSnapshot[maxKey] || ''}
+            onChange={(e) => onFilterChange?.(maxKey, e.target.value)}
+          />
+        </Stack>
+      );
+    }
+
+    return null;
+  };
+
+  if (filterConfig.disableFilter) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          width: '100%',
+        }}
+      >
+        <Typography
+          variant="subtitle2"
+          fontWeight={600}
+          noWrap
+          sx={{
+            flex: 1,
+            fontSize: '0.8rem',
+            color: 'text.secondary',
+          }}
+        >
+          {displayName}
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        width: '100%',
+      }}
+    >
+      {showSelectAll && (
+        <Checkbox
+          size="small"
+          checked={selectionState.checked}
+          indeterminate={selectionState.indeterminate}
+          onClick={handleSelectAllClick}
+          sx={{ p: 0.25, mr: 0.25 }}
+        />
+      )}
+      <Typography
+        variant="subtitle2"
+        fontWeight={600}
+        noWrap
+        sx={{
+          flex: 1,
+          fontSize: '0.8rem',
+          color: 'text.secondary',
+        }}
+      >
+        {displayName}
+      </Typography>
+      <Tooltip title="Filter">
+        <IconButton
+          size="small"
+          onClick={handleOpen}
+          sx={{
+            p: 0.5,
+            color: isActive ? 'primary.main' : 'text.secondary',
+            '&:hover': { color: 'primary.main', backgroundColor: 'action.hover' },
+          }}
+        >
+          <FilterAlt fontSize="inherit" sx={{ fontSize: 16 }} />
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: {
+              p: 1.5,
+              minWidth: 240,
+              maxWidth: 320,
+              borderRadius: 1.5,
+              boxShadow: 4,
+            },
+          },
+        }}
+      >
+        <Stack spacing={1}>
+          {renderContent()}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button size="small" color="inherit" onClick={handleClear}>
+              Clear
+            </Button>
+            <Button size="small" variant="contained" onClick={handleClose}>
+              Done
+            </Button>
+          </Box>
+        </Stack>
+      </Popover>
+    </Box>
+  );
+};
 
 /**
  * FilterModal Component
  * Modal dialog for filtering and selecting tables with metadata view
  */
 const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPickedTables = [] }) => {
+  const normalizeArrayValue = useCallback((value) => {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!value) return [];
+    if (typeof value === 'string' && value.toLowerCase() === 'all') return [];
+    return [value];
+  }, []);
+
   const [filters, setFilters] = useState({
     tableName: '',
-    year: 'all',
-    category: 'all',
-    country: 'all',
+    year: normalizeArrayValue(initialFilters.year),
+    category: normalizeArrayValue(initialFilters.category),
+    country: normalizeArrayValue(initialFilters.country),
     minDate: '',
     maxDate: '',
+    columnTags: normalizeArrayValue(initialFilters.columnTags),
     ...initialFilters,
   });
   const [selectedTables, setSelectedTables] = useState([]);
-  const [allDatabases, setAllDatabases] = useState([]);
-  const [yearOptions, setYearOptions] = useState([]);
-  const [categoryOptions, setCategoryOptions] = useState([]);
-  const [countryOptions, setCountryOptions] = useState([]);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const {
+    allDatabases,
+    availableYears,
+    availableCategories,
+    availableCountries,
+  } = useFilterMetadata(open);
 
-  // Load all databases when modal opens
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadData = async () => {
-      if (!open) return;
-      try {
-        const [databases, years, categories, countries] = await Promise.all([
-          getDatabasesWithTables(),
-          getAvailableYears(),
-          getAvailableCategories(),
-          getAvailableCountries(),
-        ]);
-
-        if (isCancelled) return;
-        setAllDatabases(databases || []);
-        setYearOptions(years || []);
-        setCategoryOptions(categories || []);
-        setCountryOptions(countries || []);
-      } catch (error) {
-        console.error('Failed to load filter metadata:', error);
-        if (!isCancelled) {
-          setAllDatabases([]);
-          setYearOptions([]);
-          setCategoryOptions([]);
-          setCountryOptions([]);
-        }
+  const getColumnTags = useCallback((table) => {
+    const tags = new Set();
+    (table?.columns || []).forEach((col) => {
+      if (col && typeof col === 'object') {
+        const colTags = col.tags ?? (col.type ? [col.type] : []);
+        (colTags || []).forEach((tag) => tag && tags.add(String(tag)));
+      } else if (col) {
+        tags.add(String(col));
       }
-    };
-
-    loadData();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [open]);
+    });
+    return Array.from(tags);
+  }, []);
 
   // Flatten all tables from all databases
   const allTables = useMemo(() => {
@@ -100,33 +364,77 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
           ...table,
           databaseName: db.name,
           databaseId: db.id,
+          columnTags: getColumnTags(table),
         });
       });
     });
     return tables;
-  }, [allDatabases]);
+  }, [allDatabases, getColumnTags]);
+
+  const availableColumnTags = useMemo(() => {
+    const tags = new Set();
+    allTables.forEach((table) => {
+      (table.columnTags || []).forEach((tag) => {
+        if (tag) tags.add(String(tag));
+      });
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [allTables]);
 
   // Filter tables based on current filters
   const filteredTables = useMemo(() => {
     return allTables.filter(table => {
-      // Filter by table name
-      if (filters.tableName && !table.name.toLowerCase().includes(filters.tableName.toLowerCase())) {
-        return false;
+      // Free-text search across table metadata
+      if (filters.tableName) {
+        const query = filters.tableName.trim().toLowerCase();
+        const fields = [
+          table.name,
+          table.databaseName,
+          String(table.year ?? ''),
+          table.country,
+          ...(table.categories || []),
+        ...(table.columnTags || []),
+        ]
+          .filter(Boolean)
+          .map((val) => val.toString().toLowerCase());
+
+        const matchesAnyField = fields.some((val) => val.includes(query));
+        if (!matchesAnyField) return false;
       }
 
-      // Filter by year
-      if (filters.year !== 'all' && table.year !== filters.year) {
-        return false;
+      // Filter by year (match any selected)
+      const selectedYears = Array.isArray(filters.year) ? filters.year.filter(Boolean) : [];
+      if (selectedYears.length > 0) {
+        const matchesYear = selectedYears.some((y) => {
+          const tableYear = Number(table.year);
+          const target = Number(y);
+          if (!Number.isNaN(tableYear) && !Number.isNaN(target)) return tableYear === target;
+          return String(table.year) === String(y);
+        });
+        if (!matchesYear) return false;
       }
 
       // Filter by category
-      if (filters.category !== 'all' && !table.categories.includes(filters.category)) {
-        return false;
+      const tableCategories = Array.isArray(table.categories) ? table.categories : [];
+      const selectedCategories = Array.isArray(filters.category) ? filters.category.filter(Boolean) : [];
+      if (selectedCategories.length > 0) {
+        const matches = selectedCategories.some((cat) => tableCategories.includes(cat));
+        if (!matches) return false;
       }
 
       // Filter by country
-      if (filters.country !== 'all' && table.country !== filters.country) {
-        return false;
+      const selectedCountries = Array.isArray(filters.country) ? filters.country.filter(Boolean) : [];
+      if (selectedCountries.length > 0) {
+        const matchesCountry = selectedCountries.some((c) => table.country === c);
+        if (!matchesCountry) return false;
+      }
+
+      // Filter by column tags (must include all selected)
+      if (Array.isArray(filters.columnTags) && filters.columnTags.length > 0) {
+        const tableTags = table.columnTags || [];
+        const required = filters.columnTags.map(String);
+        const hasAll = required.every((tag) => tableTags.includes(tag));
+        if (!hasAll) return false;
       }
 
       // Filter by date range
@@ -149,14 +457,24 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
   }, [allTables, filters]);
 
   useEffect(() => {
+    const allowedIds = new Set(filteredTables.map((table) => table.id));
+    setSelectedTables((prev) => {
+      const next = prev.filter((id) => allowedIds.has(id));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [filteredTables]);
+
+  useEffect(() => {
     if (open) {
       setFilters({
         tableName: '',
-        year: 'all',
-        category: 'all',
-        country: 'all',
+        year: normalizeArrayValue(initialFilters.year),
+        category: normalizeArrayValue(initialFilters.category),
+        country: normalizeArrayValue(initialFilters.country),
         minDate: '',
         maxDate: '',
+        columnTags: normalizeArrayValue(initialFilters.columnTags),
         ...initialFilters,
       });
       // Seed selected tables from provided picked tables
@@ -164,51 +482,15 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
         ? initialPickedTables.map((t) => t.table).filter(Boolean)
         : [];
       setSelectedTables(initialSelected);
+      setShowSelectedOnly(false);
     }
   }, [open, initialFilters, initialPickedTables]);
 
-  const handleChange = (field, value) => {
+  const handleChange = useCallback((field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSelectTable = (tableId) => {
-    setSelectedTables(prev => {
-      if (prev.includes(tableId)) {
-        return prev.filter(id => id !== tableId);
-      } else {
-        return [...prev, tableId];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedTables.length === filteredTables.length) {
-      setSelectedTables([]);
-    } else {
-      setSelectedTables(filteredTables.map(t => t.id));
-    }
-  };
+  }, []);
 
   const handleApply = () => {
-    const cleaned = { ...filters };
-
-    // Drop neutral/empty values before sending
-    ['tableName', 'year', 'category', 'country', 'minDate', 'maxDate'].forEach((key) => {
-      const val = cleaned[key];
-      if (val === undefined || val === null) {
-        delete cleaned[key];
-        return;
-      }
-      if (typeof val === 'string') {
-        const trimmed = val.trim();
-        if (trimmed === '' || trimmed.toLowerCase() === 'all') {
-          delete cleaned[key];
-          return;
-        }
-        cleaned[key] = trimmed;
-      }
-    });
-
     // Map selected table IDs to { db, table }
     const tableIndex = new Map(allTables.map((t) => [t.id, t]));
     const pickedTables = (selectedTables || []).map((tableId) => {
@@ -219,24 +501,26 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       };
     }).filter((t) => t.db && t.table);
 
-    onApply({ filters: cleaned, pickedTables });
+    // Only surface picked tables to the caller; filters are for local narrowing only
+    onApply({ filters: {}, pickedTables });
     onClose();
   };
 
   const handleReset = () => {
     const resetFilters = {
       tableName: '',
-      year: 'all',
-      category: 'all',
-      country: 'all',
+      year: [],
+      category: [],
+      country: [],
       minDate: '',
       maxDate: '',
+      columnTags: [],
     };
     setFilters(resetFilters);
     setSelectedTables([]);
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -244,10 +528,52 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       month: 'short',
       day: 'numeric'
     });
-  };
+  }, []);
 
-  const allSelected = filteredTables.length > 0 && selectedTables.length === filteredTables.length;
-  const someSelected = selectedTables.length > 0 && selectedTables.length < filteredTables.length;
+  const gridApiRef = useRef(null);
+
+  const headerParams = useMemo(() => ({
+    filtersSnapshot: filters,
+    onFilterChange: handleChange,
+    availableYears,
+    availableCategories,
+    availableCountries,
+    availableTags: availableColumnTags,
+  }), [availableCategories, availableColumnTags, availableCountries, availableYears, filters, handleChange]);
+
+  const columnDefs = useTableColumns({
+    headerParams,
+    availableYears,
+    availableCountries,
+    availableCategories,
+    availableColumnTags,
+    formatDate,
+  });
+
+  const displayedTables = useMemo(
+    () => (showSelectedOnly ? filteredTables.filter((t) => selectedTables.includes(t.id)) : filteredTables),
+    [showSelectedOnly, filteredTables, selectedTables]
+  );
+
+  const defaultColDef = useMemo(() => ({
+    sortable: true,
+    filter: false,
+    resizable: true,
+    flex: 1,
+    minWidth: 120,
+    headerComponent: ColumnFilterHeader,
+    headerComponentParams: headerParams,
+  }), [headerParams]);
+
+  useEffect(() => {
+    if (!gridApiRef.current) return;
+    gridApiRef.current.forEachNode((node) => {
+      const shouldSelect = selectedTables.includes(node.data?.id);
+      if (node.isSelected() !== shouldSelect) {
+        node.setSelected(shouldSelect);
+      }
+    });
+  }, [selectedTables, displayedTables]);
 
   return (
     <Dialog
@@ -289,124 +615,6 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
       </DialogTitle>
 
       <DialogContent dividers>
-        {/* Filters Section */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Filters
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Table Name */}
-            <TextField
-              fullWidth
-              label="Table Name"
-              placeholder="Search by table name..."
-              value={filters.tableName}
-              onChange={(e) => handleChange('tableName', e.target.value)}
-              size="small"
-            />
-
-            <Grid container spacing={2}>
-              {/* Year Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Year</InputLabel>
-                  <Select
-                    value={filters.year}
-                    label="Year"
-                    onChange={(e) => handleChange('year', e.target.value)}
-                  >
-                    <MenuItem value="all">All Years</MenuItem>
-                    {yearOptions.map((year) => (
-                      <MenuItem key={year} value={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {/* Category Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    value={filters.category}
-                    label="Category"
-                    onChange={(e) => handleChange('category', e.target.value)}
-                  >
-                    <MenuItem value="all">All Categories</MenuItem>
-                    {categoryOptions.map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {/* Country Filter */}
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Region/Country</InputLabel>
-                  <Select
-                    value={filters.country}
-                    label="Region/Country"
-                    onChange={(e) => handleChange('country', e.target.value)}
-                  >
-                    <MenuItem value="all">All Regions</MenuItem>
-                    {countryOptions.map((country) => (
-                      <MenuItem key={country} value={country}>
-                        {country}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-
-            {/* Date Range Filters */}
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <CalendarToday fontSize="small" color="primary" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Indexing Date Range
-                </Typography>
-              </Box>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Min Date"
-                    type="date"
-                    value={filters.minDate}
-                    onChange={(e) => handleChange('minDate', e.target.value)}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                    size="small"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Max Date"
-                    type="date"
-                    value={filters.maxDate}
-                    onChange={(e) => handleChange('maxDate', e.target.value)}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                    size="small"
-                  />
-                </Grid>
-              </Grid>
-            </Box>
-          </Box>
-        </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Tables Selection Section */}
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -414,7 +622,11 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
                 Tables
               </Typography>
               <Chip
-                label={`${filteredTables.length} available`}
+                label={
+                  showSelectedOnly
+                    ? `${displayedTables.length} visible / ${filteredTables.length} filtered`
+                    : `${filteredTables.length} visible`
+                }
                 size="small"
                 variant="outlined"
               />
@@ -422,119 +634,42 @@ const FilterModal = ({ open, onClose, onApply, initialFilters = {}, initialPicke
             {selectedTables.length > 0 && (
               <Chip
                 label={`${selectedTables.length} selected`}
-                color="primary"
+                color={showSelectedOnly ? 'secondary' : 'primary'}
                 size="small"
+                onClick={() => setShowSelectedOnly((prev) => !prev)}
+                clickable
                 sx={{ fontWeight: 600 }}
               />
             )}
           </Box>
 
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={someSelected}
-                      onChange={handleSelectAll}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Year</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Country</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Categories</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Indexing Date</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Records</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredTables.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No tables found matching the current filters
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredTables.map((table) => {
-                    const isSelected = selectedTables.includes(table.id);
-                    return (
-                      <TableRow
-                        key={table.id}
-                        hover
-                        onClick={() => handleSelectTable(table.id)}
-                        sx={{
-                          cursor: 'pointer',
-                          bgcolor: isSelected ? 'action.selected' : 'inherit',
-                          '&:hover': {
-                            bgcolor: isSelected ? 'action.selected' : 'action.hover',
-                          }
-                        }}
-                      >
-                        <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={() => handleSelectTable(table.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
-                            {table.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {table.databaseName}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
-                            {table.year}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
-                            {table.country}
-                          </Typography>
-                        </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
-                          {table.categories.slice(0, 2).map((category, idx) => (
-                            <Chip
-                              key={idx}
-                              label={category}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          ))}
-                          {table.categories.length > 2 && (
-                            <Chip
-                              label={`+${table.categories.length - 2}`}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                        </Stack>
-                      </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDate(table.indexingDate)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight={isSelected ? 600 : 500}>
-                            {table.count.toLocaleString()}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Paper variant="outlined" sx={{ height: 550, position: 'relative', overflow: 'hidden' }}>
+            <AgGridReact
+              style={{ height: '100%', width: '100%' }}
+              theme={themeQuartz}
+              rowData={displayedTables}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              animateRows
+              rowSelection="multiple"
+              rowMultiSelectWithClick
+              suppressRowClickSelection={false}
+              tooltipShowDelay={200}
+              overlayNoRowsTemplate="No tables found matching the current filters"
+              getRowId={(params) => params?.data?.id}
+              onGridReady={(params) => {
+                gridApiRef.current = params.api;
+                params.api.forEachNode((node) => {
+                  const shouldSelect = selectedTables.includes(node.data?.id);
+                  if (shouldSelect) node.setSelected(true);
+                });
+              }}
+              onSelectionChanged={(event) => {
+                const ids = (event.api.getSelectedRows() || []).map((row) => row.id);
+                setSelectedTables(ids);
+              }}
+            />
+          </Paper>
         </Box>
       </DialogContent>
 
