@@ -4,9 +4,9 @@ import { RECORDS_PER_PAGE } from '../config/paginationConfig';
 import { extractTermsFromQuery } from '../utils/searchUtils';
 
 /**
- * Table data status enum
+ * Row data loading status
  */
-const TableStatus = {
+const RowStatus = {
   LOADING: 'loading',
   READY: 'ready',
   ERROR: 'error',
@@ -15,10 +15,11 @@ const TableStatus = {
 /**
  * Hook to manage search execution and table data fetching
  *
- * Simplified architecture:
- * - Single source of truth: tableDataMap (React state)
- * - Loading state is derived from map entries
- * - Uses ref for checking current state to avoid effect dependency loops
+ * Architecture:
+ * - Table metadata (name, year, count, etc.) comes from searchTables API
+ * - Row data comes from getTableDataPaginatedById API
+ * - These are stored separately and merged for display
+ * - This allows showing table card wrappers immediately while rows load
  */
 export const useSearchResults = ({
   searchQuery,
@@ -43,48 +44,84 @@ export const useSearchResults = ({
   });
   const [permutationMap, setPermutationMap] = useState(null);
 
-  // Table data state - single source of truth
-  // Map<tableId, { data: TableData | null, status: TableStatus, error?: Error }>
-  const [tableDataMap, setTableDataMap] = useState(() => new Map());
+  // Table metadata from searchTables - keyed by database
+  // Structure: { db1: Map<tableId, tableMetadata>, db2: Map, ... }
+  const [tableMetadataByDb, setTableMetadataByDb] = useState({
+    db1: new Map(),
+    db2: new Map(),
+    db3: new Map(),
+    db4: new Map(),
+  });
 
-  // Ref to access current tableDataMap without causing effect re-runs
-  const tableDataMapRef = useRef(tableDataMap);
-  tableDataMapRef.current = tableDataMap;
+  // Row data state - keyed by tableId
+  // Map<tableId, { data: rows[], status: RowStatus, error?: Error, paginationInfo?: object }>
+  const [rowDataMap, setRowDataMap] = useState(() => new Map());
 
-  // Abort controllers - ref because they don't need to trigger re-renders
+  // Ref to access current rowDataMap without causing effect re-runs
+  const rowDataMapRef = useRef(rowDataMap);
+  rowDataMapRef.current = rowDataMap;
+
+  // Abort controllers for row fetches
   const abortControllersRef = useRef(new Map());
 
   // Track current fetch generation to ignore stale responses
   const fetchGenerationRef = useRef(0);
 
-  /**
-   * Get table data by ID
-   */
-  const getTableData = useCallback((tableId) => {
-    return tableDataMap.get(tableId)?.data ?? null;
-  }, [tableDataMap]);
+  // Current active database (needed to look up metadata)
+  const [activeDb, setActiveDb] = useState('db1');
 
   /**
-   * Check if a table is currently loading
+   * Get table metadata by ID (from any database)
    */
-  const isTableLoading = useCallback((tableId) => {
-    const entry = tableDataMap.get(tableId);
-    return entry?.status === TableStatus.LOADING;
-  }, [tableDataMap]);
+  const getTableMetadata = useCallback((tableId) => {
+    for (const db of ['db1', 'db2', 'db3', 'db4']) {
+      const metadata = tableMetadataByDb[db].get(tableId);
+      if (metadata) return metadata;
+    }
+    return null;
+  }, [tableMetadataByDb]);
 
   /**
-   * Check if a table has data ready
+   * Get row data by table ID
    */
-  const isTableReady = useCallback((tableId) => {
-    const entry = tableDataMap.get(tableId);
-    return entry?.status === TableStatus.READY;
-  }, [tableDataMap]);
+  const getRowData = useCallback((tableId) => {
+    return rowDataMap.get(tableId) ?? null;
+  }, [rowDataMap]);
 
   /**
-   * Update table data (used by "Load More" functionality)
+   * Check if rows are currently loading for a table
    */
-  const updateTableData = useCallback((tableId, updater) => {
-    setTableDataMap(prev => {
+  const isRowsLoading = useCallback((tableId) => {
+    const rowData = rowDataMap.get(tableId);
+    return rowData?.status === RowStatus.LOADING;
+  }, [rowDataMap]);
+
+  /**
+   * Get merged table data for display (metadata + rows)
+   * Returns null if metadata doesn't exist
+   */
+  const getTableForDisplay = useCallback((tableId) => {
+    const metadata = getTableMetadata(tableId);
+    if (!metadata) return null;
+
+    const rowData = rowDataMap.get(tableId);
+
+    return {
+      ...metadata,
+      data: rowData?.data ?? [],
+      columns: rowData?.columns ?? metadata.columns ?? [],
+      paginationInfo: rowData?.paginationInfo ?? null,
+      isLoadingRows: rowData?.status === RowStatus.LOADING,
+      hasRowData: rowData?.status === RowStatus.READY,
+      rowError: rowData?.error ?? null,
+    };
+  }, [getTableMetadata, rowDataMap]);
+
+  /**
+   * Update row data for a table (used by "Load More" functionality)
+   */
+  const updateRowData = useCallback((tableId, updater) => {
+    setRowDataMap(prev => {
       const newMap = new Map(prev);
       const existing = newMap.get(tableId);
       if (existing && existing.data) {
@@ -98,19 +135,19 @@ export const useSearchResults = ({
   }, []);
 
   /**
-   * Clear all table data (called on new search)
+   * Clear all row data (called on new search)
    */
-  const clearTableData = useCallback(() => {
+  const clearRowData = useCallback(() => {
     // Abort all in-flight requests
     abortControllersRef.current.forEach(controller => controller.abort());
     abortControllersRef.current.clear();
-    // Clear the data map
-    setTableDataMap(new Map());
+    // Clear the row data map
+    setRowDataMap(new Map());
     // Increment generation so any pending fetches are ignored
     fetchGenerationRef.current++;
   }, []);
 
-  // Step 1: Search all databases for matching table IDs
+  // Step 1: Search all databases for matching tables
   useEffect(() => {
     let isCancelled = false;
 
@@ -128,8 +165,8 @@ export const useSearchResults = ({
       return undefined;
     }
 
-    // Clear table data for new search
-    clearTableData();
+    // Clear row data for new search
+    clearRowData();
 
     // Create signature for deduplication
     const currentSignature = JSON.stringify({
@@ -187,6 +224,7 @@ export const useSearchResults = ({
         const results = await Promise.all(searchPromises);
 
         if (!isCancelled) {
+          // Store table IDs for matching (used by context)
           setMatchingTableIds({
             db1: results[0]?.tableIds || [],
             db2: results[1]?.tableIds || [],
@@ -194,6 +232,22 @@ export const useSearchResults = ({
             db4: results[3]?.tableIds || [],
           });
 
+          // Store full table metadata by database
+          const newMetadataByDb = {
+            db1: new Map(),
+            db2: new Map(),
+            db3: new Map(),
+            db4: new Map(),
+          };
+
+          ['db1', 'db2', 'db3', 'db4'].forEach((dbId, index) => {
+            const tables = results[index]?.tables || [];
+            tables.forEach(table => {
+              newMetadataByDb[dbId].set(table.id, table);
+            });
+          });
+
+          setTableMetadataByDb(newMetadataByDb);
           setLastSearchSignature(currentSignature);
           setFacetsByDb({
             db1: results[0]?.facets || null,
@@ -210,6 +264,12 @@ export const useSearchResults = ({
             db2: [],
             db3: [],
             db4: [],
+          });
+          setTableMetadataByDb({
+            db1: new Map(),
+            db2: new Map(),
+            db3: new Map(),
+            db4: new Map(),
           });
         }
       } finally {
@@ -233,8 +293,7 @@ export const useSearchResults = ({
     JSON.stringify(permutationParams),
   ]);
 
-  // Step 2: Load table data for visible table IDs
-  // Uses refs to check current state without causing re-runs
+  // Step 2: Load row data for visible table IDs
   useEffect(() => {
     if (!visibleTableIds || visibleTableIds.length === 0) {
       return;
@@ -243,15 +302,15 @@ export const useSearchResults = ({
     // Capture current generation for this effect run
     const currentGeneration = fetchGenerationRef.current;
 
-    // Use ref to check current state (avoids dependency on tableDataMap)
-    const currentMap = tableDataMapRef.current;
+    // Use ref to check current state (avoids dependency on rowDataMap)
+    const currentMap = rowDataMapRef.current;
 
-    // Determine which tables need fetching
+    // Determine which tables need row fetching
     const tablesToFetch = visibleTableIds.filter(tableId => {
-      const entry = currentMap.get(tableId);
+      const rowData = currentMap.get(tableId);
       // Fetch if: no entry, or error (retry)
       // Don't fetch if: loading or ready
-      return !entry || entry.status === TableStatus.ERROR;
+      return !rowData || rowData.status === RowStatus.ERROR;
     });
 
     if (tablesToFetch.length === 0) {
@@ -259,22 +318,21 @@ export const useSearchResults = ({
     }
 
     // Mark tables as loading immediately
-    setTableDataMap(prev => {
+    setRowDataMap(prev => {
       const newMap = new Map(prev);
       tablesToFetch.forEach(tableId => {
-        newMap.set(tableId, { data: null, status: TableStatus.LOADING, error: null });
+        newMap.set(tableId, { data: [], status: RowStatus.LOADING, error: null });
       });
       return newMap;
     });
 
-    // Fetch each table
-    const fetchTable = async (tableId) => {
-      // Create abort controller for this request
+    // Fetch rows for each table
+    const fetchRows = async (tableId) => {
       const controller = new AbortController();
       abortControllersRef.current.set(tableId, controller);
 
       try {
-        const tableData = await getTableDataPaginatedById(
+        const result = await getTableDataPaginatedById(
           tableId,
           {}, // Initial pagination state
           RECORDS_PER_PAGE,
@@ -287,41 +345,45 @@ export const useSearchResults = ({
 
         // Check if this fetch is still relevant
         if (currentGeneration !== fetchGenerationRef.current) {
-          return; // Stale fetch, ignore
+          return;
         }
 
         // Initialize pagination state
         if (tablePaginationHook) {
           tablePaginationHook.initializeTable(
             tableId,
-            tableData.data,
-            tableData.paginationInfo
+            result.data,
+            result.paginationInfo
           );
         }
 
-        // Update state with fetched data
-        setTableDataMap(prev => {
+        // Update row data
+        setRowDataMap(prev => {
           const newMap = new Map(prev);
-          newMap.set(tableId, { data: tableData, status: TableStatus.READY, error: null });
+          newMap.set(tableId, {
+            data: result.data,
+            columns: result.columns,
+            status: RowStatus.READY,
+            error: null,
+            paginationInfo: result.paginationInfo,
+          });
           return newMap;
         });
 
       } catch (error) {
         if (error?.name === 'AbortError') {
-          return; // Request was cancelled, don't update state
+          return;
         }
 
-        console.error(`Failed to load table ${tableId}:`, error);
+        console.error(`Failed to load rows for table ${tableId}:`, error);
 
-        // Check if this fetch is still relevant
         if (currentGeneration !== fetchGenerationRef.current) {
           return;
         }
 
-        // Mark as error
-        setTableDataMap(prev => {
+        setRowDataMap(prev => {
           const newMap = new Map(prev);
-          newMap.set(tableId, { data: null, status: TableStatus.ERROR, error });
+          newMap.set(tableId, { data: [], status: RowStatus.ERROR, error });
           return newMap;
         });
       } finally {
@@ -330,10 +392,8 @@ export const useSearchResults = ({
     };
 
     // Start all fetches
-    tablesToFetch.forEach(tableId => fetchTable(tableId));
+    tablesToFetch.forEach(tableId => fetchRows(tableId));
 
-    // No cleanup needed - we don't abort on visibleTableIds change
-    // The generation check handles stale responses
   }, [
     visibleTableIds,
     searchQuery,
@@ -343,17 +403,16 @@ export const useSearchResults = ({
     tablePaginationHook,
   ]);
 
-  // Prune non-visible tables from the map to prevent memory leaks
+  // Prune row data for non-visible tables to prevent memory leaks
   useEffect(() => {
     if (!visibleTableIds || visibleTableIds.length === 0) {
-      setTableDataMap(new Map());
+      setRowDataMap(new Map());
       return;
     }
 
     const visibleSet = new Set(visibleTableIds);
-    const currentMap = tableDataMapRef.current;
+    const currentMap = rowDataMapRef.current;
 
-    // Check if any pruning is needed
     let needsPruning = false;
     currentMap.forEach((_, tableId) => {
       if (!visibleSet.has(tableId)) {
@@ -362,7 +421,7 @@ export const useSearchResults = ({
     });
 
     if (needsPruning) {
-      setTableDataMap(prev => {
+      setRowDataMap(prev => {
         const newMap = new Map();
         visibleTableIds.forEach(tableId => {
           const entry = prev.get(tableId);
@@ -376,8 +435,8 @@ export const useSearchResults = ({
   }, [visibleTableIds]);
 
   // Compute derived loading state
-  const isLoadingTableData = Array.from(tableDataMap.values()).some(
-    entry => entry.status === TableStatus.LOADING
+  const isLoadingRows = Array.from(rowDataMap.values()).some(
+    entry => entry.status === RowStatus.LOADING
   );
 
   return {
@@ -386,15 +445,19 @@ export const useSearchResults = ({
     facetsByDb,
     permutationMap,
 
-    // Table data state
-    tableDataMap,
-    isLoadingTableData,
+    // Table metadata (from searchTables)
+    tableMetadataByDb,
+    getTableMetadata,
+
+    // Row data state
+    rowDataMap,
+    isLoadingRows,
 
     // Helper functions
-    getTableData,
-    isTableLoading,
-    isTableReady,
-    updateTableData,
-    clearTableData,
+    getRowData,
+    isRowsLoading,
+    getTableForDisplay,
+    updateRowData,
+    clearRowData,
   };
 };

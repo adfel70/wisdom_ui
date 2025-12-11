@@ -211,12 +211,12 @@ const SearchResultsPage = () => {
   // Search results hook
   const {
     isSearching,
-    isLoadingTableData,
+    isLoadingRows,
     facetsByDb,
     permutationMap,
-    getTableData,
-    isTableLoading,
-    updateTableData,
+    getTableForDisplay,
+    isRowsLoading,
+    updateRowData,
   } = useSearchResults({
     searchQuery: searchState.searchQuery,
     filters: activeFilters,
@@ -623,11 +623,8 @@ const SearchResultsPage = () => {
 
       const newRecords = tableData.data;
 
-      // Update the table data using the new updateTableData function
-      updateTableData(tableId, (existingTable) => ({
-        ...existingTable,
-        data: [...existingTable.data, ...newRecords],
-      }));
+      // Update the row data
+      updateRowData(tableId, (existingRows) => [...existingRows, ...newRecords]);
 
       // Update pagination state
       tablePagination.appendRecords(tableId, newRecords, tableData.paginationInfo);
@@ -636,7 +633,7 @@ const SearchResultsPage = () => {
     } finally {
       tablePagination.setLoadingMore(tableId, false);
     }
-  }, [tablePagination, updateTableData, searchState, permutationMap]);
+  }, [tablePagination, updateRowData, searchState, permutationMap]);
 
   // Determine empty state type
   const getEmptyStateType = () => {
@@ -705,6 +702,7 @@ const SearchResultsPage = () => {
                   activeDatabase={activeDatabase}
                   onChange={handleDatabaseChange}
                   tableCounts={tableCounts}
+                  isSearching={isSearching}
                 />
               </Box>
             </Container>
@@ -717,7 +715,7 @@ const SearchResultsPage = () => {
           databaseName={currentDatabaseInfo?.name}
           tableIds={matchingTableIds[activeDatabase] || []}
           visibleTableIds={visibleTableIds}
-          pendingTableIds={visibleTableIds.filter(id => isTableLoading(id))}
+          pendingTableIds={visibleTableIds.filter(id => isRowsLoading(id))}
           isSearching={isSearching}
           onSelectTable={handleSidePanelSelect}
           isCollapsed={isSidePanelCollapsed}
@@ -759,8 +757,7 @@ const SearchResultsPage = () => {
                   <ResultsGrid
                     isSearching={isSearching}
                     visibleTableIds={visibleTableIds}
-                    getTableData={getTableData}
-                    isTableLoading={isTableLoading}
+                    getTableForDisplay={getTableForDisplay}
                     searchQuery={searchState.searchQuery}
                     permutationId={appliedPermutationId}
                     permutationParams={appliedPermutationParams}
@@ -781,7 +778,7 @@ const SearchResultsPage = () => {
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={handlePageChange}
-          isLoadingTableData={isLoadingTableData}
+          isSearching={isSearching}
           sidebarOffset={sidebarOffset}
         />
 

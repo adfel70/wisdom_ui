@@ -8,13 +8,15 @@ import EmptyState from '../EmptyState';
 /**
  * ResultsGrid - Renders the list of table cards or empty state
  *
- * Simplified: receives helper functions instead of refs
+ * Progressive loading:
+ * - During search: shows skeletons
+ * - After search, during row loading: shows card wrapper with loading in grid area
+ * - After rows load: shows full card with data
  */
 const ResultsGrid = ({
   isSearching,
   visibleTableIds,
-  getTableData,
-  isTableLoading,
+  getTableForDisplay,
   searchQuery,
   permutationId,
   permutationParams,
@@ -42,8 +44,9 @@ const ResultsGrid = ({
   return (
     <AnimatePresence mode="popLayout">
       {visibleTableIds.map((tableId) => {
-        const table = getTableData(tableId);
-        const isPending = isTableLoading(tableId);
+        // getTableForDisplay returns merged metadata + row data
+        // table.isLoadingRows indicates if rows are still being fetched
+        const table = getTableForDisplay(tableId);
 
         return (
           <motion.div
@@ -62,7 +65,7 @@ const ResultsGrid = ({
                 permutationId={permutationId}
                 permutationParams={permutationParams}
                 permutationVariants={permutationVariants}
-                isLoading={isPending}
+                isLoadingRows={table.isLoadingRows}
                 onSendToLastPage={onSendToLastPage}
                 hasMore={tablePaginationHook?.hasMoreRecords(tableId) || false}
                 onLoadMore={onLoadMore ? () => onLoadMore(tableId) : null}

@@ -418,7 +418,7 @@ const TableCard = ({
   permutationId = 'none',
   permutationParams = {},
   permutationVariants = null,
-  isLoading = false,
+  isLoadingRows = false,
   onSendToLastPage,
   hasMore = false,
   onLoadMore = null,
@@ -449,7 +449,7 @@ const TableCard = ({
 
   const hasRows = dedupedData.length > 0;
   const expectsRows = (table?.count ?? 0) > 0;
-  const isGridLoading = isLoading || (!hasRows && expectsRows);
+  const isGridLoading = isLoadingRows || (!hasRows && expectsRows);
 
   // Update column order when table changes
   useEffect(() => {
@@ -816,7 +816,8 @@ const TableCard = ({
                 sx={{ fontWeight: 600 }}
               />
               <Chip
-                label={`Records: ${dedupedData.length}/${totalRecords}`}
+                icon={isLoadingRows ? <CircularProgress size={12} sx={{ ml: 0.5 }} /> : undefined}
+                label={isLoadingRows ? `Records: ... / ${totalRecords}` : `Records: ${dedupedData.length} / ${totalRecords}`}
                 size="small"
                 color="primary"
                 variant="outlined"
@@ -935,61 +936,45 @@ const TableCard = ({
       {/* Table Data */}
       <Collapse in={isExpanded} timeout="auto">
         <CardContent sx={{ p: 0, height: 400, position: 'relative' }}>
-          {isLoading ? (
+          <Box sx={{ height: '100%', width: '100%' }} ref={gridContainerRef}>
+            <AgGridReact
+              theme={themeQuartz}
+              rowData={rowData}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              animateRows
+              enableCellTextSelection
+              enableCellCopy
+              loadingOverlayComponent={CustomLoadingOverlay}
+              noRowsOverlayComponent={CustomNoRowsOverlay}
+              onColumnMoved={handleColumnMoved}
+              onCellClicked={handleCellClicked}
+              tooltipShowDelay={200}
+              suppressDragLeaveHidesColumns
+              suppressSizeToFit
+              domLayout="normal"
+              getRowId={(params) => params?.data?.id}
+              onGridReady={onGridReady}
+            />
+          </Box>
+          {/* Semi-transparent loading overlay for initial row loading or Load More */}
+          {(isLoadingRows || isLoadingMore) && (
             <Box
               sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '100%',
-                minHeight: 200
+                zIndex: 1,
               }}
             >
-              <CircularProgress size={48} />
+              <CircularProgress size={40} />
             </Box>
-          ) : (
-            <>
-              <Box sx={{ height: '100%', width: '100%' }} ref={gridContainerRef}>
-                <AgGridReact
-                  theme={themeQuartz}
-                  rowData={rowData}
-                  columnDefs={columnDefs}
-                  defaultColDef={defaultColDef}
-                  animateRows
-                  enableCellTextSelection
-                  enableCellCopy
-                  loadingOverlayComponent={CustomLoadingOverlay}
-                  noRowsOverlayComponent={CustomNoRowsOverlay}
-                  onColumnMoved={handleColumnMoved}
-                  onCellClicked={handleCellClicked}
-                  tooltipShowDelay={200}
-                  suppressDragLeaveHidesColumns
-                  suppressSizeToFit
-                  domLayout="normal"
-                  getRowId={(params) => params?.data?.id}
-                  onGridReady={onGridReady}
-                />
-              </Box>
-              {/* Semi-transparent loading overlay for Load More */}
-              {isLoadingMore && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1,
-                  }}
-                >
-                  <CircularProgress size={40} />
-                </Box>
-              )}
-            </>
           )}
         </CardContent>
       </Collapse>
@@ -1107,7 +1092,7 @@ const areEqual = (prev, next) => {
     prev.query === next.query &&
     prev.permutationId === next.permutationId &&
     shallowEqualObject(prev.permutationParams, next.permutationParams) &&
-    prev.isLoading === next.isLoading &&
+    prev.isLoadingRows === next.isLoadingRows &&
     prev.onSendToLastPage === next.onSendToLastPage &&
     prev.hasMore === next.hasMore &&
     prev.isLoadingMore === next.isLoadingMore &&

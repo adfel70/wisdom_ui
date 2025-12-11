@@ -1,12 +1,14 @@
 import React from 'react';
-import { Box, Tabs, Tab, Badge } from '@mui/material';
+import { Box, Tabs, Tab, Badge, CircularProgress } from '@mui/material';
 import { Storage as DatabaseIcon } from '@mui/icons-material';
 
 /**
  * DatabaseTabs Component
  * Tabs for switching between different databases
+ *
+ * Shows loading indicator when isSearching is true
  */
-const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} }) => {
+const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {}, isSearching = false }) => {
   const handleChange = (event, newValue) => {
     onChange(newValue);
   };
@@ -42,21 +44,25 @@ const DatabaseTabs = ({ databases, activeDatabase, onChange, tableCounts = {} })
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DatabaseIcon sx={{ fontSize: 18 }} />
                   <span>{database.name}</span>
-                  {tableCount !== undefined && tableCount > 0 && (
-                    <Badge
-                      badgeContent={tableCount}
-                      color="primary"
-                      sx={{
-                        '& .MuiBadge-badge': {
-                          position: 'relative',
-                          transform: 'none',
-                          fontSize: '0.7rem',
-                          height: 18,
-                          minWidth: 18,
-                          padding: '0 4px',
-                        },
-                      }}
-                    />
+                  {isSearching ? (
+                    <CircularProgress size={14} sx={{ ml: 0.5 }} />
+                  ) : (
+                    tableCount !== undefined && tableCount > 0 && (
+                      <Badge
+                        badgeContent={tableCount}
+                        color="primary"
+                        sx={{
+                          '& .MuiBadge-badge': {
+                            position: 'relative',
+                            transform: 'none',
+                            fontSize: '0.7rem',
+                            height: 18,
+                            minWidth: 18,
+                            padding: '0 4px',
+                          },
+                        }}
+                      />
+                    )
                   )}
                 </Box>
               }
